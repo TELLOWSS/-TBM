@@ -34,7 +34,7 @@ const SystemIdentityModal = ({ onClose }: { onClose: () => void }) => {
                         </div>
                         <div>
                             <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-none mb-1">HUIGANG OS</h1>
-                            <p className="text-[10px] md:text-sm font-bold text-slate-400 tracking-[0.4em] uppercase">Smart Safety System v2.8.3</p>
+                            <p className="text-[10px] md:text-sm font-bold text-slate-400 tracking-[0.4em] uppercase">Smart Safety System v3.0.0</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X size={24}/></button>
@@ -645,7 +645,7 @@ function App() {
               {currentView === 'reports' && 'Safe Work Report Center'}
             </h1>
             <p className="text-[10px] md:text-sm font-medium text-slate-400 uppercase tracking-wider">
-               (주)휘강건설 스마트 안전관리 시스템 v2.8.3
+               (주)휘강건설 스마트 안전관리 시스템 v3.0.0
             </p>
           </div>
 

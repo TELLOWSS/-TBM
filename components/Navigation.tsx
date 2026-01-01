@@ -151,7 +151,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
           
           <div className="flex justify-between items-center px-1">
               <button onClick={onShowHistory} className="text-[10px] text-slate-600 font-bold hover:text-slate-400 transition-colors flex items-center gap-1">
-                 <History size={10}/> v2.8.3
+                 <History size={10}/> v3.0.0
               </button>
               <button onClick={onShowIdentity} className="text-[10px] text-slate-600 font-bold hover:text-blue-400 transition-colors tracking-widest uppercase">
                  System Identity

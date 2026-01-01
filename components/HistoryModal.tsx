@@ -1,12 +1,21 @@
+
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, Rocket, Shield, BrainCircuit, LayoutDashboard, FileText, Video, Sparkles, History, GitCommit, Zap, Minimize2, Edit2, ListOrdered, Save, FileVideo, Presentation, CalendarRange, FolderInput, GraduationCap, Lock, Database } from 'lucide-react';
+import { X, Rocket, Shield, BrainCircuit, LayoutDashboard, FileText, Video, Sparkles, History, GitCommit, Zap, Minimize2, Edit2, ListOrdered, Save, FileVideo, Presentation, CalendarRange, FolderInput, GraduationCap, Lock, Database, Compass, TrendingUp } from 'lucide-react';
 
 interface HistoryModalProps {
   onClose: () => void;
 }
 
 const milestones = [
+  {
+    version: 'v3.0.0',
+    date: '2026.01.01',
+    title: '안전 철학의 구현 (Philosophy Patch)',
+    desc: 'AI 페르소나를 "평가자"에서 "안전 멘토"로 재정의. 작성 전 중점 위험을 주지시키는 "Safety Compass" 위젯과 현장의 상향평준화 과정을 시각화한 "Safety Culture Index"를 도입하여 무재해 목표를 시스템에 투영함.',
+    icon: <Compass size={18} />,
+    color: 'bg-rose-600'
+  },
   {
     version: 'v2.8.0',
     date: '2025.12.11',
