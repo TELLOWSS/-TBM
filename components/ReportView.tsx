@@ -2,7 +2,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { TBMEntry } from '../types';
-import { Printer, X, Download, Loader2, Edit3, Trash2, Sparkles, UserCheck, AlertOctagon, Eye, Users, Video, FileVideo, ImageOff } from 'lucide-react';
+import { Printer, X, Download, Loader2, Edit3, Trash2, Sparkles, UserCheck, AlertOctagon, Eye, Users, Video, FileVideo, ImageOff, CheckCircle2, XCircle } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
@@ -289,6 +289,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
             const safeLeader = entry.leaderName || '미지정';
             const safeCount = entry.attendeesCount || 0;
 
+            // Rubric Calculation
+            const rubric = entry.videoAnalysis?.rubric || {
+                logQuality: 0, focus: 0, voice: 0, ppe: 0, deductions: []
+            };
+
             return (
               <div 
                 key={entry.id || index} 
@@ -412,51 +417,69 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                         <div className="col last flex flex-col" style={{width: '50%'}}>
                              <div className="section-header">4. AI Deep Insight (심층 정밀 진단)</div>
                              <div className="flex-1 flex flex-col overflow-hidden">
-                                <div className="p-4 border-b border-black bg-slate-50/50">
+                                <div className="p-3 border-b border-black bg-slate-50/50">
                                     {entry.videoAnalysis ? (
-                                        <>
-                                        <div className="flex justify-between items-center mb-3">
-                                            <div className="flex items-center gap-1.5">
-                                                <Sparkles size={14} className="text-violet-600"/>
-                                                <span className="text-[11px] font-bold text-black">AI TBM Quality Score</span>
-                                            </div>
-                                            <span className="text-sm font-black text-violet-600 border border-violet-200 bg-white px-2 py-0.5 rounded shadow-sm">{entry.videoAnalysis.score}점</span>
-                                        </div>
-                                        <div className="flex gap-2 mb-3">
-                                            <div className="flex-1 bg-white border border-slate-200 rounded p-1.5 flex items-center gap-1.5">
-                                                <Eye size={12} className="text-slate-400"/>
-                                                <span className="text-[10px] font-bold text-slate-600">집중도: {entry.videoAnalysis.focusAnalysis?.overall || 0}%</span>
-                                            </div>
-                                            <div className="flex-1 bg-white border border-slate-200 rounded p-1.5 flex items-center gap-1.5">
-                                                <Users size={12} className="text-slate-400"/>
-                                                <span className="text-[10px] font-bold text-slate-600">산만: {entry.videoAnalysis.focusAnalysis?.distractedCount || 0}명</span>
-                                            </div>
-                                        </div>
-                                        {entry.videoAnalysis.insight?.missingTopics?.length > 0 && (
-                                            <div className="bg-orange-50 border border-orange-200 rounded p-2 mb-3">
-                                                <div className="flex items-center gap-1.5 mb-1">
-                                                    <AlertOctagon size={12} className="text-orange-600"/>
-                                                    <span className="text-[10px] font-bold text-orange-700">Blind Spot (누락 위험)</span>
+                                        <div className="flex flex-col gap-3">
+                                            {/* Top Score */}
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Sparkles size={14} className="text-violet-600"/>
+                                                    <span className="text-[11px] font-black text-black">AI 종합 감사 점수</span>
                                                 </div>
-                                                <p className="text-[10px] text-orange-900 leading-tight text-wrap-fix">
-                                                    {entry.videoAnalysis.insight.missingTopics.join(', ')}
-                                                </p>
+                                                <span className={`text-sm font-black border px-2 py-0.5 rounded shadow-sm ${entry.videoAnalysis.score >= 80 ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                                    {entry.videoAnalysis.score}점
+                                                </span>
                                             </div>
-                                        )}
-                                        <div className="text-[10px] text-slate-700 font-medium leading-relaxed bg-white p-2.5 rounded border border-slate-200 text-wrap-fix italic border-l-4 border-l-violet-400">
-                                            "{entry.videoAnalysis.evaluation}"
+
+                                            {/* Transparency Matrix (Rubric Bars) */}
+                                            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                                {[
+                                                    { label: '일지 충실도', score: rubric.logQuality, max: 30, color: 'bg-emerald-500' },
+                                                    { label: '팀원 집중도', score: rubric.focus, max: 30, color: 'bg-blue-500' },
+                                                    { label: '음성 전달력', score: rubric.voice, max: 20, color: 'bg-violet-500' },
+                                                    { label: '보호구 상태', score: rubric.ppe, max: 20, color: 'bg-orange-500' }
+                                                ].map((item, i) => (
+                                                    <div key={i} className="flex flex-col">
+                                                        <div className="flex justify-between text-[9px] font-bold text-slate-600 mb-0.5">
+                                                            <span>{item.label}</span>
+                                                            <span>{item.score}/{item.max}</span>
+                                                        </div>
+                                                        <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                                            <div className={`h-full ${item.color}`} style={{ width: `${(item.score / item.max) * 100}%` }}></div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Deductions List */}
+                                            {rubric.deductions && rubric.deductions.length > 0 && (
+                                                <div className="bg-red-50 border border-red-100 rounded p-2">
+                                                    <div className="flex items-center gap-1 mb-1">
+                                                        <XCircle size={10} className="text-red-500"/>
+                                                        <span className="text-[9px] font-bold text-red-700">주요 감점 사유</span>
+                                                    </div>
+                                                    <ul className="text-[9px] text-red-600 list-disc pl-3 space-y-0.5 leading-tight">
+                                                        {rubric.deductions.slice(0,2).map((reason, idx) => (
+                                                            <li key={idx}>{reason}</li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+
+                                            <div className="text-[10px] text-slate-700 font-medium leading-relaxed bg-white p-2 rounded border border-slate-200 text-wrap-fix italic border-l-2 border-l-violet-400">
+                                                "{entry.videoAnalysis.evaluation}"
+                                            </div>
                                         </div>
-                                        </>
                                     ) : (
                                         <div className="text-center py-6 text-[10px] text-slate-400">AI 분석 데이터 없음</div>
                                     )}
                                 </div>
-                                <div className="flex-1 p-4 bg-white">
+                                <div className="flex-1 p-3 bg-white">
                                     <div className="text-[11px] font-extrabold text-black mb-2 border-b border-slate-200 pb-1 flex items-center gap-1">
                                         <UserCheck size={12}/> 안전관리자 코멘트
                                     </div>
-                                    <div className="space-y-2">
-                                        {(entry.safetyFeedback || []).slice(0,5).map((fb, i) => (
+                                    <div className="space-y-1">
+                                        {(entry.safetyFeedback || []).slice(0,3).map((fb, i) => (
                                             <div key={i} className="flex gap-2 items-start">
                                                 <span className="text-blue-600 text-[10px] mt-0.5 font-bold">✔</span>
                                                 <span className="text-[10px] text-black leading-snug text-wrap-fix">{fb}</span>

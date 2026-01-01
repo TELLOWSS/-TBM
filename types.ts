@@ -33,6 +33,15 @@ export interface MonthlyRiskAssessment {
   createdAt: number;
 }
 
+// [NEW] Transparent Scoring Rubric
+export interface ScoreRubric {
+  logQuality: number; // 30 points max
+  focus: number;      // 30 points max
+  voice: number;      // 20 points max
+  ppe: number;        // 20 points max
+  deductions: string[]; // Reasons for lost points
+}
+
 // [UPDATED] Deep Insight Analysis Result
 export interface TBMAnalysisResult {
   score: number; // 0 to 100
@@ -40,6 +49,9 @@ export interface TBMAnalysisResult {
   
   // [NEW] Analysis Source Indicator
   analysisSource: 'DOCUMENT' | 'VIDEO'; 
+
+  // [NEW] Detailed Rubric for Transparency
+  rubric: ScoreRubric;
 
   // Basic Metrics
   details: {
@@ -80,6 +92,7 @@ export interface ExtractedTBMData {
   safetyFeedback: string[];
   // [UPDATED] Added date detection support
   detectedDate?: string; // YYYY-MM-DD format extracted from document
+  videoAnalysis?: TBMAnalysisResult; // Pass through analysis
 }
 
 export interface TBMEntry {

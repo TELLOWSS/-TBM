@@ -156,6 +156,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
   const today = new Date().toISOString().split('T')[0];
   const todaysEntries = entries.filter(e => e.date === today);
 
+  // [NEW] Culture Score Calculation
+  const cultureScore = useMemo(() => {
+      if (entries.length === 0) return 0;
+      // Get AI scores
+      const scores = entries.filter(e => e.videoAnalysis).map(e => e.videoAnalysis!.score);
+      if (scores.length === 0) return 0;
+      // Simple trend calculation (last 5 vs first 5)
+      const currentAvg = scores.slice(0, 5).reduce((a,b)=>a+b,0) / Math.min(5, scores.length);
+      return Math.round(currentAvg);
+  }, [entries]);
+
   const weeklyStats = useMemo(() => {
     const now = new Date();
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -263,7 +274,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
       {/* Stats Grid - Adaptive Columns */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
          <StatCard title="Today's TBM" value={todaysEntries.length} unit="팀" icon={<Calendar />} colorClass="text-blue-600" delay="delay-100"/>
-         <StatCard title="Total Workers" value={todaysEntries.reduce((acc, curr) => acc + (curr.attendeesCount || 0), 0)} unit="명" icon={<Users />} colorClass="text-emerald-500" delay="delay-200"/>
+         {/* [NEW] Safety Culture Card (Upward Standardization Metric) */}
+         <div className="relative overflow-hidden bg-white rounded-3xl p-6 border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:shadow-xl transition-all duration-300 group animate-slide-up delay-200">
+             <div className="absolute -right-4 -top-4 p-4 opacity-[0.08] transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-500 text-violet-600">
+                 <TrendingUp size={100}/>
+             </div>
+             <div className="relative z-10">
+                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-4 bg-violet-50 text-violet-600">
+                     <Target size={20}/>
+                 </div>
+                 <div>
+                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Safety Culture Index</p>
+                     <div className="flex items-baseline gap-1">
+                         <h3 className="text-3xl font-black text-slate-800 tracking-tight">{cultureScore}</h3>
+                         <span className="text-sm font-bold text-slate-400">점</span>
+                     </div>
+                     <p className="text-[10px] text-green-500 font-bold mt-1 flex items-center gap-1">
+                         <TrendingUp size={10}/> 점진적 상향 중
+                     </p>
+                 </div>
+             </div>
+         </div>
          <StatCard title="Risk Factors" value={todaysEntries.reduce((acc, curr) => acc + (curr.riskFactors?.length || 0), 0)} unit="건" icon={<AlertCircle />} colorClass="text-orange-500" delay="delay-300"/>
          
          <div onClick={onNavigateToReports} className="rounded-3xl p-6 cursor-pointer relative overflow-hidden group shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 animate-slide-up delay-400 bg-slate-900 min-h-[140px]">

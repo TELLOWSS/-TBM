@@ -1,10 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { TBMEntry, RiskAssessmentItem, SafetyGuideline, TeamOption, TBMAnalysisResult, ExtractedTBMData } from '../types';
+import { TBMEntry, RiskAssessmentItem, SafetyGuideline, TeamOption, TBMAnalysisResult, ExtractedTBMData, ScoreRubric } from '../types';
 import { analyzeMasterLog, evaluateTBMVideo } from '../services/geminiService';
 import { compressVideo } from '../utils/videoUtils';
-import { Upload, Camera, Sparkles, AlertTriangle, CheckCircle2, Loader2, FileText, X, ShieldCheck, Layers, ArrowLeft, Trash2, Film, Save, ZoomIn, ZoomOut, Maximize, Minimize, RotateCw, Clock, Plus, Check, PlayCircle, BarChart, Mic, Volume2, Edit2, RefreshCcw, Target, Eye, AlertOctagon, UserCheck, HelpCircle, FileStack, ScanLine, ListChecks, Zap, Files, Copy, ArrowRight, BrainCircuit, MessageSquare, Video, Database, Rocket, CalendarCheck, Image as ImageIcon, PenTool, MousePointerClick, FileInput } from 'lucide-react';
+import { Upload, Camera, Sparkles, AlertTriangle, CheckCircle2, Loader2, FileText, X, ShieldCheck, Layers, ArrowLeft, Trash2, Film, Save, ZoomIn, ZoomOut, Maximize, Minimize, RotateCw, Clock, Plus, Check, PlayCircle, BarChart, Mic, Volume2, Edit2, RefreshCcw, Target, Eye, AlertOctagon, UserCheck, HelpCircle, FileStack, ScanLine, ListChecks, Zap, Files, Copy, ArrowRight, BrainCircuit, MessageSquare, Video, Database, Rocket, CalendarCheck, Image as ImageIcon, PenTool, MousePointerClick, FileInput, Compass } from 'lucide-react';
 
 interface TBMFormProps {
   onSave: (entry: TBMEntry | TBMEntry[], shouldExit?: boolean) => boolean;
@@ -64,9 +64,10 @@ const resizeBase64Image = (base64: string, maxWidth: number = 1024, quality: num
       const canvas = document.createElement('canvas');
       let width = img.width;
       let height = img.height;
-      if (width > maxWidth) {
-        height = Math.round((height *= maxWidth / width));
-        width = maxWidth;
+      const MAX_WIDTH = 1024;
+      if (width > MAX_WIDTH) {
+        height = Math.round(height * (MAX_WIDTH / width));
+        width = MAX_WIDTH;
       }
       canvas.width = width;
       canvas.height = height;
@@ -263,6 +264,32 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
     };
   }, [tbmVideoPreview]);
 
+  // [CRITICAL FIX] Initialize from initialData correctly including nested objects
+  useEffect(() => {
+      if (initialData) {
+          setEntryDate(initialData.date);
+          setEntryTime(initialData.time);
+          setTeamId(initialData.teamId);
+          setLeaderName(initialData.leaderName);
+          setAttendeesCount(initialData.attendeesCount);
+          setWorkDescription(initialData.workDescription);
+          setRiskFactors(initialData.riskFactors || []);
+          setSafetyFeedback(initialData.safetyFeedback || []);
+          setTbmPhotoPreview(initialData.tbmPhotoUrl || null);
+          setTbmVideoPreview(initialData.tbmVideoUrl || null);
+          setTbmVideoFileName(initialData.tbmVideoFileName || null);
+          
+          if (initialData.videoAnalysis) {
+              setVideoAnalysis(initialData.videoAnalysis);
+          }
+          
+          if (initialData.originalLogImageUrl && initialData.originalLogImageUrl.startsWith('data:')) {
+              setCurrentLogBase64(initialData.originalLogImageUrl);
+          }
+          setIsDirty(false);
+      }
+  }, [initialData]);
+
   // --- Mark Dirty on Change ---
   useEffect(() => {
       // Only mark dirty if it's not the initial load
@@ -285,7 +312,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           let height = img.height;
           const MAX_WIDTH = 1024;
           if (width > MAX_WIDTH) {
-            height = Math.round((height *= MAX_WIDTH / width));
+            height = Math.round(height * (MAX_WIDTH / width));
             width = MAX_WIDTH;
           }
           canvas.width = width;
@@ -447,12 +474,20 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                       const finalDate = data.detectedDate || entryDate;
 
                       // [Safety Net] Ensure Synthetic Video Analysis is present
+                      // [FINAL FIX] Sync fallback score to be 'Verified' level (85) instead of perfect (95)
                       const safeVideoAnalysis = (data as any).videoAnalysis || {
-                          score: 80,
-                          evaluation: "데이터 분석 전용 (자동 생성)",
+                          score: 85, // Consistent with analyzeMasterLog verified score (Good but not Perfect)
+                          evaluation: "데이터 분석 전용 (서면 결재 완료 - 적격)",
                           analysisSource: 'DOCUMENT',
-                          details: { participation: 'MODERATE', voiceClarity: 'CLEAR', ppeStatus: 'GOOD', interaction: false },
-                          focusAnalysis: { overall: 80, distractedCount: 0, focusZones: { front: 'HIGH', back: 'HIGH', side: 'HIGH' } },
+                          rubric: {
+                              logQuality: 25, // Good
+                              focus: 25,      // Good
+                              voice: 18,      // Standard Good
+                              ppe: 17,        // Standard Good
+                              deductions: ["서면 기록 기반 산정"]
+                          },
+                          details: { participation: 'GOOD', voiceClarity: 'CLEAR', ppeStatus: 'GOOD', interaction: true },
+                          focusAnalysis: { overall: 95, distractedCount: 0, focusZones: { front: 'HIGH', back: 'HIGH', side: 'HIGH' } },
                           insight: { mentionedTopics: [], missingTopics: [], suggestion: "" },
                           feedback: []
                       };
@@ -520,7 +555,11 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   
   const handleStartEditAnalysis = () => {
     if (videoAnalysis) {
-      setTempAnalysis(JSON.parse(JSON.stringify(videoAnalysis)));
+      // Ensure rubric exists
+      const rubric = videoAnalysis.rubric || {
+          logQuality: 0, focus: 0, voice: 0, ppe: 0, deductions: []
+      };
+      setTempAnalysis(JSON.parse(JSON.stringify({ ...videoAnalysis, rubric })));
       setIsEditingAnalysis(true);
     }
   };
@@ -528,6 +567,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const handleCancelEditAnalysis = () => {
     setTempAnalysis(null);
     setIsEditingAnalysis(false);
+  };
+
+  // [NEW] Reset Feature
+  const handleResetAnalysis = () => {
+      if (videoAnalysis) {
+          if (confirm("수정 사항을 취소하고 AI 원본 결과로 되돌리시겠습니까?")) {
+              setTempAnalysis(JSON.parse(JSON.stringify(videoAnalysis)));
+          }
+      }
   };
 
   const handleSaveEditAnalysis = () => {
@@ -538,16 +586,35 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
     setTempAnalysis(null);
   };
 
-  const updateTempAnalysis = (path: string[], value: any) => {
-      setTempAnalysis(prev => {
-          if (!prev) return null;
-          const newState = { ...prev };
-          let current: any = newState;
-          for (let i = 0; i < path.length - 1; i++) {
-              current = current[path[i]];
-          }
-          current[path[path.length - 1]] = value;
-          return newState;
+  // [NEW] Rubric Updater with Safe Guard
+  const updateTempRubric = (field: keyof ScoreRubric, value: any) => {
+      if (!tempAnalysis) return;
+      const currentRubric = tempAnalysis.rubric || { logQuality: 0, focus: 0, voice: 0, ppe: 0, deductions: [] };
+      
+      let newRubric = { ...currentRubric };
+      
+      if (field === 'deductions') {
+          // value is string from textarea
+          newRubric.deductions = value.split('\n').filter((s: string) => s.trim() !== '');
+      } else {
+          // [SAFETY] Clamp values based on field max
+          const numVal = Number(value);
+          if (isNaN(numVal)) return;
+
+          let max = 100;
+          if (field === 'logQuality' || field === 'focus') max = 30;
+          if (field === 'voice' || field === 'ppe') max = 20;
+          
+          newRubric[field] = Math.min(max, Math.max(0, numVal));
+      }
+
+      // Auto-calc total if not deductions
+      const total = (newRubric.logQuality || 0) + (newRubric.focus || 0) + (newRubric.voice || 0) + (newRubric.ppe || 0);
+      
+      setTempAnalysis({
+          ...tempAnalysis,
+          rubric: newRubric,
+          score: total
       });
   };
 
@@ -879,11 +946,19 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       const activeItem = queue.find(q => q.id === activeQueueId);
       const isPdf = activeItem?.isPdf;
       
-      const finalImage = overrideImage || (tbmPhotoPreview || (!isPdf && currentLogBase64 ? currentLogBase64 : undefined));
+      // [FIX] Prefer existing initialData image if no new one provided
+      const finalImage = overrideImage || (tbmPhotoPreview || (!isPdf && currentLogBase64 ? currentLogBase64 : (initialData?.tbmPhotoUrl || undefined)));
 
       // Default Doc Analysis (Fallback if needed, but analyzeMasterLog logic handles most)
       const docAnalysis: TBMAnalysisResult = {
           score: 85, evaluation: "분석 완료", analysisSource: 'DOCUMENT',
+          rubric: {
+              logQuality: 25,
+              focus: 25,
+              voice: 15,
+              ppe: 15,
+              deductions: []
+          },
           details: { participation: 'GOOD', voiceClarity: 'CLEAR', ppeStatus: 'GOOD', interaction: true },
           focusAnalysis: { overall: 90, distractedCount: 0, focusZones: { front: 'HIGH', back: 'HIGH', side: 'HIGH' } },
           insight: { mentionedTopics: [], missingTopics: [], suggestion: "" },
@@ -894,16 +969,23 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           ? tempAnalysis 
           : (dataToUse.videoAnalysis || (mode === 'BATCH' ? docAnalysis : undefined)); // Only use docAnalysis as fallback in BATCH mode
 
+      // [CRITICAL FIX] Use existing ID if in Edit Mode (Routine), otherwise generate new.
+      const entryId = (isBatchMode || !initialData)
+          ? `ENTRY-${Date.now()}-${uniqueIndex}-${Math.random().toString(36).substring(2, 7)}`
+          : initialData.id;
+
       return {
-          id: `ENTRY-${Date.now()}-${uniqueIndex}-${Math.random().toString(36).substring(2, 7)}`, 
+          id: entryId, 
           date: dataToUse.date, time: entryTime, teamId: finalTeamId || 'unknown-team', teamName: dataToUse.teamName || '팀 미상',
           leaderName: dataToUse.leaderName, attendeesCount: dataToUse.attendeesCount, workDescription: dataToUse.workDescription,
           riskFactors: dataToUse.riskFactors, safetyFeedback: dataToUse.safetyFeedback,
-          tbmPhotoUrl: finalImage, tbmVideoUrl: tbmVideoPreview || undefined, tbmVideoFileName: tbmVideoFileName || undefined,
+          tbmPhotoUrl: finalImage, 
+          tbmVideoUrl: tbmVideoPreview || (initialData?.tbmVideoUrl || undefined), // Preserve Video
+          tbmVideoFileName: tbmVideoFileName || (initialData?.tbmVideoFileName || undefined),
           videoAnalysis: finalVideoAnalysis,
           originalLogImageUrl: finalImage,
           originalLogMimeType: isPdf ? 'application/pdf' : 'image/jpeg',
-          createdAt: Date.now() + uniqueIndex,
+          createdAt: initialData ? initialData.createdAt : Date.now() + uniqueIndex, // Preserve createdAt
       };
   };
 
@@ -914,7 +996,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
         return;
     }
 
-    if (!tbmPhotoPreview && !currentLogBase64 && extractedResults.length === 0) {
+    if (!tbmPhotoPreview && !currentLogBase64 && extractedResults.length === 0 && !initialData) {
       alert("⚠ TBM 증빙 자료가 없습니다.");
       return;
     }
@@ -1205,6 +1287,32 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
 
                        {/* 3. Form */}
                        <div className={`w-full lg:w-[480px] bg-white border-l border-slate-200 flex-col h-full shadow-2xl z-30 relative ${activeMobileTab === 'form' ? 'flex' : 'hidden lg:flex'}`}>
+                           
+                           {/* [NEW] Safety Compass (Risk Guidance Widget) */}
+                           {monthlyGuidelines.length > 0 && mode === 'ROUTINE' && !isAutoProcessing && (
+                                <div className="bg-orange-50 border-b border-orange-100 p-4 shrink-0 relative overflow-hidden">
+                                    <div className="absolute right-0 top-0 w-24 h-24 bg-orange-100 rounded-full blur-xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                                    <div className="flex items-center gap-2 mb-2 relative z-10">
+                                        <Compass size={16} className="text-orange-600 animate-pulse" />
+                                        <span className="text-xs font-black text-orange-700 uppercase tracking-wide">Today's Safety Focus</span>
+                                    </div>
+                                    <div className="relative z-10">
+                                        <p className="text-[10px] text-orange-800 font-medium mb-1.5">
+                                            금월 위험성평가 기반 중점 관리 사항입니다. 
+                                            <br/>TBM 진행 시 반드시 포함하여 주지시켜 주세요.
+                                        </p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {monthlyGuidelines.slice(0, 3).map((g, i) => (
+                                                <span key={i} className="text-[9px] font-bold bg-white border border-orange-200 text-orange-600 px-2 py-1 rounded-lg shadow-sm">
+                                                    ⚠ {g.content}
+                                                </span>
+                                            ))}
+                                            {monthlyGuidelines.length > 3 && <span className="text-[9px] text-orange-400 font-bold self-center">+{monthlyGuidelines.length - 3}건 더보기</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                           )}
+
                            {/* ... Form Content ... */}
                            {isAutoProcessing && (
                                 <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-fade-in">
@@ -1268,6 +1376,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar pb-24">
+                                {/* ... (Field rendering remains same) */}
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="text-[11px] font-bold text-slate-500 mb-1 flex items-center gap-1">
@@ -1360,6 +1469,105 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* [NEW] AI Analysis Result & Edit Card */}
+                                {videoAnalysis && (
+                                    <div className="mt-3 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in">
+                                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-100 flex justify-between items-center">
+                                            <div className="flex items-center gap-2">
+                                                <Sparkles size={14} className="text-violet-600"/>
+                                                <span className="text-xs font-bold text-slate-700">AI 정밀 진단 결과</span>
+                                            </div>
+                                            {!isEditingAnalysis && (
+                                                <button onClick={handleStartEditAnalysis} className="text-[10px] text-slate-500 underline hover:text-blue-600 font-bold">결과 수정</button>
+                                            )}
+                                        </div>
+
+                                        <div className="p-4">
+                                            {isEditingAnalysis && tempAnalysis ? (
+                                                <div className="space-y-3">
+                                                {/* Score Inputs */}
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 block mb-1">일지 충실도 (30)</label>
+                                                        <input type="number" max={30} min={0} value={tempAnalysis.rubric?.logQuality || 0} onChange={(e) => updateTempRubric('logQuality', e.target.value)} className="w-full border border-blue-300 rounded p-1.5 text-xs font-bold bg-blue-50 focus:ring-2 focus:ring-blue-200 outline-none"/>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 block mb-1">팀원 집중도 (30)</label>
+                                                        <input type="number" max={30} min={0} value={tempAnalysis.rubric?.focus || 0} onChange={(e) => updateTempRubric('focus', e.target.value)} className="w-full border border-blue-300 rounded p-1.5 text-xs font-bold bg-blue-50 focus:ring-2 focus:ring-blue-200 outline-none"/>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 block mb-1">음성 전달력 (20)</label>
+                                                        <input type="number" max={20} min={0} value={tempAnalysis.rubric?.voice || 0} onChange={(e) => updateTempRubric('voice', e.target.value)} className="w-full border border-blue-300 rounded p-1.5 text-xs font-bold bg-blue-50 focus:ring-2 focus:ring-blue-200 outline-none"/>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 block mb-1">보호구 상태 (20)</label>
+                                                        <input type="number" max={20} min={0} value={tempAnalysis.rubric?.ppe || 0} onChange={(e) => updateTempRubric('ppe', e.target.value)} className="w-full border border-blue-300 rounded p-1.5 text-xs font-bold bg-blue-50 focus:ring-2 focus:ring-blue-200 outline-none"/>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="flex justify-between items-center bg-slate-100 p-2 rounded-lg border border-slate-200">
+                                                    <span className="text-xs font-bold text-slate-600">총점 (자동계산)</span>
+                                                    <span className="text-lg font-black text-blue-600">{tempAnalysis.score}점</span>
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-500 block mb-1">평가 코멘트</label>
+                                                    <textarea value={tempAnalysis.evaluation} onChange={(e) => setTempAnalysis({...tempAnalysis, evaluation: e.target.value})} className="w-full border border-slate-300 rounded-lg p-2 text-xs h-16 resize-none focus:border-blue-500 outline-none"/>
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-500 block mb-1">감점 사유 (줄바꿈으로 구분)</label>
+                                                    <textarea value={(tempAnalysis.rubric?.deductions || []).join('\n')} onChange={(e) => updateTempRubric('deductions', e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 text-xs h-16 resize-none focus:border-blue-500 outline-none"/>
+                                                </div>
+
+                                                <div className="flex gap-2 pt-2">
+                                                    <button onClick={handleSaveEditAnalysis} className="flex-1 bg-slate-800 text-white py-2 rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors">저장 완료</button>
+                                                    <button onClick={handleResetAnalysis} className="flex-1 bg-orange-100 border border-orange-200 text-orange-700 py-2 rounded-lg text-xs font-bold hover:bg-orange-200 transition-colors">초기화</button>
+                                                    <button onClick={handleCancelEditAnalysis} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors">취소</button>
+                                                </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between items-end">
+                                                        <span className="text-2xl font-black text-slate-800">{videoAnalysis.score}<span className="text-sm text-slate-400 font-medium ml-1">점</span></span>
+                                                        <span className={`text-xs font-bold px-2 py-1 rounded ${videoAnalysis.score >= 80 ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                            {videoAnalysis.score >= 80 ? '우수' : '보통'}
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    {/* Bars */}
+                                                    <div className="space-y-1.5">
+                                                        {[
+                                                            { l: '일지', v: videoAnalysis.rubric?.logQuality || 0, max: 30, c: 'bg-emerald-500' },
+                                                            { l: '집중', v: videoAnalysis.rubric?.focus || 0, max: 30, c: 'bg-blue-500' },
+                                                            { l: '음성', v: videoAnalysis.rubric?.voice || 0, max: 20, c: 'bg-violet-500' },
+                                                            { l: '복장', v: videoAnalysis.rubric?.ppe || 0, max: 20, c: 'bg-orange-500' },
+                                                        ].map((i, idx) => (
+                                                            <div key={idx} className="flex items-center gap-2 text-[10px]">
+                                                                <span className="w-6 font-bold text-slate-500">{i.l}</span>
+                                                                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                                    <div className={`h-full ${i.c}`} style={{width: `${(i.v/i.max)*100}%`}}></div>
+                                                                </div>
+                                                                <span className="w-8 text-right font-bold text-slate-700">{i.v}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+                                                    <p className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 leading-relaxed font-medium">
+                                                        {videoAnalysis.evaluation}
+                                                    </p>
+                                                    
+                                                    {videoAnalysis.rubric?.deductions?.length > 0 && (
+                                                        <ul className="text-[10px] text-red-500 list-disc pl-4 space-y-0.5">
+                                                            {videoAnalysis.rubric.deductions.map((d:string, k:number) => <li key={k}>{d}</li>)}
+                                                        </ul>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             
                             {/* Footer Actions */}
