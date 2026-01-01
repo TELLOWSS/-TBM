@@ -64,7 +64,8 @@ const resizeBase64Image = (base64: string, maxWidth: number = 1024, quality: num
       const canvas = document.createElement('canvas');
       let width = img.width;
       let height = img.height;
-      const MAX_WIDTH = 1024;
+      // [FIX] Correctly use the parameter or define constant
+      const MAX_WIDTH = maxWidth; 
       if (width > MAX_WIDTH) {
         height = Math.round(height * (MAX_WIDTH / width));
         width = MAX_WIDTH;
