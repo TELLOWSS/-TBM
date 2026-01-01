@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { LayoutDashboard, PlusCircle, FileText, ShieldCheck, ChevronRight, Settings, Shield, Sparkles, History, Hexagon, User } from 'lucide-react';
 
@@ -6,7 +7,8 @@ interface NavigationProps {
   setCurrentView: (view: string) => void;
   onOpenSettings: () => void;
   onShowHistory: () => void; 
-  onShowIdentity: () => void; // New prop for philosophy
+  onShowIdentity: () => void;
+  onNewEntryClick: () => void; // [NEW] Callback for handling "New" button click separately
 }
 
 // Updated Logo: Geometric Monogram (Architectural)
@@ -21,13 +23,21 @@ const BrandLogo = () => (
   </div>
 );
 
-export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentView, onOpenSettings, onShowHistory, onShowIdentity }) => {
+export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentView, onOpenSettings, onShowHistory, onShowIdentity, onNewEntryClick }) => {
   const navItems = [
     { id: 'dashboard', label: '통합 대시보드', sub: 'Overview', icon: <LayoutDashboard size={20} /> },
     { id: 'new', label: '스마트 TBM 등록', sub: 'Registration', icon: <PlusCircle size={20} /> },
     { id: 'risk-assessment', label: '위험성평가 관리', sub: 'Risk Management', icon: <ShieldCheck size={20} /> },
     { id: 'reports', label: '보고서 센터', sub: 'Archive', icon: <FileText size={20} /> },
   ];
+
+  const handleNavClick = (id: string) => {
+      if (id === 'new') {
+          onNewEntryClick();
+      } else {
+          setCurrentView(id);
+      }
+  };
 
   return (
     <>
@@ -36,7 +46,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
         {navItems.map((item) => (
           <button
             key={item.id}
-            onClick={() => setCurrentView(item.id)}
+            onClick={() => handleNavClick(item.id)}
             className={`flex flex-col items-center gap-1 transition-all ${
               currentView === item.id ? 'text-blue-600 scale-105' : 'text-slate-400'
             }`}
@@ -81,7 +91,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
             return (
               <button
                 key={item.id}
-                onClick={() => setCurrentView(item.id)}
+                onClick={() => handleNavClick(item.id)}
                 className={`
                   w-full flex items-center justify-between p-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden
                   ${isActive 
@@ -141,7 +151,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
           
           <div className="flex justify-between items-center px-1">
               <button onClick={onShowHistory} className="text-[10px] text-slate-600 font-bold hover:text-slate-400 transition-colors flex items-center gap-1">
-                 <History size={10}/> v2.8.0
+                 <History size={10}/> v2.8.3
               </button>
               <button onClick={onShowIdentity} className="text-[10px] text-slate-600 font-bold hover:text-blue-400 transition-colors tracking-widest uppercase">
                  System Identity

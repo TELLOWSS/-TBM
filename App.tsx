@@ -10,10 +10,11 @@ import { RiskAssessmentManager } from './components/RiskAssessmentManager';
 import { HistoryModal } from './components/HistoryModal';
 import { TBMEntry, MonthlyRiskAssessment, TeamOption, TeamCategory } from './types';
 import { TEAMS } from './constants';
-import { Download, Upload, Trash2, X, Settings, Database, Eraser, Plus, Users, Edit3, Save, FileText, ScanLine, Camera, Lock, Server, MessageSquare, BrainCircuit, ShieldCheck, PlayCircle, Sparkles, Target, Eye, Radar, Hexagon, Layers, Zap } from 'lucide-react';
+import { Download, Upload, Trash2, X, Settings, Database, Eraser, Plus, Users, Edit3, Save, FileText, ScanLine, Camera, Lock, Server, MessageSquare, BrainCircuit, ShieldCheck, PlayCircle, Sparkles, Target, Eye, Radar, Hexagon, Layers, Zap, FileStack, ArrowRight } from 'lucide-react';
 
 // --- System Identity Modal (Design Philosophy) ---
 const SystemIdentityModal = ({ onClose }: { onClose: () => void }) => {
+    // ... (Existing implementation remains the same)
     return createPortal(
         <div className="fixed inset-0 z-[999999] bg-[#0F172A] text-white animate-fade-in flex items-center justify-center p-4 md:p-6" onClick={onClose}>
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 pointer-events-none"></div>
@@ -33,7 +34,7 @@ const SystemIdentityModal = ({ onClose }: { onClose: () => void }) => {
                         </div>
                         <div>
                             <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-none mb-1">HUIGANG OS</h1>
-                            <p className="text-[10px] md:text-sm font-bold text-slate-400 tracking-[0.4em] uppercase">Smart Safety System v2.8.2</p>
+                            <p className="text-[10px] md:text-sm font-bold text-slate-400 tracking-[0.4em] uppercase">Smart Safety System v2.8.3</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X size={24}/></button>
@@ -281,6 +282,64 @@ const DeleteConfirmModal = ({ info, onConfirm, onCancel }: { info: any, onConfir
   );
 };
 
+// [NEW] Mode Selection Modal
+const ModeSelectionModal = ({ onSelect, onClose }: { onSelect: (mode: 'BATCH' | 'ROUTINE') => void, onClose: () => void }) => {
+    return createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up relative p-6 md:p-8" onClick={(e) => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 className="text-2xl font-black text-slate-800">작업 모드 선택</h2>
+                        <p className="text-sm text-slate-500 font-medium mt-1">원하는 등록 방식을 선택해주세요.</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"><X size={24}/></button>
+                </div>
+
+                <div className="space-y-4">
+                    {/* Batch Mode Button */}
+                    <button 
+                        onClick={() => onSelect('BATCH')}
+                        className="w-full flex items-center p-5 rounded-2xl border-2 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-lg hover:shadow-indigo-100 transition-all group text-left relative overflow-hidden"
+                    >
+                        <div className="bg-indigo-100 text-indigo-600 p-3 rounded-xl mr-4 shrink-0 group-hover:scale-110 transition-transform">
+                            <FileStack size={28} />
+                        </div>
+                        <div className="flex-1 z-10">
+                            <h3 className="font-bold text-lg text-slate-800 group-hover:text-indigo-700">종합일지 일괄 자동 처리</h3>
+                            <p className="text-xs text-slate-500 mt-1 font-medium group-hover:text-slate-600">
+                                관리자용. 종합 일지 파일을 업로드하여<br/>여러 팀의 데이터를 한 번에 추출합니다.
+                            </p>
+                        </div>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-300 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                            <ArrowRight size={24} />
+                        </div>
+                    </button>
+
+                    {/* Routine Mode Button */}
+                    <button 
+                        onClick={() => onSelect('ROUTINE')}
+                        className="w-full flex items-center p-5 rounded-2xl border-2 border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-100 transition-all group text-left relative overflow-hidden"
+                    >
+                        <div className="bg-emerald-100 text-emerald-600 p-3 rounded-xl mr-4 shrink-0 group-hover:scale-110 transition-transform">
+                            <Camera size={28} />
+                        </div>
+                        <div className="flex-1 z-10">
+                            <h3 className="font-bold text-lg text-slate-800 group-hover:text-emerald-700">개별 TBM 간편 등록</h3>
+                            <p className="text-xs text-slate-500 mt-1 font-medium group-hover:text-slate-600">
+                                현장 팀장용. 사진과 영상을 촬영하여<br/>단일 팀의 활동 내역을 등록합니다.
+                            </p>
+                        </div>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-300 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                            <ArrowRight size={24} />
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [entries, setEntries] = useState<TBMEntry[]>([]);
@@ -297,10 +356,12 @@ function App() {
   const [editingEntry, setEditingEntry] = useState<TBMEntry | null>(null); 
   
   const [entryMode, setEntryMode] = useState<'BATCH' | 'ROUTINE'>('ROUTINE');
+  // [NEW] Mode Selection State
+  const [showModeSelector, setShowModeSelector] = useState(false);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isIdentityOpen, setIsIdentityOpen] = useState(false); // [NEW] Philosophy Modal State
+  const [isIdentityOpen, setIsIdentityOpen] = useState(false); 
   const [settingsTab, setSettingsTab] = useState<'backup' | 'teams'>('teams'); 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -567,6 +628,7 @@ function App() {
          onOpenSettings={() => setIsSettingsOpen(true)} 
          onShowHistory={() => setIsHistoryOpen(true)}
          onShowIdentity={() => setIsIdentityOpen(true)}
+         onNewEntryClick={() => setShowModeSelector(true)} // [NEW] Open Modal
       />
       {/* 
          Updated Main Content Layout:
@@ -583,7 +645,7 @@ function App() {
               {currentView === 'reports' && 'Safe Work Report Center'}
             </h1>
             <p className="text-[10px] md:text-sm font-medium text-slate-400 uppercase tracking-wider">
-               (주)휘강건설 스마트 안전관리 시스템 v2.8.2
+               (주)휘강건설 스마트 안전관리 시스템 v2.8.3
             </p>
           </div>
 
@@ -623,6 +685,19 @@ function App() {
 
         {/* Feature Showcase Modal */}
         {activeFeature && <FeatureShowcase featureKey={activeFeature} onClose={() => setActiveFeature(null)} />}
+
+        {/* [NEW] Mode Selection Modal */}
+        {showModeSelector && (
+            <ModeSelectionModal 
+                onSelect={(mode) => {
+                    setEditingEntry(null);
+                    setEntryMode(mode);
+                    setCurrentView('new');
+                    setShowModeSelector(false);
+                }} 
+                onClose={() => setShowModeSelector(false)} 
+            />
+        )}
 
         {deleteState.isOpen && (
            <DeleteConfirmModal info={deleteState.targetInfo} onConfirm={handleConfirmDelete} onCancel={() => setDeleteState({isOpen: false, targetId: null, targetInfo: null})} />
