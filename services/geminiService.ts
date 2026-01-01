@@ -70,6 +70,16 @@ const cleanJsonString = (text: string): string => {
   return cleaned;
 };
 
+// Helper: Safe Number Parser
+const safeParseInt = (val: any): number => {
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+        const parsed = parseInt(val.replace(/[^0-9-]/g, ''), 10);
+        return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+};
+
 // ... (Existing video analysis code remains unchanged) ...
 export const evaluateTBMVideo = async (base64Video: string, mimeType: string, workDescription?: string): Promise<TBMAnalysisResult> => {
   try {
@@ -304,42 +314,56 @@ export const analyzeMasterLog = async (
         }
 
         const teamsArray = Array.isArray(data) ? data : (data.teams || []);
-        // Use extracted date or fallback to today
-        const globalDate = data.documentDate || new Date().toISOString().split('T')[0];
+        
+        // [Sanitization Logic] Date Normalization
+        let globalDate = new Date().toISOString().split('T')[0];
+        if (data.documentDate && /^\d{4}-\d{2}-\d{2}$/.test(data.documentDate)) {
+            globalDate = data.documentDate;
+        }
         
         const processedTeams = teamsArray.map((team: any) => {
+            // [Sanitization Logic] Safe Number Conversion
+            const safeAttendees = safeParseInt(team.attendeesCount);
+            const safeRiskCount = safeParseInt(team.riskFactorCount);
+            const safeSafetyScore = safeParseInt(team.safetyScore);
+            const safeFeedbackLevel = safeParseInt(team.feedbackLevel);
+
+            // [Sanitization Logic] Safe Array Defaults
+            const safeRiskFactors = Array.isArray(team.riskFactors) ? team.riskFactors : [];
+            const safeFeedback = Array.isArray(team.safetyFeedback) ? team.safetyFeedback : [];
+
             // Map the AI's "Research Variables" into the TBMAnalysisResult structure
             // effectively creating "Synthetic Data" for analysis where video is missing.
             const researchAnalysis: TBMAnalysisResult = {
-                score: team.safetyScore || 85, // Extracted score
-                evaluation: `[데이터 마이닝] 위험요인 ${team.riskFactorCount}건 도출, 피드백 강도 Lv.${team.feedbackLevel}.`,
+                score: safeSafetyScore || 85, // Extracted score or Default
+                evaluation: `[데이터 마이닝] 위험요인 ${safeRiskCount}건 도출, 피드백 강도 Lv.${safeFeedbackLevel}.`,
                 analysisSource: 'DOCUMENT', // Mark as Document source
                 details: { 
                     participation: 'GOOD', 
                     voiceClarity: 'CLEAR', 
                     ppeStatus: 'GOOD', 
-                    interaction: team.feedbackLevel >= 3 
+                    interaction: safeFeedbackLevel >= 3 
                 },
                 focusAnalysis: { 
-                    overall: Math.min(100, (team.safetyScore || 80) + 5), 
+                    overall: Math.min(100, (safeSafetyScore || 80) + 5), 
                     distractedCount: 0, 
                     focusZones: { front: 'HIGH', back: 'HIGH', side: 'HIGH' } 
                 },
                 insight: { 
-                    mentionedTopics: team.riskFactors?.map((r:any) => r.risk) || [], 
+                    mentionedTopics: safeRiskFactors.map((r:any) => r.risk || '') || [], 
                     missingTopics: [], 
                     suggestion: "종합 일지 정량 데이터 추출 완료" 
                 },
-                feedback: team.safetyFeedback || []
+                feedback: safeFeedback
             };
 
             return {
                 teamName: team.teamName || "팀명 미상",
                 leaderName: team.leaderName || "",
-                attendeesCount: team.attendeesCount || 0,
+                attendeesCount: safeAttendees,
                 workDescription: team.workDescription || "내용 없음",
-                riskFactors: team.riskFactors || [],
-                safetyFeedback: team.safetyFeedback || [],
+                riskFactors: safeRiskFactors,
+                safetyFeedback: safeFeedback,
                 detectedDate: globalDate, // [CRITICAL] Propagate detected date
                 videoAnalysis: researchAnalysis // Inject variables here
             };
