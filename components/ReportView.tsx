@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { TBMEntry } from '../types';
 import { Printer, X, Download, Loader2, Edit3, Trash2, Sparkles, UserCheck, AlertOctagon, Eye, Users, Video, FileVideo, ImageOff } from 'lucide-react';
@@ -17,6 +17,20 @@ interface ReportViewProps {
 
 export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signatures, onUpdateSignature, onEdit, onDelete }) => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [scale, setScale] = useState(1);
+
+  // Auto-scale for mobile/tablet screens
+  useEffect(() => {
+      const handleResize = () => {
+          const maxWidth = Math.min(window.innerWidth - 32, 794); // -32 for padding
+          const newScale = Math.min(1, maxWidth / 794);
+          setScale(newScale);
+      };
+      
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handlePrint = () => {
     window.print();
@@ -192,6 +206,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
             box-sizing: border-box;
             border: 2px solid black; 
             display: block;
+            transform-origin: top center; /* Important for scaling */
         }
         .row { display: flex; width: 100%; border-bottom: 1px solid black; box-sizing: border-box; }
         .row.last { border-bottom: none; }
@@ -233,16 +248,17 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
           .report-page {
             margin: 0 !important; box-shadow: none !important;
             page-break-after: always;
+            transform: none !important; /* Reset scale for printing */
           }
           .no-print-ui { display: none !important; }
         }
       `}</style>
       
       {/* Toolbar */}
-      <div className="sticky top-0 z-50 w-full bg-slate-800 text-white p-4 shadow-lg flex justify-between items-center max-w-[794px] rounded-b-xl mb-8 no-print-ui">
+      <div className="sticky top-0 z-50 w-full bg-slate-800 text-white p-4 shadow-lg flex justify-between items-center max-w-[794px] rounded-b-xl mb-4 md:mb-8 no-print-ui">
         <div>
-          <h2 className="font-bold text-lg">🖨️ 보고서 센터</h2>
-          <p className="text-xs text-slate-400">
+          <h2 className="font-bold text-base md:text-lg">🖨️ 보고서 센터</h2>
+          <p className="text-[10px] md:text-xs text-slate-400">
             {entries.length}개의 TBM 일지가 준비되었습니다.
           </p>
         </div>
@@ -250,27 +266,21 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
           <button 
             onClick={handleDownloadPDF}
             disabled={isGeneratingPdf}
-            className={`flex items-center gap-2 bg-green-600 hover:bg-green-500 px-4 py-2 rounded font-bold transition-colors ${isGeneratingPdf ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`flex items-center gap-2 bg-green-600 hover:bg-green-500 px-3 md:px-4 py-2 rounded font-bold transition-colors text-xs md:text-sm ${isGeneratingPdf ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            {isGeneratingPdf ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-            {isGeneratingPdf ? 'PDF 생성 중...' : 'PDF 파일로 다운로드'}
-          </button>
-          <button 
-            onClick={handlePrint}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-bold transition-colors"
-          >
-            <Printer size={18} /> 인쇄 (시스템)
+            {isGeneratingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            <span className="hidden md:inline">{isGeneratingPdf ? 'PDF 생성 중...' : 'PDF 다운로드'}</span>
           </button>
           <button 
             onClick={onClose}
-            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded transition-colors"
+            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 px-3 md:px-4 py-2 rounded transition-colors text-xs md:text-sm"
           >
-            <X size={18} /> 닫기
+            <X size={16} /> 닫기
           </button>
         </div>
       </div>
 
-      <div className="pb-20 print:pb-0">
+      <div className="pb-20 print:pb-0 w-full flex flex-col items-center">
         {entries.map((entry, index) => {
             // SAFEGUARD: Ensure date exists
             const safeDate = entry.date ? entry.date.replace(/-/g,'') : '00000000';
@@ -280,7 +290,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
             const safeCount = entry.attendeesCount || 0;
 
             return (
-              <div key={entry.id || index} className="report-page group">
+              <div 
+                key={entry.id || index} 
+                className="report-page group"
+                style={{ transform: `scale(${scale})`, marginBottom: `${40 * scale}px` }} // Dynamic Scaling
+              >
                 {/* 1. Header Row */}
                 <div className="row h-header">
                     <div className="col" style={{width: '65%'}}>

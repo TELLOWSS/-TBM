@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { TBMEntry, RiskAssessmentItem, SafetyGuideline, TeamOption, TBMAnalysisResult, ExtractedTBMData } from '../types';
 import { analyzeMasterLog, evaluateTBMVideo } from '../services/geminiService';
 import { compressVideo } from '../utils/videoUtils';
-import { Upload, Camera, Sparkles, AlertTriangle, CheckCircle2, Loader2, FileText, X, ShieldCheck, Layers, ArrowLeft, Trash2, Film, Save, ZoomIn, ZoomOut, Maximize, Minimize, RotateCw, Clock, Plus, Check, PlayCircle, BarChart, Mic, Volume2, Edit2, RefreshCcw, Target, Eye, AlertOctagon, UserCheck, HelpCircle, FileStack, ScanLine, ListChecks, Zap, Files, Copy, ArrowRight, BrainCircuit, MessageSquare, Video, Database, Rocket, CalendarCheck } from 'lucide-react';
+import { Upload, Camera, Sparkles, AlertTriangle, CheckCircle2, Loader2, FileText, X, ShieldCheck, Layers, ArrowLeft, Trash2, Film, Save, ZoomIn, ZoomOut, Maximize, Minimize, RotateCw, Clock, Plus, Check, PlayCircle, BarChart, Mic, Volume2, Edit2, RefreshCcw, Target, Eye, AlertOctagon, UserCheck, HelpCircle, FileStack, ScanLine, ListChecks, Zap, Files, Copy, ArrowRight, BrainCircuit, MessageSquare, Video, Database, Rocket, CalendarCheck, Image as ImageIcon, PenTool, MousePointerClick, FileInput } from 'lucide-react';
 
 interface TBMFormProps {
   onSave: (entry: TBMEntry | TBMEntry[], shouldExit?: boolean) => boolean;
@@ -32,7 +32,7 @@ interface SavedFormState {
   videoAnalysis: TBMAnalysisResult | null;
   extractedResults?: ExtractedTBMData[];
   currentResultIndex?: number;
-  isDateFromAI?: boolean; // [NEW] Track source of date
+  isDateFromAI?: boolean;
 }
 
 interface QueueItem {
@@ -46,7 +46,7 @@ interface QueueItem {
   analysisCache?: ExtractedTBMData[]; 
 }
 
-// Helper for Blob to Base64
+// ... (blobToBase64 and resizeBase64Image helpers remain unchanged)
 const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -56,7 +56,6 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
-// Helper for resizing Base64 Image
 const resizeBase64Image = (base64: string, maxWidth: number = 1024, quality: number = 0.7): Promise<string> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -65,12 +64,10 @@ const resizeBase64Image = (base64: string, maxWidth: number = 1024, quality: num
       const canvas = document.createElement('canvas');
       let width = img.width;
       let height = img.height;
-      
       if (width > maxWidth) {
         height = Math.round((height *= maxWidth / width));
         width = maxWidth;
       }
-      
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
@@ -86,11 +83,111 @@ const resizeBase64Image = (base64: string, maxWidth: number = 1024, quality: num
   });
 };
 
+// --- Guide Component ---
+const GuideScreen = ({ mode, onStart }: { mode: 'BATCH' | 'ROUTINE', onStart: () => void }) => {
+    return (
+        <div className="flex-1 bg-slate-50 flex flex-col items-center justify-center p-6 animate-fade-in overflow-y-auto">
+            <div className="max-w-4xl w-full">
+                <div className="text-center mb-10">
+                    <div className={`inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-6 shadow-xl ${mode === 'BATCH' ? 'bg-indigo-600 text-white' : 'bg-emerald-500 text-white'}`}>
+                        {mode === 'BATCH' ? <FileStack size={40} /> : <Camera size={40} />}
+                    </div>
+                    <h2 className="text-3xl md:text-4xl font-black text-slate-800 mb-3 tracking-tight">
+                        {mode === 'BATCH' ? '종합 일지 빅데이터 마이닝' : '스마트 TBM 개별 등록'}
+                    </h2>
+                    <p className="text-slate-500 text-sm md:text-base font-medium max-w-2xl mx-auto leading-relaxed">
+                        {mode === 'BATCH' 
+                            ? "종이로 작성된 '일일안전작업종합일지'를 업로드하세요. AI가 수십 개의 팀 데이터를 자동으로 분리하고 추출하여 데이터베이스화합니다." 
+                            : "팀장님이 현장에서 직접 활동 내역을 등록합니다. 사진과 영상을 업로드하면 AI가 위험 요인을 분석하고 피드백을 제공합니다."}
+                    </p>
+                </div>
+
+                {mode === 'BATCH' ? (
+                    /* Batch Mode Infographic */
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative group hover:shadow-lg transition-all">
+                            <div className="absolute top-6 right-6 text-indigo-100 group-hover:text-indigo-500 transition-colors"><FileInput size={40}/></div>
+                            <span className="bg-indigo-50 text-indigo-600 text-[10px] font-black px-2 py-1 rounded mb-4 inline-block">STEP 01</span>
+                            <h3 className="text-lg font-bold text-slate-800 mb-2">종합 파일 업로드</h3>
+                            <p className="text-xs text-slate-500 leading-relaxed">
+                                스캔한 PDF 또는 촬영한 이미지 파일을 업로드하세요.<br/>
+                                <strong>*여러 장의 파일도 한 번에 처리가 가능합니다.</strong>
+                            </p>
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative group hover:shadow-lg transition-all">
+                            <div className="absolute top-6 right-6 text-indigo-100 group-hover:text-indigo-500 transition-colors"><Sparkles size={40}/></div>
+                            <span className="bg-indigo-50 text-indigo-600 text-[10px] font-black px-2 py-1 rounded mb-4 inline-block">STEP 02</span>
+                            <h3 className="text-lg font-bold text-slate-800 mb-2">AI 자동 추출</h3>
+                            <p className="text-xs text-slate-500 leading-relaxed">
+                                AI가 문서 내의 <strong>날짜, 팀명, 인원, 위험요인</strong>을 자동으로 식별하고 구조화된 데이터로 변환합니다.
+                            </p>
+                        </div>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm relative group hover:shadow-lg transition-all">
+                            <div className="absolute top-6 right-6 text-indigo-100 group-hover:text-indigo-500 transition-colors"><Database size={40}/></div>
+                            <span className="bg-indigo-50 text-indigo-600 text-[10px] font-black px-2 py-1 rounded mb-4 inline-block">STEP 03</span>
+                            <h3 className="text-lg font-bold text-slate-800 mb-2">DB 저장 완료</h3>
+                            <p className="text-xs text-slate-500 leading-relaxed">
+                                추출된 데이터를 확인 후 <strong>'일괄 저장'</strong> 버튼을 누르면 대시보드에 즉시 반영됩니다.
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    /* Routine Mode Infographic */
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
+                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center hover:border-emerald-200 transition-colors">
+                            <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 mb-3">
+                                <MousePointerClick size={20}/>
+                            </div>
+                            <h3 className="font-bold text-slate-800 text-sm mb-1">팀 선택</h3>
+                            <p className="text-[10px] text-slate-400">작업할 팀을 선택하세요.</p>
+                        </div>
+                        <div className="flex items-center justify-center md:rotate-0 rotate-90 text-slate-300"><ArrowRight/></div>
+                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center hover:border-emerald-200 transition-colors">
+                            <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 mb-3">
+                                <Camera size={20}/>
+                            </div>
+                            <h3 className="font-bold text-slate-800 text-sm mb-1">사진/영상 촬영</h3>
+                            <p className="text-[10px] text-slate-400">활동 모습을 담아주세요.</p>
+                        </div>
+                        <div className="flex items-center justify-center md:rotate-0 rotate-90 text-slate-300"><ArrowRight/></div>
+                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center hover:border-emerald-200 transition-colors">
+                            <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 mb-3">
+                                <BrainCircuit size={20}/>
+                            </div>
+                            <h3 className="font-bold text-slate-800 text-sm mb-1">AI 안전 피드백</h3>
+                            <p className="text-[10px] text-slate-400">누락된 위험을 코칭받으세요.</p>
+                        </div>
+                    </div>
+                )}
+
+                <div className="text-center">
+                    <button 
+                        onClick={onStart}
+                        className={`px-10 py-4 rounded-2xl font-bold text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all text-lg flex items-center gap-2 mx-auto ${mode === 'BATCH' ? 'bg-indigo-600 shadow-indigo-200' : 'bg-emerald-600 shadow-emerald-200'}`}
+                    >
+                        <Rocket size={20} className="animate-pulse" />
+                        작업 시작하기
+                    </button>
+                    <p className="mt-4 text-xs text-slate-400 font-medium">
+                        * 오른쪽 상단의 <HelpCircle size={12} className="inline align-middle"/> 아이콘을 눌러 언제든 다시 볼 수 있습니다.
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuidelines, initialData, onDelete, teams, mode = 'ROUTINE' }) => {
   // --- Global State ---
+  // [NEW] Guide State - Default to true only if NOT editing existing data
+  const [showGuide, setShowGuide] = useState(!initialData);
+  
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [activeQueueId, setActiveQueueId] = useState<string | null>(null);
   const [loadedFileId, setLoadedFileId] = useState<string | null>(null);
+
+  // --- Mobile Tab State ---
+  const [activeMobileTab, setActiveMobileTab] = useState<'queue' | 'preview' | 'form'>('queue');
 
   // --- Workspace State ---
   const [viewerMode, setViewerMode] = useState<'fit' | 'scroll'>('fit'); 
@@ -99,7 +196,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   
   // Form Fields
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isDateFromAI, setIsDateFromAI] = useState(false); // [NEW] Date Source Flag
+  const [isDateFromAI, setIsDateFromAI] = useState(false);
   const [entryTime, setEntryTime] = useState('07:30');
   const [teamId, setTeamId] = useState(teams[0]?.id || '');
   const [leaderName, setLeaderName] = useState('');
@@ -155,6 +252,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
+  // ... (Memory Cleanup, Dirty Check, Helpers, compressImage, getCurrentFormState, resetFormFields, restoreFormData, handleSafeCancel, handleAutoProcessQueue remain unchanged)
   // --- Memory Cleanup ---
   useEffect(() => {
     return () => {
@@ -403,8 +501,8 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       }
   };
 
-  // ... (Rest of component methods - edit, risk change, etc.) ...
-
+  // ... (Existing component methods)
+  // ... (handleStartEditAnalysis, handleCancelEditAnalysis, handleSaveEditAnalysis, updateTempAnalysis, handleRiskChange, addRiskFactor, removeRiskFactor, startEditingFeedback, saveEditingFeedback, cancelEditingFeedback, populateFieldsFromData, syncCurrentToExtracted, handleSelectExtractedResult, handleDocAnalyze, handleVideoAnalyze)
   const handleStartEditAnalysis = () => {
     if (videoAnalysis) {
       setTempAnalysis(JSON.parse(JSON.stringify(videoAnalysis)));
@@ -511,6 +609,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       if (extractedResults[index]) {
           setCurrentResultIndex(index);
           populateFieldsFromData(extractedResults[index]);
+          setActiveMobileTab('form'); // Auto switch on mobile
       }
   };
 
@@ -528,6 +627,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
         populateFieldsFromData(activeItem.analysisCache[0]);
         setVideoStatusMessage("✅ 저장된 문서 분석 결과 불러옴");
         setTimeout(() => setVideoStatusMessage(""), 2000);
+        setActiveMobileTab('form');
         return;
     }
 
@@ -556,6 +656,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                       status: 'pending'
                   } : q));
               }
+              setActiveMobileTab('form'); // Switch to form on mobile
           } else {
              alert("문서 내용을 인식하지 못했습니다.");
              if (activeQueueId) {
@@ -612,6 +713,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       }
   };
 
+  // ... (useEffect Hooks and other handlers)
   useEffect(() => {
     if (!activeQueueId) return;
     const item = queue.find(q => q.id === activeQueueId);
@@ -695,6 +797,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       setActiveQueueId(fakeId);
       setLoadedFileId(fakeId);
       restoreFormData(formState);
+      setActiveMobileTab('form'); // Switch to form on load
     }
   }, [initialData, teams]);
 
@@ -855,16 +958,12 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
             }
 
             const batchEntries: TBMEntry[] = [];
-            // Use local variable for updated results if sync was delayed (though syncCurrentToExtracted updates state)
-            // Ideally we rely on state being fresh enough or pass it. 
-            // For safety, let's re-construct the current item manually here to ensure it's included.
             
             for (let index = 0; index < extractedResults.length; index++) {
                 const data = extractedResults[index];
                 let entryData = { ...data };
                 if (index === currentResultIndex) {
                     const currentTeamOption = teams.find(t => t.id === teamId);
-                    // Use CURRENT STATE directly for the active index to ensure latest edits are saved
                     entryData = { 
                         ...data, 
                         leaderName, 
@@ -991,32 +1090,32 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
     <div className="fixed inset-0 z-[9999] bg-[#F8FAFC] flex flex-col animate-fade-in text-slate-800 font-sans">
         
         {/* Top Header */}
-        <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm shrink-0 z-50">
-           <div className="flex items-center gap-4">
+        <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6 shadow-sm shrink-0 z-50">
+           <div className="flex items-center gap-2 md:gap-4">
               <button onClick={handleSafeCancel} className="text-slate-500 hover:text-slate-800 flex items-center gap-2 font-bold transition-colors">
                  <ArrowLeft size={20} />
-                 <span>메인으로 나가기</span>
+                 <span className="hidden md:inline">메인으로 나가기</span>
               </button>
-              <div className="h-6 w-px bg-slate-200"></div>
-              <h1 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                 <Layers className={mode === 'BATCH' ? "text-indigo-600" : "text-emerald-600"} /> 
-                 {mode === 'BATCH' ? '스마트 TBM 종합 일지 작업실' : '스마트 TBM 정밀 분석 등록'}
+              <div className="hidden md:block h-6 w-px bg-slate-200"></div>
+              <h1 className="text-sm md:text-lg font-black text-slate-800 flex items-center gap-2 truncate">
+                 <Layers className={mode === 'BATCH' ? "text-indigo-600" : "text-emerald-600"} size={18} /> 
+                 <span className="truncate">{mode === 'BATCH' ? '종합 일지 작업실' : '정밀 분석 등록'}</span>
               </h1>
-              <button onClick={() => setShowHelpModal(true)} className="ml-2 text-slate-400 hover:text-blue-600" title="가이드"><HelpCircle size={20} /></button>
+              <button onClick={() => setShowGuide(true)} className="ml-1 md:ml-2 text-slate-400 hover:text-blue-600" title="가이드"><HelpCircle size={20} /></button>
            </div>
            
-           <div className="flex items-center gap-3">
+           <div className="flex items-center gap-2 md:gap-3">
               {/* Delete Button in Edit Mode */}
               {initialData && onDelete && (
                   <button 
                       onClick={() => onDelete(String(initialData.id))} 
                       className="bg-white border border-red-200 text-red-500 px-3 py-2 rounded-lg text-xs font-bold hover:bg-red-50 hover:text-red-700 hover:border-red-300 transition-colors flex items-center gap-1.5"
                   >
-                      <Trash2 size={16} /> 삭제
+                      <Trash2 size={16} /> <span className="hidden md:inline">삭제</span>
                   </button>
               )}
 
-              <div className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full flex items-center gap-2">
+              <div className="hidden md:flex text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full items-center gap-2">
                  <span>진행 현황:</span>
                  <span className="text-blue-600">{queue.filter(q => q.status === 'done').length}</span>
                  <span>/ {queue.length}</span>
@@ -1027,333 +1126,296 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
            </div>
         </div>
 
-        {/* ... (Middle Layout Content - unchanged) ... */}
-        
+        {/* Mobile Tab Switcher */}
+        {activeQueueId && !showGuide && (
+            <div className="flex lg:hidden bg-white border-b border-slate-200 sticky top-0 z-40">
+                <button onClick={() => setActiveMobileTab('queue')} className={`flex-1 py-3 text-xs font-bold border-b-2 ${activeMobileTab === 'queue' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}>파일 목록</button>
+                <button onClick={() => setActiveMobileTab('preview')} className={`flex-1 py-3 text-xs font-bold border-b-2 ${activeMobileTab === 'preview' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}>미리보기</button>
+                <button onClick={() => setActiveMobileTab('form')} className={`flex-1 py-3 text-xs font-bold border-b-2 ${activeMobileTab === 'form' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}>작성하기</button>
+            </div>
+        )}
+
         {/* Layout */}
-        <div className="flex-1 flex overflow-hidden">
-           {/* Sidebar */}
-           <div className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 z-40">
-              <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-2">
-                 {/* Auto-Pilot Button */}
-                 {mode === 'BATCH' && queue.filter(q => q.status === 'pending').length > 0 && (
-                     <button 
-                        onClick={handleAutoProcessQueue}
-                        disabled={isAutoProcessing}
-                        className={`w-full py-3 border rounded-xl font-bold text-xs transition-colors flex flex-col items-center justify-center gap-1 shadow-lg ${isAutoProcessing ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-600 text-white hover:shadow-blue-200/50'}`}
-                     >
-                        <span className="flex items-center gap-1.5"><Rocket size={14} className={isAutoProcessing ? "animate-pulse" : ""} /> {isAutoProcessing ? '자동 처리 중...' : '빅데이터 마이닝 (Auto-Pilot)'}</span>
-                        <span className="text-[9px] opacity-80 font-normal">통계 데이터만 추출 (No Images)</span>
-                     </button>
-                 )}
-                 <button onClick={() => sidebarInputRef.current?.click()} className={`w-full py-3 border rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 ${mode === 'BATCH' ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'}`}>
-                    <Plus size={16} /> 파일 추가
-                 </button>
-                 <input ref={sidebarInputRef} type="file" multiple accept="image/*,application/pdf" className="hidden" onChange={handleBatchUpload}/>
-              </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-                 {queue.length === 0 && <div className="text-center py-10 text-slate-400"><p className="text-xs">등록된 파일이 없습니다.</p></div>}
-                 {queue.map((item, idx) => (
-                    <div key={item.id} onClick={() => !isAutoProcessing && setActiveQueueId(item.id)} className={`relative p-3 rounded-xl cursor-pointer border transition-all ${activeQueueId === item.id ? 'bg-blue-50 border-blue-500 shadow-sm' : 'bg-white border-slate-100 hover:bg-slate-50'} ${item.status === 'error' ? 'border-red-300 bg-red-50' : ''}`}>
-                       <div className="flex gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 shrink-0 overflow-hidden flex items-center justify-center relative">
-                                {item.isPdf ? <FileText size={16}/> : <img src={item.previewUrl || ''} className="w-full h-full object-cover"/>}
-                                {item.status === 'done' && (
-                                    <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
-                                        <CheckCircle2 size={12} className="text-green-700 bg-white rounded-full"/>
-                                    </div>
-                                )}
-                                {item.status === 'processing' && (
-                                    <div className="absolute inset-0 bg-blue-500/30 flex items-center justify-center backdrop-blur-[1px]">
-                                        <Loader2 size={16} className="text-white animate-spin"/>
-                                    </div>
-                                )}
-                                {item.status === 'error' && (
-                                    <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
-                                        <AlertTriangle size={12} className="text-red-600 bg-white rounded-full"/>
-                                    </div>
-                                )}
-                          </div>
-                          <div className="flex-1 min-w-0"><p className="text-xs font-bold truncate">{item.file.name}</p><span className="text-[10px] text-slate-400">{item.status}</span></div>
-                       </div>
-                       <button 
-                          onClick={(e) => removeFromQueue(item.id, e)} 
-                          className="absolute -top-2 -right-2 bg-white border border-slate-200 rounded-full p-1.5 shadow-sm hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors z-10"
-                          type="button"
-                          disabled={isAutoProcessing}
-                       >
-                          <Trash2 size={14}/>
-                       </button>
-                    </div>
-                 ))}
-              </div>
-           </div>
-
-           {activeQueueId ? (
-              <div className="flex-1 flex overflow-hidden relative">
-                 {/* Center Viewer */}
-                 <div className="flex-1 bg-slate-900 relative flex flex-col overflow-hidden">
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-xl border border-slate-700 shadow-2xl">
-                       <button onClick={() => { setViewerMode('fit'); setImgScale(1); }} className="p-2 rounded-lg text-xs font-bold bg-blue-600 text-white"><Minimize size={14}/> 전체</button>
-                       <button onClick={() => { setViewerMode('scroll'); setImgScale(1.5); }} className="p-2 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700"><Maximize size={14}/></button>
-                       <button onClick={() => setImgRotation(r => (r + 90) % 360)} className="p-2 hover:bg-slate-700 text-white rounded-lg"><RotateCw size={16}/></button>
-                    </div>
-                    <div className="flex-1 overflow-auto flex items-center justify-center p-8 custom-scrollbar">
-                        {queue.find(q => q.id === activeQueueId)?.isPdf ? 
-                           <object data={queue.find(q => q.id === activeQueueId)?.previewUrl!} type="application/pdf" className="w-full h-full min-h-[800px] shadow-2xl rounded-lg bg-white"/> : 
-                           <div style={{ transform: `rotate(${imgRotation}deg)`, width: viewerMode === 'fit' ? 'auto' : `${imgScale * 100}%`, height: viewerMode === 'fit' ? '100%' : 'auto' }} className="relative transition-transform duration-200 ease-out origin-center">
-                             <img src={queue.find(q => q.id === activeQueueId)?.previewUrl!} className={`rounded bg-white ${viewerMode === 'fit' ? 'max-w-full max-h-full object-contain' : 'w-full h-auto'}`}/>
-                           </div>
-                        }
-                    </div>
-                 </div>
-
-                 {/* Right Form */}
-                 <div className="w-[480px] bg-white border-l border-slate-200 flex flex-col h-full shadow-2xl z-30 relative">
-                    {isAutoProcessing && (
-                        <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-fade-in">
-                            <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-6 relative">
-                                <Rocket size={48} className="text-blue-600 animate-bounce" />
-                                <div className="absolute inset-0 border-4 border-blue-100 rounded-full animate-ping"></div>
-                            </div>
-                            <h3 className="text-2xl font-black text-slate-800 mb-2">빅데이터 마이닝 중...</h3>
-                            <p className="text-sm text-slate-500 font-bold mb-6">종합 일지에서 연구용 데이터를 추출하고 있습니다.<br/>(저장 공간 확보를 위해 이미지는 자동 제외됩니다)</p>
-                            
-                            <div className="w-full max-w-xs bg-slate-100 rounded-full h-4 mb-3 overflow-hidden">
-                                <div 
-                                    className="bg-blue-600 h-full transition-all duration-300 ease-out" 
-                                    style={{ width: `${(autoProcessStats.currentFileIndex / Math.max(autoProcessStats.totalFiles, 1)) * 100}%` }}
-                                ></div>
-                            </div>
-                            <div className="flex justify-between w-full max-w-xs text-xs font-bold text-slate-500">
-                                <span>파일 {autoProcessStats.currentFileIndex} / {autoProcessStats.totalFiles}</span>
-                                <span>누적 {autoProcessStats.totalTeamsSaved}개 팀 등록</span>
-                            </div>
-                        </div>
+        {showGuide ? (
+            <GuideScreen mode={mode as 'BATCH' | 'ROUTINE'} onStart={() => setShowGuide(false)} />
+        ) : (
+            <div className="flex-1 flex overflow-hidden relative">
+            
+            {/* 1. Sidebar (Queue) - Visible on Desktop OR Mobile Tab 'queue' */}
+            <div className={`w-full lg:w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 z-40 ${activeMobileTab === 'queue' || !activeQueueId ? 'block' : 'hidden lg:flex'}`}>
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-2">
+                    {/* Auto-Pilot Button */}
+                    {mode === 'BATCH' && queue.filter(q => q.status === 'pending').length > 0 && (
+                        <button 
+                            onClick={handleAutoProcessQueue}
+                            disabled={isAutoProcessing}
+                            className={`w-full py-3 border rounded-xl font-bold text-xs transition-colors flex flex-col items-center justify-center gap-1 shadow-lg ${isAutoProcessing ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-600 text-white hover:shadow-blue-200/50'}`}
+                        >
+                            <span className="flex items-center gap-1.5"><Rocket size={14} className={isAutoProcessing ? "animate-pulse" : ""} /> {isAutoProcessing ? '자동 처리 중...' : '빅데이터 마이닝 (Auto-Pilot)'}</span>
+                            <span className="text-[9px] opacity-80 font-normal">통계 데이터만 추출 (No Images)</span>
+                        </button>
                     )}
-                    <div className="p-5 border-b border-slate-100 bg-slate-50/80 backdrop-blur-sm shrink-0">
-                       <div className="flex items-end gap-2">
-                          <div className="flex-1">
-                             <label className="text-[11px] font-bold text-slate-500 mb-1 block uppercase">등록할 팀 선택</label>
-                             <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className="w-full text-base font-bold text-slate-900 bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
-                                {teams.map(t => {
-                                   const isDone = queue.find(q => q.id === activeQueueId)?.teamsRegistered.includes(t.name);
-                                   return <option key={t.id} value={t.id} disabled={isDone} className={isDone ? "text-slate-300" : ""}>{t.name} {isDone ? '(완료)' : ''}</option>;
-                                })}
-                             </select>
-                          </div>
-                          
-                          <button onClick={handleDocAnalyze} disabled={isDocAnalyzing || isVideoAnalyzing} className={`h-[46px] text-white px-4 rounded-lg font-bold transition-all shadow-md flex items-center gap-2 shrink-0 text-xs ${activeQueueId ? 'bg-gradient-to-r from-indigo-600 to-violet-600' : 'bg-slate-900'}`}>
-                             {isDocAnalyzing ? <Loader2 className="animate-spin" size={16}/> : <Sparkles size={16}/>} 
-                             {isDocAnalyzing ? '분석 중...' : '문서 식별'}
-                          </button>
-                       </div>
-                       
-                       {(isDocAnalyzing || isVideoAnalyzing) && videoStatusMessage && (
-                           <div className="mt-2 text-center">
-                               <p className="text-[10px] font-bold text-indigo-600 animate-pulse bg-indigo-50 py-1 rounded">{videoStatusMessage}</p>
-                           </div>
-                       )}
-                       
-                       {extractedResults.length > 0 && mode === 'BATCH' && (
-                           <div className="mt-3 overflow-x-auto pb-1 custom-scrollbar">
-                               <div className="flex gap-2">
-                                   {extractedResults.map((result, idx) => (
-                                       <button key={idx} onClick={() => handleSelectExtractedResult(idx)} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${currentResultIndex === idx ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200'}`}>
-                                           {result.teamName || `Team ${idx + 1}`}
-                                       </button>
-                                   ))}
-                               </div>
-                               <p className="text-[9px] text-indigo-600 font-bold mt-1.5 px-1 bg-indigo-50 inline-block rounded p-1">
-                                   ✨ {extractedResults.length}개 팀 식별 완료
-                               </p>
-                           </div>
-                       )}
+                    <button onClick={() => sidebarInputRef.current?.click()} className={`w-full py-3 border rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 ${mode === 'BATCH' ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'}`}>
+                        <Plus size={16} /> 파일 추가
+                    </button>
+                    <input ref={sidebarInputRef} type="file" multiple accept="image/*,application/pdf" className="hidden" onChange={handleBatchUpload}/>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                    {queue.length === 0 && <div className="text-center py-10 text-slate-400"><p className="text-xs">등록된 파일이 없습니다.</p></div>}
+                    {queue.map((item, idx) => (
+                        <div key={item.id} onClick={() => { !isAutoProcessing && setActiveQueueId(item.id); setActiveMobileTab('preview'); }} className={`relative p-3 rounded-xl cursor-pointer border transition-all ${activeQueueId === item.id ? 'bg-blue-50 border-blue-500 shadow-sm' : 'bg-white border-slate-100 hover:bg-slate-50'} ${item.status === 'error' ? 'border-red-300 bg-red-50' : ''}`}>
+                        <div className="flex gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-slate-100 shrink-0 overflow-hidden flex items-center justify-center relative">
+                                    {item.isPdf ? <FileText size={16}/> : <img src={item.previewUrl || ''} className="w-full h-full object-cover"/>}
+                                    {item.status === 'done' && (
+                                        <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
+                                            <CheckCircle2 size={12} className="text-green-700 bg-white rounded-full"/>
+                                        </div>
+                                    )}
+                                    {item.status === 'processing' && (
+                                        <div className="absolute inset-0 bg-blue-500/30 flex items-center justify-center backdrop-blur-[1px]">
+                                            <Loader2 size={16} className="text-white animate-spin"/>
+                                        </div>
+                                    )}
+                                    {item.status === 'error' && (
+                                        <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
+                                            <AlertTriangle size={12} className="text-red-600 bg-white rounded-full"/>
+                                        </div>
+                                    )}
+                            </div>
+                            <div className="flex-1 min-w-0"><p className="text-xs font-bold truncate">{item.file.name}</p><span className="text-[10px] text-slate-400">{item.status}</span></div>
+                        </div>
+                        <button 
+                            onClick={(e) => removeFromQueue(item.id, e)} 
+                            className="absolute -top-2 -right-2 bg-white border border-slate-200 rounded-full p-1.5 shadow-sm hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors z-10"
+                            type="button"
+                            disabled={isAutoProcessing}
+                        >
+                            <Trash2 size={14}/>
+                        </button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {activeQueueId ? (
+                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+                    {/* 2. Center Viewer - Visible on Desktop OR Mobile Tab 'preview' */}
+                    <div className={`flex-1 bg-slate-900 relative flex-col overflow-hidden ${activeMobileTab === 'preview' ? 'flex' : 'hidden lg:flex'}`}>
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-xl border border-slate-700 shadow-2xl">
+                        <button onClick={() => { setViewerMode('fit'); setImgScale(1); }} className="p-2 rounded-lg text-xs font-bold bg-blue-600 text-white"><Minimize size={14}/> 전체</button>
+                        <button onClick={() => { setViewerMode('scroll'); setImgScale(1.5); }} className="p-2 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700"><Maximize size={14}/></button>
+                        <button onClick={() => setImgRotation(r => (r + 90) % 360)} className="p-2 hover:bg-slate-700 text-white rounded-lg"><RotateCw size={16}/></button>
+                        </div>
+                        <div className="flex-1 overflow-auto flex items-center justify-center p-4 md:p-8 custom-scrollbar bg-slate-900">
+                            {queue.find(q => q.id === activeQueueId)?.isPdf ? 
+                            <object data={queue.find(q => q.id === activeQueueId)?.previewUrl!} type="application/pdf" className="w-full h-full min-h-[400px] md:min-h-[800px] shadow-2xl rounded-lg bg-white"/> : 
+                            <div style={{ transform: `rotate(${imgRotation}deg)`, width: viewerMode === 'fit' ? 'auto' : `${imgScale * 100}%`, height: viewerMode === 'fit' ? '100%' : 'auto' }} className="relative transition-transform duration-200 ease-out origin-center">
+                                <img src={queue.find(q => q.id === activeQueueId)?.previewUrl!} className={`rounded bg-white ${viewerMode === 'fit' ? 'max-w-full max-h-full object-contain' : 'w-full h-auto'}`}/>
+                            </div>
+                            }
+                        </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar pb-24">
-                       <div className="grid grid-cols-2 gap-3">
-                          <div>
-                              <label className="text-[11px] font-bold text-slate-500 mb-1 flex items-center gap-1">
-                                  일자 {isDateFromAI && <span className="text-[9px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><Sparkles size={8}/> AI 추출</span>}
-                              </label>
-                              <div className="relative">
-                                  <input 
-                                      type="date" 
-                                      value={entryDate} 
-                                      onChange={(e)=>{
-                                          setEntryDate(e.target.value);
-                                          setIsDateFromAI(false); // Reset if manually changed
-                                      }} 
-                                      className={`w-full border rounded-lg p-2 text-sm font-bold bg-slate-50 ${isDateFromAI ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-slate-300'}`}
-                                  />
-                                  {isDateFromAI && <div className="absolute right-8 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none"><Check size={14}/></div>}
-                              </div>
-                          </div>
-                          <div><label className="text-[11px] font-bold text-slate-500 mb-1 block">시간</label><input type="time" value={entryTime} onChange={(e)=>setEntryTime(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 text-sm font-bold bg-slate-50"/></div>
-                       </div>
-                       <div className="grid grid-cols-2 gap-3">
-                          <div><label className="text-[11px] font-bold text-slate-500 mb-1 block">팀장명</label><input type="text" value={leaderName} onChange={(e)=>setLeaderName(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 text-sm font-bold"/></div>
-                          <div><label className="text-[11px] font-bold text-slate-500 mb-1 block">참석 인원</label><input type="number" value={attendeesCount} onChange={(e)=>setAttendeesCount(Number(e.target.value))} className="w-full border border-slate-300 rounded-lg p-2 text-sm font-bold"/></div>
-                       </div>
-                       <div>
-                          <label className="text-[11px] font-bold text-slate-500 mb-1 block">작업 내용</label>
-                          <textarea value={workDescription} onChange={(e)=>setWorkDescription(e.target.value)} className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:border-blue-500 outline-none min-h-[80px] resize-none" placeholder="작업 내용을 입력하세요."/>
-                       </div>
-                       
-                       {/* Risk Factors */}
-                       <div className="bg-orange-50/50 rounded-xl border border-orange-100 p-3">
-                          <div className="flex justify-between items-center mb-2"><h4 className="text-[11px] font-bold text-orange-700 flex items-center gap-1"><AlertTriangle size={12}/> 중점 위험 요인</h4><button onClick={addRiskFactor} className="text-[10px] bg-white border px-2 py-0.5 rounded">+ 행 추가</button></div>
-                          <div className="space-y-2">{(riskFactors || []).map((r, i) => (<div key={i} className="bg-white p-2 rounded border flex flex-col gap-1"><input value={r.risk} onChange={(e)=>handleRiskChange(i, 'risk', e.target.value)} className="border-b border-dashed outline-none text-xs"/><input value={r.measure} onChange={(e)=>handleRiskChange(i, 'measure', e.target.value)} className="border-b border-dashed outline-none text-xs"/></div>))}</div>
-                       </div>
+                    {/* 3. Right Form - Visible on Desktop OR Mobile Tab 'form' */}
+                    <div className={`w-full lg:w-[480px] bg-white border-l border-slate-200 flex-col h-full shadow-2xl z-30 relative ${activeMobileTab === 'form' ? 'flex' : 'hidden lg:flex'}`}>
+                        {isAutoProcessing && (
+                            <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+                                <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-6 relative">
+                                    <Rocket size={48} className="text-blue-600 animate-bounce" />
+                                    <div className="absolute inset-0 border-4 border-blue-100 rounded-full animate-ping"></div>
+                                </div>
+                                <h3 className="text-2xl font-black text-slate-800 mb-2">빅데이터 마이닝 중...</h3>
+                                <p className="text-sm text-slate-500 font-bold mb-6">종합 일지에서 연구용 데이터를 추출하고 있습니다.<br/>(저장 공간 확보를 위해 이미지는 자동 제외됩니다)</p>
+                                
+                                <div className="w-full max-w-xs bg-slate-100 rounded-full h-4 mb-3 overflow-hidden">
+                                    <div 
+                                        className="bg-blue-600 h-full transition-all duration-300 ease-out" 
+                                        style={{ width: `${(autoProcessStats.currentFileIndex / Math.max(autoProcessStats.totalFiles, 1)) * 100}%` }}
+                                    ></div>
+                                </div>
+                                <div className="flex justify-between w-full max-w-xs text-xs font-bold text-slate-500">
+                                    <span>파일 {autoProcessStats.currentFileIndex} / {autoProcessStats.totalFiles}</span>
+                                    <span>누적 {autoProcessStats.totalTeamsSaved}개 팀 등록</span>
+                                </div>
+                            </div>
+                        )}
+                        <div className="p-5 border-b border-slate-100 bg-slate-50/80 backdrop-blur-sm shrink-0">
+                        <div className="flex items-end gap-2">
+                            <div className="flex-1">
+                                <label className="text-[11px] font-bold text-slate-500 mb-1 block uppercase">등록할 팀 선택</label>
+                                <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className="w-full text-base font-bold text-slate-900 bg-white border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                                    {teams.map(t => {
+                                    const isDone = queue.find(q => q.id === activeQueueId)?.teamsRegistered.includes(t.name);
+                                    return <option key={t.id} value={t.id} disabled={isDone} className={isDone ? "text-slate-300" : ""}>{t.name} {isDone ? '(완료)' : ''}</option>;
+                                    })}
+                                </select>
+                            </div>
+                            
+                            <button onClick={handleDocAnalyze} disabled={isDocAnalyzing || isVideoAnalyzing} className={`h-[46px] text-white px-4 rounded-lg font-bold transition-all shadow-md flex items-center gap-2 shrink-0 text-xs ${activeQueueId ? 'bg-gradient-to-r from-indigo-600 to-violet-600' : 'bg-slate-900'}`}>
+                                {isDocAnalyzing ? <Loader2 className="animate-spin" size={16}/> : <Sparkles size={16}/>} 
+                                {isDocAnalyzing ? '분석 중...' : '문서 식별'}
+                            </button>
+                        </div>
+                        
+                        {(isDocAnalyzing || isVideoAnalyzing) && videoStatusMessage && (
+                            <div className="mt-2 text-center">
+                                <p className="text-[10px] font-bold text-indigo-600 animate-pulse bg-indigo-50 py-1 rounded">{videoStatusMessage}</p>
+                            </div>
+                        )}
+                        
+                        {extractedResults.length > 0 && mode === 'BATCH' && (
+                            <div className="mt-3 overflow-x-auto pb-1 custom-scrollbar">
+                                <div className="flex gap-2">
+                                    {extractedResults.map((result, idx) => (
+                                        <button key={idx} onClick={() => handleSelectExtractedResult(idx)} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${currentResultIndex === idx ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200'}`}>
+                                            {result.teamName || `Team ${idx + 1}`}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="text-[9px] text-indigo-600 font-bold mt-1.5 px-1 bg-indigo-50 inline-block rounded p-1">
+                                    ✨ {extractedResults.length}개 팀 식별 완료
+                                </p>
+                            </div>
+                        )}
+                        </div>
 
-                       <div className="space-y-3">
-                          <div className="flex gap-3">
-                             <div className="flex-1 space-y-1">
-                                <label className="text-[11px] font-bold text-slate-500 block">TBM 사진/일지 ({mode === 'ROUTINE' ? '필수' : '선택'})</label>
-                                {tbmPhotoPreview ? (
-                                   <div className="relative aspect-video rounded-lg overflow-hidden border">
-                                      <img src={tbmPhotoPreview} className="w-full h-full object-cover"/>
-                                      <button 
-                                         onClick={(e) => {
-                                            e.stopPropagation();
-                                            setTbmPhotoPreview(null);
-                                            setTbmPhotoFile(null);
-                                            if (photoInputRef.current) photoInputRef.current.value = '';
-                                         }} 
-                                         type="button"
-                                         className="absolute top-1 right-1 bg-black/60 hover:bg-red-500 text-white p-1.5 rounded-full transition-colors z-10 cursor-pointer"
-                                      >
-                                         <X size={14}/>
-                                      </button>
-                                   </div>
-                                ) : (
-                                   <div onClick={()=>photoInputRef.current?.click()} className="w-full aspect-video rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer bg-white"><Camera className="text-slate-300"/></div>
-                                )}
-                                <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload}/>
-                             </div>
-                             <div className="flex-1 space-y-1">
-                                <label className="text-[11px] font-bold text-slate-500 block">동영상 (선택)</label>
-                                {tbmVideoPreview ? 
-                                    <div className="flex flex-col gap-2">
-                                        <div className="relative aspect-video rounded-lg overflow-hidden border bg-black">
-                                            <video src={tbmVideoPreview} className="w-full h-full object-contain" controls/>
-                                            <button onClick={()=>{setTbmVideoPreview(null); setVideoAnalysis(null); setIsVideoAnalyzing(false);}} className="absolute top-1 right-1 bg-white/20 text-white p-1 rounded-full z-10 hover:bg-red-500 transition-colors"><X size={12}/></button>
-                                        </div>
+                        <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar pb-24">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-[11px] font-bold text-slate-500 mb-1 flex items-center gap-1">
+                                    일자 {isDateFromAI && <span className="text-[9px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full flex items-center gap-0.5"><Sparkles size={8}/> AI 추출</span>}
+                                </label>
+                                <div className="relative">
+                                    <input 
+                                        type="date" 
+                                        value={entryDate} 
+                                        onChange={(e)=>{
+                                            setEntryDate(e.target.value);
+                                            setIsDateFromAI(false); // Reset if manually changed
+                                        }} 
+                                        className={`w-full border rounded-lg p-2 text-sm font-bold bg-slate-50 ${isDateFromAI ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-slate-300'}`}
+                                    />
+                                    {isDateFromAI && <div className="absolute right-8 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none"><Check size={14}/></div>}
+                                </div>
+                            </div>
+                            <div><label className="text-[11px] font-bold text-slate-500 mb-1 block">시간</label><input type="time" value={entryTime} onChange={(e)=>setEntryTime(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 text-sm font-bold bg-slate-50"/></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div><label className="text-[11px] font-bold text-slate-500 mb-1 block">팀장명</label><input type="text" value={leaderName} onChange={(e)=>setLeaderName(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 text-sm font-bold"/></div>
+                            <div><label className="text-[11px] font-bold text-slate-500 mb-1 block">참석 인원</label><input type="number" value={attendeesCount} onChange={(e)=>setAttendeesCount(Number(e.target.value))} className="w-full border border-slate-300 rounded-lg p-2 text-sm font-bold"/></div>
+                        </div>
+                        <div>
+                            <label className="text-[11px] font-bold text-slate-500 mb-1 block">작업 내용</label>
+                            <textarea value={workDescription} onChange={(e)=>setWorkDescription(e.target.value)} className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:border-blue-500 outline-none min-h-[80px] resize-none" placeholder="작업 내용을 입력하세요."/>
+                        </div>
+                        
+                        {/* Risk Factors */}
+                        <div className="bg-orange-50/50 rounded-xl border border-orange-100 p-3">
+                            <div className="flex justify-between items-center mb-2"><h4 className="text-[11px] font-bold text-orange-700 flex items-center gap-1"><AlertTriangle size={12}/> 중점 위험 요인</h4><button onClick={addRiskFactor} className="text-[10px] bg-white border px-2 py-0.5 rounded">+ 행 추가</button></div>
+                            <div className="space-y-2">{(riskFactors || []).map((r, i) => (<div key={i} className="bg-white p-2 rounded border flex flex-col gap-1"><input value={r.risk} onChange={(e)=>handleRiskChange(i, 'risk', e.target.value)} className="border-b border-dashed outline-none text-xs"/><input value={r.measure} onChange={(e)=>handleRiskChange(i, 'measure', e.target.value)} className="border-b border-dashed outline-none text-xs"/></div>))}</div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="flex flex-col md:flex-row gap-3">
+                                <div className="flex-1 space-y-1">
+                                    <label className="text-[11px] font-bold text-slate-500 block">TBM 사진/일지 ({mode === 'ROUTINE' ? '필수' : '선택'})</label>
+                                    {tbmPhotoPreview ? (
+                                    <div className="relative aspect-video rounded-lg overflow-hidden border">
+                                        <img src={tbmPhotoPreview} className="w-full h-full object-cover"/>
                                         <button 
-                                            onClick={handleVideoAnalyze}
-                                            disabled={isVideoAnalyzing} 
-                                            className="w-full bg-violet-600 text-white text-xs font-bold py-2 rounded-lg hover:bg-violet-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setTbmPhotoPreview(null);
+                                                setTbmPhotoFile(null);
+                                                if (photoInputRef.current) photoInputRef.current.value = '';
+                                            }} 
+                                            type="button"
+                                            className="absolute top-1 right-1 bg-black/60 hover:bg-red-500 text-white p-1.5 rounded-full transition-colors z-10 cursor-pointer"
                                         >
-                                            {isVideoAnalyzing ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14} className="text-yellow-300"/>}
-                                            {isVideoAnalyzing ? "영상 정밀 분석 중..." : "✨ AI 영상 정밀 진단 시작"}
+                                            <X size={14}/>
                                         </button>
                                     </div>
-                                    : <div onClick={()=>videoInputRef.current?.click()} className="w-full aspect-video rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer bg-white"><Film className="text-slate-300"/></div>
-                                }
-                                <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoUpload}/>
-                             </div>
-                          </div>
-                       </div>
-                    </div>
+                                    ) : (
+                                    <div onClick={()=>photoInputRef.current?.click()} className="w-full aspect-video rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer bg-white hover:bg-slate-50 transition-colors">
+                                        <div className="flex flex-col items-center gap-1 text-slate-300">
+                                            <Camera size={24} />
+                                            <span className="text-[10px] font-bold">사진 촬영/업로드</span>
+                                        </div>
+                                    </div>
+                                    )}
+                                    <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload}/>
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                    <label className="text-[11px] font-bold text-slate-500 block">동영상 (선택)</label>
+                                    {tbmVideoPreview ? 
+                                        <div className="flex flex-col gap-2">
+                                            <div className="relative aspect-video rounded-lg overflow-hidden border bg-black">
+                                                <video src={tbmVideoPreview} className="w-full h-full object-contain" controls/>
+                                                <button onClick={()=>{setTbmVideoPreview(null); setVideoAnalysis(null); setIsVideoAnalyzing(false);}} className="absolute top-1 right-1 bg-white/20 text-white p-1 rounded-full z-10 hover:bg-red-500 transition-colors"><X size={12}/></button>
+                                            </div>
+                                            <button 
+                                                onClick={handleVideoAnalyze}
+                                                disabled={isVideoAnalyzing} 
+                                                className="w-full bg-violet-600 text-white text-xs font-bold py-2 rounded-lg hover:bg-violet-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                                            >
+                                                {isVideoAnalyzing ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14} className="text-yellow-300"/>}
+                                                {isVideoAnalyzing ? "영상 정밀 분석 중..." : "✨ AI 영상 정밀 진단 시작"}
+                                            </button>
+                                        </div>
+                                        : <div onClick={()=>videoInputRef.current?.click()} className="w-full aspect-video rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer bg-white hover:bg-slate-50 transition-colors">
+                                            <div className="flex flex-col items-center gap-1 text-slate-300">
+                                                <Film size={24} />
+                                                <span className="text-[10px] font-bold">동영상 업로드</span>
+                                            </div>
+                                        </div>
+                                    }
+                                    <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoUpload}/>
+                                </div>
+                            </div>
+                        </div>
+                        </div>
 
-                    {/* Footer Actions */}
-                    <div className="p-4 border-t border-slate-200 bg-white absolute bottom-0 left-0 right-0 z-10 flex gap-2 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-                       {!initialData ? (
-                          <>
-                             {mode === 'BATCH' && extractedResults.length > 0 ? (
-                                <button onClick={() => handleSave('save_all')} disabled={isDocAnalyzing || isSaving} className="flex-[2] bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 text-sm flex flex-col items-center justify-center leading-none gap-1 disabled:opacity-50">
-                                   <span className="flex items-center gap-1"><Copy size={16}/> {isSaving ? '저장 중...' : `${extractedResults.length}개 팀 일괄 저장`}</span>
-                                   <span className="text-[10px] opacity-80 font-normal">자동으로 다음 문서 이동</span>
-                                </button>
-                             ) : (
-                                <button onClick={() => handleSave('finish_doc')} disabled={isDocAnalyzing || isSaving} className="flex-[1] bg-emerald-600 text-white py-3 rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-lg text-sm flex flex-col items-center justify-center leading-none gap-1 disabled:opacity-50">
-                                   <span className="flex items-center gap-1"><Check size={16}/> {isSaving ? '저장 중...' : '저장 및 완료'}</span>
-                                   {mode === 'BATCH' && <span className="text-[10px] opacity-80 font-normal">다음 파일로 이동</span>}
-                                </button>
-                             )}
-                             
-                             {mode === 'BATCH' && extractedResults.length === 0 && (
-                                 <button onClick={() => handleSave('next_team')} disabled={isDocAnalyzing || isSaving} className="flex-1 bg-white border border-slate-300 text-slate-700 py-3 rounded-lg font-bold hover:bg-slate-50 transition-colors text-xs flex flex-col items-center justify-center leading-none gap-1 disabled:opacity-50">
-                                    <span className="flex items-center gap-1"><Plus size={14}/> 현재 문서에 팀 추가</span>
-                                 </button>
-                             )}
-                          </>
-                       ) : (
-                          <button onClick={() => handleSave('finish_doc')} disabled={isDocAnalyzing || isSaving} className="flex-1 bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition-colors shadow-lg flex items-center justify-center gap-2 disabled:opacity-50">
-                             <Save size={16}/> {isSaving ? '저장 중...' : '수정 내용 저장'}
-                          </button>
-                       )}
+                        {/* Footer Actions */}
+                        <div className="p-4 border-t border-slate-200 bg-white absolute bottom-0 left-0 right-0 z-10 flex gap-2 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+                        {!initialData ? (
+                            <>
+                                {mode === 'BATCH' && extractedResults.length > 0 ? (
+                                    <button onClick={() => handleSave('save_all')} disabled={isDocAnalyzing || isSaving} className="flex-[2] bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 text-sm flex flex-col items-center justify-center leading-none gap-1 disabled:opacity-50">
+                                    <span className="flex items-center gap-1"><Copy size={16}/> {isSaving ? '저장 중...' : `${extractedResults.length}개 팀 일괄 저장`}</span>
+                                    <span className="text-[10px] opacity-80 font-normal">자동으로 다음 문서 이동</span>
+                                    </button>
+                                ) : (
+                                    <button onClick={() => handleSave('finish_doc')} disabled={isDocAnalyzing || isSaving} className="flex-[1] bg-emerald-600 text-white py-3 rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-lg text-sm flex flex-col items-center justify-center leading-none gap-1 disabled:opacity-50">
+                                    <span className="flex items-center gap-1"><Check size={16}/> {isSaving ? '저장 중...' : '저장 및 완료'}</span>
+                                    {mode === 'BATCH' && <span className="text-[10px] opacity-80 font-normal">다음 파일로 이동</span>}
+                                    </button>
+                                )}
+                                
+                                {mode === 'BATCH' && extractedResults.length === 0 && (
+                                    <button onClick={() => handleSave('next_team')} disabled={isDocAnalyzing || isSaving} className="flex-1 bg-white border border-slate-300 text-slate-700 py-3 rounded-lg font-bold hover:bg-slate-50 transition-colors text-xs flex flex-col items-center justify-center leading-none gap-1 disabled:opacity-50">
+                                        <span className="flex items-center gap-1"><Plus size={14}/> 현재 문서에 팀 추가</span>
+                                    </button>
+                                )}
+                            </>
+                        ) : (
+                            <button onClick={() => handleSave('finish_doc')} disabled={isDocAnalyzing || isSaving} className="flex-1 bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition-colors shadow-lg flex items-center justify-center gap-2 disabled:opacity-50">
+                                <Save size={16}/> {isSaving ? '저장 중...' : '수정 내용 저장'}
+                            </button>
+                        )}
+                        </div>
                     </div>
-                 </div>
-              </div>
-           ) : (
-              /* Empty State */
-              <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 text-slate-400 p-10 animate-fade-in">
-                 {mode === 'BATCH' ? (
-                     <>
-                        <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center mb-6 shadow-xl border border-indigo-100 relative group overflow-hidden">
-                            <FileStack size={48} className="text-indigo-500"/>
-                        </div>
-                        <h2 className="text-3xl font-black text-slate-800 mb-3 tracking-tight">종합 일지 처리 모드</h2>
-                        <p className="text-sm text-slate-500 mb-8 font-medium">여러 팀이 포함된 종합 문서를 업로드하세요.<br/>AI가 자동으로 팀을 분리합니다.</p>
-                     </>
-                 ) : (
-                     <div className="max-w-md w-full flex flex-col items-center">
-                        <div className="relative mb-10"> 
-                            <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-xl border border-emerald-100 relative z-10">
-                                <BrainCircuit size={48} className="text-emerald-500"/>
-                            </div>
-                            <div className="absolute -top-3 -right-3 bg-slate-800 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg z-20 animate-bounce">
-                                AI Coach
-                            </div>
-                            <div className="absolute inset-0 bg-emerald-500/20 blur-3xl -z-10 rounded-full"></div>
-                        </div>
-                        
-                        <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">스마트 TBM 정밀 분석</h2>
-                        <p className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full mb-6 border border-emerald-100">
-                            수기 일지(OCR) + 활동 영상(Vision AI) 융합 분석
-                        </p>
-
-                        <div className="w-full bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-8 space-y-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500"><FileText size={16}/></div>
-                                <div className="flex-1">
-                                    <p className="text-xs font-bold text-slate-800">1. 수기 일지 촬영</p>
-                                    <p className="text-[10px] text-slate-400">OCR로 글자를 인식하여 디지털 변환</p>
-                                </div>
-                                <ArrowRight size={14} className="text-slate-300"/>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500"><Video size={16}/></div>
-                                <div className="flex-1">
-                                    <p className="text-xs font-bold text-slate-800">2. 활동 영상 분석</p>
-                                    <p className="text-[10px] text-slate-400">참여도, 보호구, 음성을 AI가 정밀 진단</p>
-                                </div>
-                                <ArrowRight size={14} className="text-slate-300"/>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600"><MessageSquare size={16}/></div>
-                                <div className="flex-1">
-                                    <p className="text-xs font-bold text-slate-800">3. 피드백 및 개선</p>
-                                    <p className="text-[10px] text-slate-400">분석 결과를 바탕으로 내일의 안전 확보</p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <p className="text-xs text-slate-400 text-center mb-6 leading-relaxed px-4 break-keep">
-                            단순 기록이 아닙니다. AI가 TBM 과정을 입체적으로 분석하여,<br/>
-                            <strong className="text-slate-600">현장 소장님과 근로자 간의 실질적인 소통</strong>을 돕습니다.
-                        </p>
-                     </div>
-                 )}
-                 {!isAutoProcessing && (
-                     <button onClick={() => sidebarInputRef.current?.click()} className={`px-8 py-4 text-white rounded-2xl font-bold hover:shadow-xl hover:scale-105 transition-all shadow-lg flex items-center gap-3 text-sm ${mode === 'BATCH' ? 'bg-indigo-600 shadow-indigo-200' : 'bg-emerald-600 shadow-emerald-200'}`}>
+                </div>
+            ) : (
+                /* Empty State - Now handled by GuideScreen when queue is empty, but this remains as fallback */
+                <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 text-slate-400 p-10 animate-fade-in text-center">
+                    <button onClick={() => sidebarInputRef.current?.click()} className={`px-8 py-4 text-white rounded-2xl font-bold hover:shadow-xl hover:scale-105 transition-all shadow-lg flex items-center gap-3 text-sm ${mode === 'BATCH' ? 'bg-indigo-600 shadow-indigo-200' : 'bg-emerald-600 shadow-emerald-200'}`}>
                         <Plus size={20}/> 파일 불러오기
-                     </button>
-                 )}
-              </div>
-           )}
-        </div>
+                    </button>
+                </div>
+            )}
+            </div>
+        )}
       {showFeedbackModal && createPortal(<div className="fixed inset-0 z-[99999] bg-black/50 p-4 flex items-center justify-center"><div className="bg-white p-4 rounded-xl w-full max-w-lg h-[80vh] overflow-y-auto"><h3 className="font-bold mb-4">안전 가이드라인 선택</h3>{monthlyGuidelines.map((g, i)=><div key={i} onClick={()=>{if(!safetyFeedback.includes(g.content)) setSafetyFeedback([...safetyFeedback, g.content]); setShowFeedbackModal(false);}} className="p-3 border-b cursor-pointer hover:bg-slate-50">{g.content}</div>)}<button onClick={()=>setShowFeedbackModal(false)} className="mt-4 w-full p-3 bg-slate-100 rounded-lg">닫기</button></div></div>, document.body)}
       
       {showHelpModal && createPortal(

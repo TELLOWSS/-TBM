@@ -15,31 +15,31 @@ import { Download, Upload, Trash2, X, Settings, Database, Eraser, Plus, Users, E
 // --- System Identity Modal (Design Philosophy) ---
 const SystemIdentityModal = ({ onClose }: { onClose: () => void }) => {
     return createPortal(
-        <div className="fixed inset-0 z-[999999] bg-[#0F172A] text-white animate-fade-in flex items-center justify-center p-6" onClick={onClose}>
+        <div className="fixed inset-0 z-[999999] bg-[#0F172A] text-white animate-fade-in flex items-center justify-center p-4 md:p-6" onClick={onClose}>
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 pointer-events-none"></div>
             <div className="absolute top-0 right-0 w-[50vh] h-[50vh] bg-blue-600/20 rounded-full blur-[150px] pointer-events-none"></div>
             
-            <div className="max-w-4xl w-full relative z-10" onClick={e => e.stopPropagation()}>
+            <div className="max-w-4xl w-full relative z-10 overflow-y-auto max-h-[90vh] custom-scrollbar" onClick={e => e.stopPropagation()}>
                 {/* Header with Logo */}
                 <div className="flex items-start justify-between mb-10">
                     <div className="flex items-center gap-5">
-                        <div className="relative w-16 h-16 flex items-center justify-center">
+                        <div className="relative w-12 h-12 md:w-16 md:h-16 flex items-center justify-center shrink-0">
                              <div className="absolute inset-0 bg-blue-600 rounded-2xl rotate-6 opacity-30 animate-pulse"></div>
                              <div className="absolute inset-0 bg-indigo-600 rounded-2xl -rotate-6 opacity-30"></div>
                              <div className="relative w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl flex items-center justify-center text-white shadow-2xl border border-slate-600">
-                                <Hexagon size={32} strokeWidth={2} className="text-white"/>
-                                <div className="absolute w-3 h-3 bg-red-500 rounded-full top-3 right-3 border-2 border-slate-800 shadow-[0_0_10px_rgba(239,68,68,0.8)]"></div>
+                                <Hexagon size={24} strokeWidth={2} className="text-white md:w-8 md:h-8"/>
+                                <div className="absolute w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded-full top-2 right-2 md:top-3 md:right-3 border-2 border-slate-800 shadow-[0_0_10px_rgba(239,68,68,0.8)]"></div>
                              </div>
                         </div>
                         <div>
-                            <h1 className="text-5xl font-black tracking-tight leading-none mb-1">HUIGANG OS</h1>
-                            <p className="text-sm font-bold text-slate-400 tracking-[0.4em] uppercase">Smart Safety System v2.8.0</p>
+                            <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-none mb-1">HUIGANG OS</h1>
+                            <p className="text-[10px] md:text-sm font-bold text-slate-400 tracking-[0.4em] uppercase">Smart Safety System v2.8.2</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X size={24}/></button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 pb-10">
                     {/* Left Column: Logo Anatomy */}
                     <div>
                         <h3 className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-6 flex items-center gap-2">
@@ -121,6 +121,7 @@ const SystemIdentityModal = ({ onClose }: { onClose: () => void }) => {
     );
 };
 
+// ... (FeatureShowcase, DeleteConfirmModal remain the same) ...
 // --- Feature Showcase Component ---
 interface FeatureShowcaseProps {
    featureKey: 'risk' | 'proof' | 'feedback' | 'audit' | 'insight';
@@ -283,7 +284,7 @@ const DeleteConfirmModal = ({ info, onConfirm, onCancel }: { info: any, onConfir
 function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [entries, setEntries] = useState<TBMEntry[]>([]);
-  
+  // ... (Other state remains unchanged)
   const [monthlyAssessments, setMonthlyAssessments] = useState<MonthlyRiskAssessment[]>([]);
 
   const [showReportModal, setShowReportModal] = useState(false);
@@ -321,6 +322,7 @@ function App() {
   }, [monthlyAssessments]);
 
   useEffect(() => {
+    // ... (Loading effect remains unchanged)
     const savedEntries = localStorage.getItem('tbm_entries');
     if (savedEntries) {
       try {
@@ -341,7 +343,6 @@ function App() {
               };
             });
             setEntries(sanitized);
-            // Don't write back immediately to avoid loops, just load.
         }
       } catch (e) {
         setEntries([]);
@@ -375,6 +376,7 @@ function App() {
     }
   }, []);
 
+  // ... (Methods handleAddTeam, handleDeleteTeam, handleSaveEntry, etc. remain unchanged)
   const handleAddTeam = () => {
     if(!newTeamName.trim()) return;
     const newTeam: TeamOption = { id: `team-${Date.now()}`, name: newTeamName.trim(), category: newTeamCategory };
@@ -393,16 +395,10 @@ function App() {
     }
   };
 
-  // [UPDATED] Robust Save Handler supporting Batch Arrays and Error Feedback
   const handleSaveEntry = (data: TBMEntry | TBMEntry[], shouldExit: boolean = true): boolean => {
     try {
-        // 1. Prepare new data structure
         const newItems = Array.isArray(data) ? data : [data];
-        
-        // 2. Clone current entries to avoid mutation
         const currentEntries = [...entries];
-        
-        // 3. Merge new items (update existing or prepend new)
         newItems.forEach(newItem => {
             const index = currentEntries.findIndex(e => String(e.id) === String(newItem.id));
             if (index >= 0) {
@@ -411,21 +407,13 @@ function App() {
                 currentEntries.unshift(newItem);
             }
         });
-
-        // 4. Try Saving to LocalStorage FIRST (Critical Step)
-        // If this throws, we catch it and return false, so caller knows to strip images.
         localStorage.setItem('tbm_entries', JSON.stringify(currentEntries));
-        
-        // 5. If successful, update React State
         setEntries(currentEntries);
-        setEditingEntry(null); // Clear editing state if any
+        setEditingEntry(null); 
         if (shouldExit) setCurrentView('dashboard');
-        
-        return true; // Success
-
+        return true; 
     } catch (error: any) {
         console.error("Storage Save Failed:", error);
-        // Explicitly return false so TBMForm knows to retry without images
         return false; 
     }
   };
@@ -580,21 +568,26 @@ function App() {
          onShowHistory={() => setIsHistoryOpen(true)}
          onShowIdentity={() => setIsIdentityOpen(true)}
       />
-      <main className="flex-1 md:ml-72 p-4 md:p-8 mb-20 md:mb-0 relative z-10">
-        <header className="flex justify-between items-center mb-8 no-print">
+      {/* 
+         Updated Main Content Layout:
+         - Added 'md:ml-72' for desktop sidebar spacing.
+         - Added 'pb-24' to prevent content from being hidden behind the mobile bottom nav.
+      */}
+      <main className="flex-1 md:ml-72 p-4 md:p-8 mb-0 pb-24 md:pb-8 relative z-10 w-full">
+        <header className="flex justify-between items-center mb-6 md:mb-8 no-print">
           <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-1">
+            <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-none mb-1">
               {currentView === 'dashboard' && 'Integrated Dashboard'}
               {currentView === 'new' && (entryMode === 'BATCH' ? 'Batch Processing' : 'Individual Entry')}
               {currentView === 'risk-assessment' && 'Risk Assessment Management'}
               {currentView === 'reports' && 'Safe Work Report Center'}
             </h1>
-            <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">
-               (주)휘강건설 스마트 안전관리 시스템 v2.7.5
+            <p className="text-[10px] md:text-sm font-medium text-slate-400 uppercase tracking-wider">
+               (주)휘강건설 스마트 안전관리 시스템 v2.8.2
             </p>
           </div>
 
-          {/* RIGHT SIDE HEADER: 5 Core Features (Only visible on Dashboard) */}
+          {/* RIGHT SIDE HEADER: 5 Core Features (Only visible on Desktop/Tablet) */}
           {currentView === 'dashboard' && (
               <div className="hidden md:flex gap-3">
                   {featureButtons.map((btn) => (
