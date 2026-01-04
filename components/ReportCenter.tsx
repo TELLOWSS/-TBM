@@ -492,7 +492,7 @@ AI Vision 분석을 통해 산출된 TBM 활동의 평균 품질 점수는 **${m
             <div 
                key={entry.id} 
                className="bg-white rounded-2xl border border-slate-200 p-0 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group cursor-default"
-               style={{ animation: `slideUp 0.5s ease-out forwards ${idx * 0.05}s`, opacity: 0 }}
+               style={{ animation: `slideUpFade 0.5s ease-out forwards ${idx * 0.05}s`, opacity: 0 }}
             >
                {/* Card Header */}
                <div className="p-4 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">

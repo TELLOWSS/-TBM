@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TBMEntry } from '../types';
-import { Calendar, Users, AlertCircle, FileText, Camera, BarChart2, CheckCircle2, TrendingUp, ChevronRight, Edit2, ShieldAlert, BookOpen, Quote, Database, Trash2, X, ScanLine, Server, Lock, Sparkles, BrainCircuit, MessageSquare, ArrowRight, ShieldCheck, Activity, Zap, Clock, MoreHorizontal, Plus, Eye, Mic, HandMetal, UserCheck, PlayCircle, Globe, Languages, Target, Radar, Presentation, TrendingDown, CalendarRange, FolderInput, FileStack, Layers, ArrowUpDown, Filter } from 'lucide-react';
+import { Calendar, Users, AlertCircle, FileText, Camera, BarChart2, CheckCircle2, TrendingUp, ChevronRight, Edit2, ShieldAlert, BookOpen, Quote, Database, Trash2, X, ScanLine, Server, Lock, Sparkles, BrainCircuit, MessageSquare, ArrowRight, ShieldCheck, Activity, Zap, Clock, MoreHorizontal, Plus, Eye, Mic, HandMetal, UserCheck, PlayCircle, Globe, Languages, Target, Radar, Presentation, TrendingDown, CalendarRange, FolderInput, FileStack, Layers, ArrowUpDown, Filter, Printer } from 'lucide-react';
 
 interface DashboardProps {
   entries: TBMEntry[];
@@ -12,9 +12,10 @@ interface DashboardProps {
   onEdit: (entry: TBMEntry) => void;
   onOpenSettings: () => void;
   onDelete: (id: string) => void; 
+  onPrintSingle: (entry: TBMEntry) => void; // [NEW] Handler for single PDF print
 }
 
-// --- Impact Report Modal (Updated Design) ---
+// ... (ImpactReportModal and analysis logic remain the same) ...
 interface ImpactReportModalProps {
    entries: TBMEntry[];
    onClose: () => void;
@@ -149,20 +150,18 @@ const ImpactReportModal: React.FC<ImpactReportModalProps> = ({ entries, onClose 
    );
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onNavigateToReports, onNewEntry, onEdit, onOpenSettings, onDelete }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onNavigateToReports, onNewEntry, onEdit, onOpenSettings, onDelete, onPrintSingle }) => {
   const [showImpactReport, setShowImpactReport] = useState(false); 
   const [chartSortBy, setChartSortBy] = useState<'COUNT' | 'SCORE'>('COUNT');
 
   const today = new Date().toISOString().split('T')[0];
   const todaysEntries = entries.filter(e => e.date === today);
 
-  // [NEW] Culture Score Calculation
+  // ... (Culture Score logic remains the same) ...
   const cultureScore = useMemo(() => {
       if (entries.length === 0) return 0;
-      // Get AI scores
       const scores = entries.filter(e => e.videoAnalysis).map(e => e.videoAnalysis!.score);
       if (scores.length === 0) return 0;
-      // Simple trend calculation (last 5 vs first 5)
       const currentAvg = scores.slice(0, 5).reduce((a,b)=>a+b,0) / Math.min(5, scores.length);
       return Math.round(currentAvg);
   }, [entries]);
@@ -220,7 +219,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
     <div className="space-y-6 md:space-y-8 pb-12">
       {showImpactReport && <ImpactReportModal entries={entries} onClose={() => setShowImpactReport(false)} />}
 
-      {/* Hero Section: Responsive Grid */}
+      {/* Hero Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-auto">
          {/* Card 1: Batch Processing (Manager) */}
          <button onClick={() => onNewEntry('BATCH')} className="relative lg:col-span-2 bg-[#1E293B] rounded-[32px] p-6 md:p-8 text-left shadow-2xl hover:scale-[1.01] transition-all group overflow-hidden border border-slate-700 min-h-[240px] md:h-[320px] flex flex-col justify-between">
@@ -271,10 +270,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
          </button>
       </div>
 
-      {/* Stats Grid - Adaptive Columns */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-         <StatCard title="Today's TBM" value={todaysEntries.length} unit="팀" icon={<Calendar />} colorClass="text-blue-600" delay="delay-100"/>
-         {/* [NEW] Safety Culture Card (Upward Standardization Metric) */}
+         <StatCard title="오늘의 TBM" value={todaysEntries.length} unit="팀" icon={<Calendar />} colorClass="text-blue-600" delay="delay-100"/>
          <div className="relative overflow-hidden bg-white rounded-3xl p-6 border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:shadow-xl transition-all duration-300 group animate-slide-up delay-200">
              <div className="absolute -right-4 -top-4 p-4 opacity-[0.08] transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-500 text-violet-600">
                  <TrendingUp size={100}/>
@@ -295,7 +293,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
                  </div>
              </div>
          </div>
-         <StatCard title="Risk Factors" value={todaysEntries.reduce((acc, curr) => acc + (curr.riskFactors?.length || 0), 0)} unit="건" icon={<AlertCircle />} colorClass="text-orange-500" delay="delay-300"/>
+         <StatCard title="발견된 위험요인" value={todaysEntries.reduce((acc, curr) => acc + (curr.riskFactors?.length || 0), 0)} unit="건" icon={<AlertCircle />} colorClass="text-orange-500" delay="delay-300"/>
          
          <div onClick={onNavigateToReports} className="rounded-3xl p-6 cursor-pointer relative overflow-hidden group shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 animate-slide-up delay-400 bg-slate-900 min-h-[140px]">
             <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/20 rounded-full blur-[60px] translate-x-10 -translate-y-10 group-hover:scale-125 transition-transform duration-700"></div>
@@ -341,7 +339,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
                          const maxVal = chartSortBy === 'COUNT' ? maxValue : 100;
                          const heightPercent = Math.max(15, (value / maxVal) * 100);
                          
-                         // Premium Gradients
                          let barGradient = "from-slate-200 to-slate-300";
                          let textColor = "text-slate-400";
                          if (chartSortBy === 'SCORE') {
@@ -413,8 +410,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
                               </div>
                            </div>
                            
-                           {/* Hover Actions */}
+                           {/* Hover Actions - Now includes Print PDF */}
                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0 duration-200 bg-white/80 backdrop-blur rounded-xl p-1 shadow-sm border border-slate-100">
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); onPrintSingle(entry); }} 
+                                className="p-2 hover:bg-green-50 text-slate-400 hover:text-green-600 rounded-lg transition-colors"
+                                title="PDF 보고서 보기"
+                              >
+                                <Printer size={14}/>
+                              </button>
                               <button onClick={(e) => { e.stopPropagation(); onEdit(entry); }} className="p-2 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg transition-colors"><Edit2 size={14}/></button>
                               <button onClick={(e) => { e.stopPropagation(); onDelete(String(entry.id)); }} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-lg transition-colors"><Trash2 size={14}/></button>
                            </div>

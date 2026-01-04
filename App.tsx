@@ -1,16 +1,18 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { Navigation } from './components/Navigation';
 import { Dashboard } from './components/Dashboard';
-import { TBMForm } from './components/TBMForm';
-import { ReportView } from './components/ReportView';
-import { ReportCenter } from './components/ReportCenter';
-import { RiskAssessmentManager } from './components/RiskAssessmentManager';
+// [FIX] Lazy Load heavy components to prevent white screen on init
+const TBMForm = React.lazy(() => import('./components/TBMForm').then(module => ({ default: module.TBMForm })));
+const ReportView = React.lazy(() => import('./components/ReportView').then(module => ({ default: module.ReportView })));
+const ReportCenter = React.lazy(() => import('./components/ReportCenter').then(module => ({ default: module.ReportCenter })));
+const RiskAssessmentManager = React.lazy(() => import('./components/RiskAssessmentManager').then(module => ({ default: module.RiskAssessmentManager })));
+
 import { HistoryModal } from './components/HistoryModal';
 import { TBMEntry, MonthlyRiskAssessment, TeamOption, TeamCategory } from './types';
 import { TEAMS } from './constants';
-import { Download, Upload, Trash2, X, Settings, Database, Eraser, Plus, Users, Edit3, Save, FileText, ScanLine, Camera, Lock, Server, MessageSquare, BrainCircuit, ShieldCheck, PlayCircle, Sparkles, Target, Eye, Radar, Hexagon, Layers, Zap, FileStack, ArrowRight } from 'lucide-react';
+import { Download, Upload, Trash2, X, Settings, Database, Eraser, Plus, Users, Edit3, Save, FileText, ScanLine, Camera, Lock, Server, MessageSquare, BrainCircuit, ShieldCheck, PlayCircle, Sparkles, Target, Eye, Radar, Hexagon, Layers, Zap, FileStack, ArrowRight, Loader2 } from 'lucide-react';
 
 // --- System Identity Modal (Design Philosophy) ---
 const SystemIdentityModal = ({ onClose }: { onClose: () => void }) => {
@@ -340,10 +342,20 @@ const ModeSelectionModal = ({ onSelect, onClose }: { onSelect: (mode: 'BATCH' | 
     );
 };
 
+// [NEW] Loading Fallback Component
+const LoadingScreen = () => (
+    <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-slate-400">
+        <Loader2 size={40} className="animate-spin text-blue-600 mb-4" />
+        <p className="text-sm font-bold">시스템 리소스 로딩 중...</p>
+    </div>
+);
+
 function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [entries, setEntries] = useState<TBMEntry[]>([]);
-  // ... (Other state remains unchanged)
+  // [NEW] State for filtering reports (Show Single vs All)
+  const [reportTargetEntries, setReportTargetEntries] = useState<TBMEntry[]>([]);
+  
   const [monthlyAssessments, setMonthlyAssessments] = useState<MonthlyRiskAssessment[]>([]);
 
   const [showReportModal, setShowReportModal] = useState(false);
@@ -356,7 +368,6 @@ function App() {
   const [editingEntry, setEditingEntry] = useState<TBMEntry | null>(null); 
   
   const [entryMode, setEntryMode] = useState<'BATCH' | 'ROUTINE'>('ROUTINE');
-  // [NEW] Mode Selection State
   const [showModeSelector, setShowModeSelector] = useState(false);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -365,7 +376,6 @@ function App() {
   const [settingsTab, setSettingsTab] = useState<'backup' | 'teams'>('teams'); 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // NEW: Global Feature Showcase State
   const [activeFeature, setActiveFeature] = useState<'risk' | 'proof' | 'feedback' | 'audit' | 'insight' | null>(null);
 
   const [newTeamName, setNewTeamName] = useState('');
@@ -523,28 +533,62 @@ function App() {
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'SAPA_BACKUP.json'; a.click();
   };
 
+  // [OVERHAULED] Smart Import Handler
   const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if(!file) return;
       const reader = new FileReader();
       reader.onload = (evt) => {
           try {
-              const json = JSON.parse(evt.target?.result as string);
-              if(json.tbm_entries) {
-                  setEntries(json.tbm_entries);
-                  localStorage.setItem('tbm_entries', JSON.stringify(json.tbm_entries));
+              const raw = JSON.parse(evt.target?.result as string);
+              let restoredTbmCount = 0;
+              let restoredRiskCount = 0;
+
+              // Case 1: Full System Backup (Object with keys)
+              if (!Array.isArray(raw)) {
+                  if(raw.tbm_entries && Array.isArray(raw.tbm_entries)) {
+                      setEntries(raw.tbm_entries);
+                      localStorage.setItem('tbm_entries', JSON.stringify(raw.tbm_entries));
+                      restoredTbmCount = raw.tbm_entries.length;
+                  }
+                  if(raw.monthly_assessment_list && Array.isArray(raw.monthly_assessment_list)) {
+                      setMonthlyAssessments(raw.monthly_assessment_list);
+                      localStorage.setItem('monthly_assessment_list', JSON.stringify(raw.monthly_assessment_list));
+                      restoredRiskCount = raw.monthly_assessment_list.length;
+                  }
+                  if(raw.site_teams && Array.isArray(raw.site_teams)) {
+                      setTeams(raw.site_teams);
+                      localStorage.setItem('site_teams', JSON.stringify(raw.site_teams));
+                  }
+              } 
+              // Case 2: Array Backup (Specific Lists)
+              else if (Array.isArray(raw) && raw.length > 0) {
+                  const firstItem = raw[0];
+                  // Check signature of TBM Entry (has teamName, date)
+                  if (firstItem.teamName && (firstItem.date || firstItem.workDescription)) {
+                      setEntries(raw);
+                      localStorage.setItem('tbm_entries', JSON.stringify(raw));
+                      restoredTbmCount = raw.length;
+                  }
+                  // Check signature of Risk Assessment (has month, priorities)
+                  else if (firstItem.month && firstItem.priorities) {
+                      setMonthlyAssessments(raw);
+                      localStorage.setItem('monthly_assessment_list', JSON.stringify(raw));
+                      restoredRiskCount = raw.length;
+                  }
               }
-              if(json.monthly_assessment_list) {
-                  setMonthlyAssessments(json.monthly_assessment_list);
-                  localStorage.setItem('monthly_assessment_list', JSON.stringify(json.monthly_assessment_list));
+
+              if (restoredTbmCount > 0 || restoredRiskCount > 0) {
+                  alert(`✅ 데이터 복구 완료\n- TBM 일지: ${restoredTbmCount}건\n- 위험성평가: ${restoredRiskCount}건`);
+                  setIsSettingsOpen(false);
+                  if (restoredTbmCount > 0) setCurrentView('dashboard'); 
+              } else {
+                  alert("⚠ 유효한 데이터 형식이 아닙니다.\n(TBM 일지 또는 위험성평가 데이터가 포함되어야 합니다)");
               }
-              if(json.site_teams) {
-                  setTeams(json.site_teams);
-                  localStorage.setItem('site_teams', JSON.stringify(json.site_teams));
-              }
-              alert("복구 완료");
-              setIsSettingsOpen(false);
-          } catch(err) { alert("파일 오류"); }
+          } catch(err) { 
+              console.error(err);
+              alert("❌ 파일 처리 중 오류가 발생했습니다."); 
+          }
       };
       reader.readAsText(file);
   };
@@ -569,46 +613,64 @@ function App() {
   };
 
   const renderContent = () => {
-    switch (currentView) {
-      case 'dashboard':
-        return <Dashboard 
-                  entries={entries} 
-                  onViewReport={()=>setShowReportModal(true)} 
-                  onNavigateToReports={()=>setCurrentView('reports')}
-                  onNewEntry={(mode) => {
-                      setEditingEntry(null); 
-                      setEntryMode(mode); 
-                      setCurrentView('new');
-                  }} 
-                  onEdit={handleEditEntry} 
-                  onOpenSettings={()=>setIsSettingsOpen(true)} 
-                  onDelete={handleRequestDelete} 
-               />;
-      case 'new':
-        return <TBMForm 
-                  onSave={handleSaveEntry} 
-                  onCancel={()=>{setCurrentView('dashboard'); setEditingEntry(null)}} 
-                  monthlyGuidelines={currentMonthGuidelines} 
-                  initialData={editingEntry || undefined} 
-                  onDelete={handleRequestDelete} 
-                  teams={teams} 
-                  mode={entryMode}
-               />;
-      case 'risk-assessment':
-        return <RiskAssessmentManager assessments={monthlyAssessments} onSave={handleUpdateAssessments} />;
-      case 'reports':
-        return <ReportCenter entries={entries} onOpenPrintModal={()=>setShowReportModal(true)} signatures={signatures} teams={teams} />;
-      default:
-        return <Dashboard 
-                  entries={entries} 
-                  onViewReport={()=>setShowReportModal(true)} 
-                  onNavigateToReports={()=>setCurrentView('reports')} 
-                  onNewEntry={(mode)=>{setEditingEntry(null); setEntryMode(mode); setCurrentView('new')}} 
-                  onEdit={handleEditEntry} 
-                  onOpenSettings={()=>setIsSettingsOpen(true)} 
-                  onDelete={handleRequestDelete} 
-               />;
-    }
+    // [FIX] Suspense Wrapper for Lazy Loaded Components
+    return (
+        <Suspense fallback={<LoadingScreen />}>
+            {(() => {
+                switch (currentView) {
+                  case 'dashboard':
+                    return <Dashboard 
+                              entries={entries} 
+                              onViewReport={() => {
+                                  setReportTargetEntries(entries); // View All
+                                  setShowReportModal(true);
+                              }} 
+                              onNavigateToReports={()=>setCurrentView('reports')}
+                              onNewEntry={(mode) => {
+                                  setEditingEntry(null); 
+                                  setEntryMode(mode); 
+                                  setCurrentView('new');
+                              }} 
+                              onEdit={handleEditEntry} 
+                              onOpenSettings={()=>setIsSettingsOpen(true)} 
+                              onDelete={handleRequestDelete} 
+                              onPrintSingle={(entry) => {
+                                  setReportTargetEntries([entry]); // View Only This
+                                  setShowReportModal(true);
+                              }}
+                           />;
+                  case 'new':
+                    return <TBMForm 
+                              onSave={handleSaveEntry} 
+                              onCancel={()=>{setCurrentView('dashboard'); setEditingEntry(null)}} 
+                              monthlyGuidelines={currentMonthGuidelines} 
+                              initialData={editingEntry || undefined} 
+                              onDelete={handleRequestDelete} 
+                              teams={teams} 
+                              mode={entryMode}
+                           />;
+                  case 'risk-assessment':
+                    return <RiskAssessmentManager assessments={monthlyAssessments} onSave={handleUpdateAssessments} />;
+                  case 'reports':
+                    return <ReportCenter entries={entries} onOpenPrintModal={() => { setReportTargetEntries(entries); setShowReportModal(true); }} signatures={signatures} teams={teams} />;
+                  default:
+                    return <Dashboard 
+                              entries={entries} 
+                              onViewReport={() => { setReportTargetEntries(entries); setShowReportModal(true); }} 
+                              onNavigateToReports={()=>setCurrentView('reports')} 
+                              onNewEntry={(mode)=>{setEditingEntry(null); setEntryMode(mode); setCurrentView('new')}} 
+                              onEdit={handleEditEntry} 
+                              onOpenSettings={()=>setIsSettingsOpen(true)} 
+                              onDelete={handleRequestDelete}
+                              onPrintSingle={(entry) => {
+                                  setReportTargetEntries([entry]);
+                                  setShowReportModal(true);
+                              }}
+                           />;
+                }
+            })()}
+        </Suspense>
+    );
   };
 
   // 5 Key Features Config
@@ -628,7 +690,7 @@ function App() {
          onOpenSettings={() => setIsSettingsOpen(true)} 
          onShowHistory={() => setIsHistoryOpen(true)}
          onShowIdentity={() => setIsIdentityOpen(true)}
-         onNewEntryClick={() => setShowModeSelector(true)} // [NEW] Open Modal
+         onNewEntryClick={() => setShowModeSelector(true)} 
       />
       {/* 
          Updated Main Content Layout:
@@ -671,10 +733,21 @@ function App() {
 
         {renderContent()}
 
+        {/* [FIX] Report View wrapped in Suspense for consistency */}
         {showReportModal && (
-          <ReportView entries={entries} onClose={() => setShowReportModal(false)} signatures={signatures} onUpdateSignature={handleUpdateSignature} onEdit={handleEditEntry} onDelete={handleRequestDelete} />
+          <Suspense fallback={<LoadingScreen />}>
+              <ReportView 
+                entries={reportTargetEntries} 
+                onClose={() => { setShowReportModal(false); setReportTargetEntries([]); }} 
+                signatures={signatures} 
+                onUpdateSignature={handleUpdateSignature} 
+                onEdit={handleEditEntry} 
+                onDelete={handleRequestDelete} 
+              />
+          </Suspense>
         )}
         
+        {/* ... (rest of modals) */}
         {isHistoryOpen && (
           <HistoryModal onClose={() => setIsHistoryOpen(false)} />
         )}

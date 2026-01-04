@@ -14,8 +14,47 @@ export interface MonthlyExtractionResult {
   items: ExtractedPriority[];
 }
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+// [FIX] Safe API Key Access for Browser Environment
+const getApiKey = () => {
+  try {
+    // Check if process is defined (Node.js style environment variables)
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      return process.env.API_KEY;
+    }
+  } catch (e) {
+    console.warn("Failed to read process.env");
+  }
+  return '';
+};
+
+// [CRITICAL FIX] Lazy Initialization
+// Do NOT instantiate globally to prevent startup crashes if API Key is missing or env is unstable.
+let aiInstance: GoogleGenAI | null = null;
+
+const getAiClient = () => {
+    if (!aiInstance) {
+        const apiKey = getApiKey();
+        // Even if apiKey is empty, we instantiate here. 
+        // The SDK might throw on call, but we avoid throwing on module load.
+        aiInstance = new GoogleGenAI({ apiKey });
+    }
+    return aiInstance;
+};
+
+// Helper: Promise with Timeout
+const promiseWithTimeout = <T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> => {
+    let timeoutId: any;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(errorMessage)), ms);
+    });
+    return Promise.race([
+        promise.then((res) => {
+            clearTimeout(timeoutId);
+            return res;
+        }),
+        timeoutPromise
+    ]);
+};
 
 // Helper: Retry Logic for 500/503 Errors
 const withRetry = async <T>(fn: () => Promise<T>, retries = 3, baseDelay = 2000): Promise<T> => {
@@ -63,11 +102,42 @@ const cleanAndRepairJson = (text: string): string => {
       endIndex = cleaned.lastIndexOf(']');
   }
 
-  if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-    cleaned = cleaned.substring(startIndex, endIndex + 1);
-  } else if (startIndex !== -1) {
-    // If closing brace is missing (common stream error), try to append it
-    cleaned = cleaned.substring(startIndex) + (cleaned[startIndex] === '{' ? '}' : ']');
+  // [IMPROVED REPAIR LOGIC] Handle Truncated JSON
+  if (startIndex !== -1) {
+    if (endIndex !== -1 && endIndex > startIndex) {
+        // Seems valid, stick to it
+        cleaned = cleaned.substring(startIndex, endIndex + 1);
+    } else {
+        // Missing closing brace/bracket - The Response was TRUNCATED
+        console.warn("JSON appears truncated. Attempting aggressive repair...");
+        cleaned = cleaned.substring(startIndex);
+        
+        // 1. Check for unterminated string (Odd number of quotes after the last colon?)
+        // Simple heuristic: If the last significant char is not a closer, and looks like text
+        const lastChar = cleaned.trim().slice(-1);
+        const isCloser = ['}', ']', '"', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'e', 'l', 's'].includes(lastChar.toLowerCase()); // numbers, true, false, null enders
+        
+        // If it ended abruptly in a string (e.g., "workDescriptio...)
+        // We simply append a quote first.
+        if (!['}', ']'].includes(lastChar)) {
+             // Basic fix: Close quote if it looks open, then close structure
+             // This is a naive heuristic but works for many LLM cutoffs
+             if (lastChar !== '"') {
+                 cleaned += '"'; 
+             }
+        }
+
+        // 2. Count braces and close them
+        const openBraces = (cleaned.match(/\{/g) || []).length;
+        const closeBraces = (cleaned.match(/\}/g) || []).length;
+        const openBrackets = (cleaned.match(/\[/g) || []).length;
+        const closeBrackets = (cleaned.match(/\]/g) || []).length;
+
+        // Close arrays first (inner), then objects (outer) usually
+        // But simplified: Just append missing closures.
+        for (let i = 0; i < (openBrackets - closeBrackets); i++) cleaned += ']';
+        for (let i = 0; i < (openBraces - closeBraces); i++) cleaned += '}';
+    }
   }
 
   // Step 3: Attempt parsing. If fail, return safe empty object/array string
@@ -75,8 +145,9 @@ const cleanAndRepairJson = (text: string): string => {
     JSON.parse(cleaned);
     return cleaned;
   } catch (e) {
-    console.warn("JSON Repair needed:", e);
-    // Simple fallback: if it looks like an array, return []. If object, {}.
+    console.warn("JSON Repair Failed even after aggressive fix:", e);
+    console.log("Failed String:", cleaned);
+    // Ultimate fallback: return empty structure based on start
     return cleaned.startsWith('[') ? "[]" : "{}";
   }
 };
@@ -93,42 +164,85 @@ const safeParseInt = (val: any): number => {
     return 0;
 };
 
-// ... (Existing video analysis code remains unchanged) ...
-export const evaluateTBMVideo = async (base64Video: string, mimeType: string, workDescription?: string): Promise<TBMAnalysisResult> => {
+// [UPDATED] Video Analysis with Strict Evidence-Based Scoring & Gap Analysis Feedback
+export const evaluateTBMVideo = async (
+  base64Video: string, 
+  mimeType: string, 
+  textContext: { workDescription: string, riskFactors: any[] },
+  safetyGuidelines: SafetyGuideline[] = []
+): Promise<TBMAnalysisResult> => {
   try {
+    const ai = getAiClient(); // Lazy load
     let cleanMimeType = 'video/webm'; 
     if (mimeType.includes('mp4')) cleanMimeType = 'video/mp4';
 
-    const workContext = workDescription ? `작업 내용 및 일지 요약: "${workDescription}"` : "작업 내용: 일반 골조 공사";
+    const risksText = textContext.riskFactors?.length > 0 
+        ? textContext.riskFactors.map(r => `- 위험: ${r.risk} / 대책: ${r.measure}`).join('\n')
+        : "위험요인 없음 (텍스트 누락)";
 
-    // [PHILOSOPHY UPDATE] Prompt Engineering for Upward Standardization
-    const prompt = `
-      역할: 당신은 건설 현장의 **안전 멘토(Safety Mentor)**이자 **무재해 코치**입니다.
-      
-      [궁극적 목표]
-      이 분석의 목적은 처벌이나 감점이 아닙니다. 
-      팀원들의 **안전 의식을 고취**시키고, 모든 팀의 TBM 수준을 **상향 평준화(Upward Standardization)**하여 현장의 **무재해(Zero Accident)**를 달성하는 것입니다.
+    const guidelinesText = safetyGuidelines.length > 0
+        ? safetyGuidelines.map(g => `- [${g.category}] ${g.content} (${g.level === 'HIGH' ? '중점' : '일반'})`).join('\n')
+        : "등록된 중점 관리 항목 없음";
 
-      임무: TBM 영상과 일지 내용을 분석하여, 긍정적인 변화를 유도할 수 있는 피드백을 제공하십시오.
-      
-      ${workContext}
+    const workContext = `
+      [INPUT DATA 1: Written Log]
+      - Work Description: ${textContext.workDescription}
+      - Risk Assessment (Created by Team):
+      ${risksText}
 
-      [평가 철학 및 기준 (총 100점 만점)]
-      1. **일지 충실도 (30점):** 위험성평가 내용이 작업자들에게 정확히 전달되었는가? (형식적 낭독 지양)
-      2. **집중도 및 태도 (30점):** 팀원들이 리더와 눈을 맞추고 경청하는가? (상호 존중과 소통 문화)
-      3. **음성 전달력 (20점):** 리더의 목소리에 자신감과 '안전 리더십'이 묻어나는가?
-      4. **보호구 상태 (20점):** 생명을 지키기 위한 기본 원칙(안전모 턱끈 등)이 준수되었는가?
-
-      [출력 데이터 요구사항]
-      - **feedback**: 단순 지적보다는 "다음에는 ~하면 더욱 완벽한 TBM이 될 것입니다"와 같은 **격려와 코칭(Coaching)** 위주로 작성하십시오.
-      - **suggestion**: 이 팀이 '베스트 안전 팀'이 되기 위해 필요한 **한 가지 핵심 제언**을 해주십시오.
-      - 응답은 반드시 JSON 형식이어야 합니다.
+      [INPUT DATA 2: Monthly Priority Guidelines (Site Rules)]
+      ${guidelinesText}
     `;
 
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    // [CRITICAL PROMPT UPDATE FOR FAST FORWARD]
+    const prompt = `
+      You are a specialized 'Construction Safety Forensic AI'.
+      
+      *** IMPORTANT: VIDEO IS ACCELERATED 3X SPEED ***
+      - The uploaded video is a "Hyper-Lapse" (3x speed) to cover the whole TBM quickly.
+      - **Visuals:** People will move fast. This is normal. Focus on PPE (helmets) and formation.
+      - **Audio:** Voices will be high-pitched and fast. Do NOT penalize for "fast speaking". 
+      - Assess "Voice" based on volume energy and presence, not dictation accuracy.
+
+      [TASK 1: EVIDENCE-BASED SCORING]
+      - PPE Score (Max 20): -10 (No Helmet), -5 (No Chin Strap).
+      - Voice (Max 20): Check if the leader is speaking loudly enough (despite 3x speed).
+      - Focus (Max 30): Are workers facing the leader? (Ignore fast head movements).
+      - Log Quality (Max 30): Assess if the written log is specific and detailed.
+
+      [TASK 2: SAFETY MANAGER FEEDBACK GENERATION (CRITICAL)]
+      You must generate 'feedback' strings acting as the Site Safety Manager.
+      **Logic:**
+      1. Analyze the [Work Description].
+      2. Check if any [Monthly Priority Guidelines] apply to this work.
+      3. **COMPARE:** Did the team include the applicable guidelines in their [Risk Assessment]?
+      4. **IF MISSING:** Generate a feedback: "월간 중점 사항인 [Guideline Content] 내용이 누락되었습니다. 작업자에게 전파 바랍니다."
+      5. **IF GOOD:** Generate a feedback: "작업 특성에 맞는 위험요인이 잘 도출되었습니다. 계획대로 이행 바랍니다."
+      6. If the work description matches no guidelines, provide general safety advice based on the video (e.g., "목소리를 더 크게 하여 전달력을 높이세요").
+
+      [OUTPUT REQUIREMENT]
+      Return a JSON object. **All text values must be in Korean.**
+      
+      Structure:
+      - rubric: { logQuality, focus, voice, ppe, deductions: string[] }
+      - score: Total sum.
+      - evaluation: Summary.
+      - focusAnalysis: { overall, distractedCount }
+      - insight: { missingTopics, suggestion }
+      - feedback: string[] (The Safety Manager Comments)
+
+      ${workContext}
+    `;
+
+    // [FIX] Decreased timeout to 120s (2 minutes) for fail-fast behavior
+    // If it takes longer than 2 minutes, it's better to fail and switch to text analysis.
+    const apiCall = () => ai.models.generateContent({
       model: "gemini-3-flash-preview", 
       contents: [{ role: "user", parts: [{ inlineData: { mimeType: cleanMimeType, data: base64Video } }, { text: prompt }] }],
       config: {
+        temperature: 0.1, 
+        topP: 0.1, 
+        topK: 1,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -136,13 +250,13 @@ export const evaluateTBMVideo = async (base64Video: string, mimeType: string, wo
              rubric: {
                  type: Type.OBJECT,
                  properties: {
-                     logQuality: { type: Type.INTEGER, description: "Score out of 30" },
-                     focus: { type: Type.INTEGER, description: "Score out of 30" },
-                     voice: { type: Type.INTEGER, description: "Score out of 20" },
-                     ppe: { type: Type.INTEGER, description: "Score out of 20" },
+                     logQuality: { type: Type.INTEGER },
+                     focus: { type: Type.INTEGER },
+                     voice: { type: Type.INTEGER },
+                     ppe: { type: Type.INTEGER },
                      deductions: { type: Type.ARRAY, items: { type: Type.STRING } }
                  },
-                 required: ["logQuality", "focus", "voice", "ppe"]
+                 required: ["logQuality", "focus", "voice", "ppe", "deductions"]
              },
              score: { type: Type.INTEGER },
              evaluation: { type: Type.STRING },
@@ -178,32 +292,38 @@ export const evaluateTBMVideo = async (base64Video: string, mimeType: string, wo
                      suggestion: { type: Type.STRING }
                  }
              },
-             feedback: { type: Type.ARRAY, items: { type: Type.STRING } }
+             feedback: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Manager comments regarding missing priorities" }
           }
         },
       },
-    }));
+    });
+
+    // 120 Seconds strict timeout (Fail Fast)
+    const response = await withRetry<GenerateContentResponse>(
+        () => promiseWithTimeout(apiCall(), 120000, "AI Server Response Timeout (120s)"),
+        1, // Reduced retries to 1 for video. If it fails, fallback to text.
+        2000
+    );
 
     if (response.text) {
       const raw = JSON.parse(cleanAndRepairJson(response.text));
       
-      // Default rubric if AI fails to populate it specifically (Fallback)
       const defaultRubric = {
-          logQuality: 28,
-          focus: 28,
-          voice: 18,
-          ppe: 18,
+          logQuality: 25,
+          focus: 25,
+          voice: 15,
+          ppe: 15,
           deductions: []
       };
 
       const finalRubric = raw.rubric || defaultRubric;
-      const totalScore = finalRubric.logQuality + finalRubric.focus + finalRubric.voice + finalRubric.ppe;
+      const totalScore = (finalRubric.logQuality || 0) + (finalRubric.focus || 0) + (finalRubric.voice || 0) + (finalRubric.ppe || 0);
 
       return {
-          score: raw.score || totalScore,
-          evaluation: raw.evaluation || "양호함",
+          score: totalScore,
+          evaluation: raw.evaluation || "분석 완료",
           analysisSource: 'VIDEO',
-          rubric: finalRubric, // Inject Rubric
+          rubric: finalRubric,
           details: {
               participation: (raw.details?.participation || 'GOOD') as any,
               voiceClarity: (raw.details?.voiceClarity || 'CLEAR') as any,
@@ -211,7 +331,7 @@ export const evaluateTBMVideo = async (base64Video: string, mimeType: string, wo
               interaction: !!raw.details?.interaction
           },
           focusAnalysis: {
-              overall: raw.focusAnalysis?.overall ?? 98,
+              overall: raw.focusAnalysis?.overall ?? 90,
               distractedCount: raw.focusAnalysis?.distractedCount ?? 0,
               focusZones: {
                   front: (raw.focusAnalysis?.focusZones?.front || 'HIGH') as any,
@@ -222,22 +342,22 @@ export const evaluateTBMVideo = async (base64Video: string, mimeType: string, wo
           insight: {
               mentionedTopics: raw.insight?.mentionedTopics || [],
               missingTopics: raw.insight?.missingTopics || [],
-              suggestion: raw.insight?.suggestion || "지속적인 소통으로 무재해를 달성합시다."
+              suggestion: raw.insight?.suggestion || "안전 수칙을 철저히 준수합시다."
           },
-          feedback: raw.feedback || []
+          feedback: raw.feedback || [] 
       };
     }
     throw new Error("No response text");
   } catch (error: any) {
     console.error("Gemini Insight Error:", error);
     return {
-      score: 95,
-      evaluation: "분석 대기 중",
+      score: 0,
+      evaluation: `분석 실패: ${error.message || "서버 응답 없음"}`,
       analysisSource: 'VIDEO',
-      rubric: { logQuality: 25, focus: 25, voice: 15, ppe: 15, deductions: ["분석 실패로 인한 기본 점수 부여"] },
-      details: { participation: 'GOOD', voiceClarity: 'CLEAR', ppeStatus: 'GOOD', interaction: true },
-      focusAnalysis: { overall: 98, distractedCount: 0, focusZones: { front: 'HIGH', back: 'HIGH', side: 'HIGH' } },
-      insight: { mentionedTopics: [], missingTopics: [], suggestion: "" },
+      rubric: { logQuality: 0, focus: 0, voice: 0, ppe: 0, deductions: ["시스템 오류로 분석 불가"] },
+      details: { participation: 'BAD', voiceClarity: 'NONE', ppeStatus: 'BAD', interaction: false },
+      focusAnalysis: { overall: 0, distractedCount: 0, focusZones: { front: 'LOW', back: 'LOW', side: 'LOW' } },
+      insight: { mentionedTopics: [], missingTopics: [], suggestion: "네트워크 상태를 확인하고 다시 시도해주세요." },
       feedback: []
     };
   }
@@ -246,11 +366,14 @@ export const evaluateTBMVideo = async (base64Video: string, mimeType: string, wo
 // ... (Monthly extraction remains unchanged) ...
 export const extractMonthlyPriorities = async (base64Data: string, mimeType: string): Promise<MonthlyExtractionResult> => {
     try {
+      const ai = getAiClient(); // Lazy load
       const prompt = `월간 위험성평가표 분석. 날짜(detectedMonth)와 항목(items) 추출.`;
       const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ inlineData: { mimeType, data: base64Data } }, { text: prompt }] }],
         config: {
+          // [FIX] Temperature 0.0 for Document Extraction
+          temperature: 0.0, 
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -288,42 +411,45 @@ export const analyzeMasterLog = async (
     mode: 'BATCH' | 'ROUTINE' = 'BATCH' // [CRITICAL] Mode param added
   ): Promise<ExtractedTBMData[]> => {
     try {
+      const ai = getAiClient(); // Lazy load
       console.log(`Starting Document Analysis in [${mode}] mode...`);
       
       let promptContext = "";
+      // Construct Guidelines Text
+      const guidelinesText = monthlyGuidelines.length > 0
+          ? monthlyGuidelines.map(g => `- [${g.category}] ${g.content}`).join('\n')
+          : "등록된 중점 관리 항목 없음";
+
       if (mode === 'BATCH') {
           promptContext = `
             [모드: 종합 일지 일괄 처리 (BATCH)]
-            - 이 문서는 **이미 현장 소장의 결재가 완료된 검증된 문서**입니다.
-            - 목표: 문서의 내용을 디지털 데이터로 변환(Archive)하는 것입니다.
-            - **점수 처리:** 문서에 점수가 명시되어 있지 않다면, 무조건 높은 점수를 주지 말고 **일지 내용의 구체성에 따라 80~90점 사이**로 현실적으로 평가하십시오. (결재 완료 = 적격/Pass 의미, 만점 아님)
-            - **데이터:** 팀명, 인원, 작업내용, 위험요인을 빠짐없이 추출하십시오.
+            - 이 문서는 이미 결재가 완료된 문서입니다.
+            - 목표: 디지털 데이터 변환.
+            - **안전관리자 코멘트(safetyFeedback) 생성 규칙:**
+              1. 문서에 수기 코멘트가 있으면 우선 추출.
+              2. 코멘트가 없으면, [작업 내용]과 [아래 제공된 월간 위험성평가 항목]을 대조하십시오.
+              3. 작업 내용에 해당되는 위험 항목이 TBM 내용에서 빠져있다면, **"월간 중점 사항인 [항목명]이 누락되었습니다. 작업자에게 주지시키세요."**라는 코멘트를 생성하여 'safetyFeedback' 배열에 넣으십시오.
+              4. 누락 사항이 없다면 **"작업별 위험요인이 적절히 도출되었습니다."**라고 생성하십시오.
+            
+            [월간 위험성평가 참고 자료]
+            ${guidelinesText}
           `;
       } else {
           promptContext = `
             [모드: 개별 TBM 간편 등록 (ROUTINE)]
-            - 이 문서는 **작업 전 작성 중인 TBM 초안**입니다.
-            - 목표: 사용자가 입력해야 할 텍스트(작업내용, 위험요인)를 대신 타이핑해주는 것입니다.
-            - **점수 처리:** 아직 TBM 활동(동영상 촬영)을 하지 않았으므로, **안전 점수와 집중도는 절대 생성하지 마십시오 (0 또는 null).** 이는 추후 영상 분석으로 채워집니다.
-            - **주의:** 오직 텍스트 정보만 추출하십시오.
+            - 이 문서는 TBM 보드판입니다.
+            - 목표: 텍스트 추출.
+            - **안전관리자 코멘트:** 위 BATCH 모드와 동일한 로직으로, 월간 위험성평가 대비 누락 사항을 지적하는 코멘트를 생성하십시오.
           `;
       }
 
       const prompt = `
-        역할: 건설 현장 데이터 분석가 (골조 공사 전문).
-        임무: 제공된 '일일 종합 TBM 일지' 또는 'TBM 보드판' 이미지를 분석하여 데이터를 구조화하십시오.
+        역할: 건설 현장 데이터 분석가.
         
         ${promptContext}
         
         [필수 추출 항목]
-        1. **날짜(Document Date)**: YYYY-MM-DD 형식. (예: 2025년 3월 1일 -> 2025-03-01)
-        2. **팀별 데이터 (teams)**:
-           - **팀명**: (예: 형틀 1팀, 철근 2팀, 직영)
-           - **팀장명**: 식별 가능할 경우 추출.
-           - **참석인원**: 숫자만 추출.
-           - **작업내용**: 구체적으로 추출.
-           - **위험요인/대책**: 텍스트 그대로 추출.
-           - **안전점수(safetyScore)**: 모드에 따라 처리.
+        - teams 배열 내 'safetyFeedback'은 반드시 위 규칙에 따라 생성된 코멘트 배열이어야 합니다.
       `;
   
       const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
@@ -338,6 +464,8 @@ export const analyzeMasterLog = async (
           }
         ],
         config: {
+          // [FIX] Temperature 0.0 for consistent data mining
+          temperature: 0.0,
           responseMimeType: "application/json",
           maxOutputTokens: 8192, 
           responseSchema: {
@@ -376,7 +504,7 @@ export const analyzeMasterLog = async (
       }));
   
       if (response.text) {
-        // [Safety] Use Repair Logic
+        // [Safety] Use Improved Repair Logic
         const cleanedText = cleanAndRepairJson(response.text);
         let data: any;
         
@@ -437,7 +565,7 @@ export const analyzeMasterLog = async (
                         missingTopics: [], 
                         suggestion: "기존 분석 검증 완료 데이터 (Batch Processed)" 
                     },
-                    feedback: safeFeedback
+                    feedback: safeFeedback // Use extracted feedback here
                 };
             } else {
                 // In Routine Mode, we do NOT generate fake analysis. 
