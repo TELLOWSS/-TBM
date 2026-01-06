@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TBMEntry } from '../types';
-import { Calendar, Users, AlertCircle, FileText, Camera, BarChart2, CheckCircle2, TrendingUp, ChevronRight, Edit2, ShieldAlert, BookOpen, Quote, Database, Trash2, X, ScanLine, Server, Lock, Sparkles, BrainCircuit, MessageSquare, ArrowRight, ShieldCheck, Activity, Zap, Clock, MoreHorizontal, Plus, Eye, Mic, HandMetal, UserCheck, PlayCircle, Globe, Languages, Target, Radar, Presentation, TrendingDown, CalendarRange, FolderInput, FileStack, Layers, ArrowUpDown, Filter, Printer } from 'lucide-react';
+import { Calendar, Users, AlertCircle, FileText, Camera, BarChart2, CheckCircle2, TrendingUp, ChevronRight, Edit2, ShieldAlert, BookOpen, Quote, Database, Trash2, X, ScanLine, Server, Lock, Sparkles, BrainCircuit, MessageSquare, ArrowRight, ShieldCheck, Activity, Zap, Clock, MoreHorizontal, Plus, Eye, Mic, HandMetal, UserCheck, PlayCircle, Globe, Languages, Target, Radar, Presentation, TrendingDown, CalendarRange, FolderInput, FileStack, Layers, ArrowUpDown, Filter, Printer, LineChart } from 'lucide-react';
 
 interface DashboardProps {
   entries: TBMEntry[];
@@ -12,10 +12,10 @@ interface DashboardProps {
   onEdit: (entry: TBMEntry) => void;
   onOpenSettings: () => void;
   onDelete: (id: string) => void; 
-  onPrintSingle: (entry: TBMEntry) => void; // [NEW] Handler for single PDF print
+  onPrintSingle: (entry: TBMEntry) => void; 
 }
 
-// ... (ImpactReportModal and analysis logic remain the same) ...
+// ... (ImpactReportModal remains the same) ...
 interface ImpactReportModalProps {
    entries: TBMEntry[];
    onClose: () => void;
@@ -150,14 +150,56 @@ const ImpactReportModal: React.FC<ImpactReportModalProps> = ({ entries, onClose 
    );
 };
 
+// --- Sparkline Component ---
+const Sparkline = ({ data, color, label }: { data: number[], color: string, label: string }) => {
+  // If insufficient data, render a placeholder
+  if (!data || data.length === 0) return (
+      <div className="flex flex-col items-center justify-center h-[34px] w-[60px] opacity-30">
+          <span className="text-[9px] font-bold text-slate-300">-</span>
+      </div>
+  );
+
+  const height = 24;
+  const width = 60;
+  
+  // Normalize
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = max - min || 1;
+  
+  // Generate Points
+  const points = data.map((val, i) => {
+      // For single point, place in middle
+      const x = data.length === 1 ? width / 2 : (i / (data.length - 1)) * width;
+      const y = height - ((val - min) / range) * height; // Invert Y
+      return `${x},${y}`;
+  }).join(' ');
+
+  return (
+      <div className="flex flex-col items-center gap-0.5">
+          <svg width={width} height={height} className="overflow-visible">
+              {/* Line or Dot */}
+              {data.length > 1 ? (
+                  <path d={`M ${points}`} fill="none" stroke="currentColor" strokeWidth="2" className={color} strokeLinecap="round" strokeLinejoin="round" />
+              ) : (
+                  <circle cx={width/2} cy={height/2} r="2" className={`fill-current ${color}`} />
+              )}
+              {/* End dot */}
+              <circle cx={points.split(' ').pop()?.split(',')[0]} cy={points.split(' ').pop()?.split(',')[1]} r="2.5" className={`fill-current ${color} animate-pulse`} />
+          </svg>
+          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">{label}</span>
+      </div>
+  );
+};
+
 export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onNavigateToReports, onNewEntry, onEdit, onOpenSettings, onDelete, onPrintSingle }) => {
   const [showImpactReport, setShowImpactReport] = useState(false); 
   const [chartSortBy, setChartSortBy] = useState<'COUNT' | 'SCORE'>('COUNT');
+  const [viewMode, setViewMode] = useState<'BAR' | 'SPARK'>('BAR'); // New View Mode State
 
   const today = new Date().toISOString().split('T')[0];
   const todaysEntries = entries.filter(e => e.date === today);
 
-  // ... (Culture Score logic remains the same) ...
   const cultureScore = useMemo(() => {
       if (entries.length === 0) return 0;
       const scores = entries.filter(e => e.videoAnalysis).map(e => e.videoAnalysis!.score);
@@ -170,23 +212,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
     const now = new Date();
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const oneWeekAgoStr = oneWeekAgo.toISOString().split('T')[0];
-    const stats: Record<string, { name: string; count: number; totalAttendees: number; aiScores: number[] }> = {};
+    
+    // Structure to hold aggregated stats + time series history
+    const stats: Record<string, { 
+        name: string; 
+        count: number; 
+        totalAttendees: number; 
+        aiScores: number[];
+        history: { date: string, attendees: number, score: number, focus: number }[] // New History Array
+    }> = {};
 
     entries.forEach(entry => {
       if (entry.date && entry.date >= oneWeekAgoStr) {
         const teamName = entry.teamName || '미지정 팀';
-        if (!stats[teamName]) stats[teamName] = { name: teamName, count: 0, totalAttendees: 0, aiScores: [] };
+        if (!stats[teamName]) {
+            stats[teamName] = { name: teamName, count: 0, totalAttendees: 0, aiScores: [], history: [] };
+        }
+        
         stats[teamName].count += 1;
         stats[teamName].totalAttendees += (entry.attendeesCount || 0);
         if (entry.videoAnalysis?.score) stats[teamName].aiScores.push(entry.videoAnalysis.score);
+
+        // Populate History for Sparklines
+        stats[teamName].history.push({
+            date: entry.date,
+            attendees: entry.attendeesCount || 0,
+            score: entry.videoAnalysis?.rubric?.logQuality || (entry.videoAnalysis?.score ? entry.videoAnalysis.score / 3 : 0), // Use LogQuality or proxy
+            focus: entry.videoAnalysis?.focusAnalysis?.overall || 0
+        });
       }
     });
 
     return Object.values(stats)
-      .map(item => ({ 
-         ...item, 
-         avgScore: item.aiScores.length > 0 ? Math.round(item.aiScores.reduce((a,b)=>a+b,0) / item.aiScores.length) : null
-      }))
+      .map(item => {
+         // Sort history by date for correct sparkline rendering
+         const sortedHistory = item.history.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+         
+         return { 
+            ...item, 
+            avgScore: item.aiScores.length > 0 ? Math.round(item.aiScores.reduce((a,b)=>a+b,0) / item.aiScores.length) : null,
+            // Extract arrays for sparklines
+            sparkAttendees: sortedHistory.map(h => h.attendees),
+            sparkQuality: sortedHistory.map(h => h.score),
+            sparkFocus: sortedHistory.map(h => h.focus)
+         };
+      })
       .sort((a, b) => chartSortBy === 'COUNT' ? b.count - a.count : (b.avgScore || 0) - (a.avgScore || 0));
   }, [entries, chartSortBy]);
 
@@ -312,62 +382,98 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
 
       {/* Charts & List Section */}
       <div className="grid lg:grid-cols-3 gap-6">
-         {/* Left: Weekly Chart */}
-         <div className="lg:col-span-2 bg-white rounded-[32px] p-6 md:p-8 border border-slate-100 shadow-sm flex flex-col animate-slide-up delay-200 relative overflow-hidden">
-            <div className="flex flex-col md:flex-row justify-between md:items-center mb-8 relative z-10 gap-4">
+         {/* Left: Streamlined Horizontal Bar Chart (Auto-Fit) or Sparkline View */}
+         <div className="lg:col-span-2 bg-white rounded-[32px] p-6 md:p-8 border border-slate-100 shadow-sm flex flex-col animate-slide-up delay-200 relative overflow-hidden h-[500px]">
+            <div className="flex flex-col md:flex-row justify-between md:items-center mb-4 relative z-10 gap-4 shrink-0">
                <div>
                   <h3 className="font-black text-xl text-slate-800 tracking-tight">주간 활동 요약</h3>
-                  <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wide">Weekly Performance</p>
+                  <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wide">Weekly Streamlined Analytics</p>
                </div>
-               <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-100 w-full md:w-auto">
-                   <button onClick={() => setChartSortBy('COUNT')} className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-[10px] font-bold transition-all ${chartSortBy === 'COUNT' ? 'bg-white shadow text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}><Activity size={12}/> 참여율순</button>
-                   <button onClick={() => setChartSortBy('SCORE')} className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-[10px] font-bold transition-all ${chartSortBy === 'SCORE' ? 'bg-white shadow text-violet-700' : 'text-slate-400 hover:text-slate-600'}`}><Sparkles size={12}/> AI점수순</button>
+               <div className="flex gap-2 w-full md:w-auto overflow-x-auto">
+                   <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-100 shrink-0">
+                       <button onClick={() => setViewMode('BAR')} className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${viewMode === 'BAR' ? 'bg-white shadow text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}><BarChart2 size={12}/> Bar</button>
+                       <button onClick={() => setViewMode('SPARK')} className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${viewMode === 'SPARK' ? 'bg-white shadow text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}><LineChart size={12}/> Spark</button>
+                   </div>
+                   
+                   {viewMode === 'BAR' && (
+                       <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-100 shrink-0">
+                           <button onClick={() => setChartSortBy('COUNT')} className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${chartSortBy === 'COUNT' ? 'bg-white shadow text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>참여율순</button>
+                           <button onClick={() => setChartSortBy('SCORE')} className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${chartSortBy === 'SCORE' ? 'bg-white shadow text-violet-700' : 'text-slate-400 hover:text-slate-600'}`}>AI점수순</button>
+                       </div>
+                   )}
                </div>
             </div>
 
-            <div className="relative flex-1 group min-h-[260px] flex items-end">
-                {/* Chart Area */}
-                <div className="w-full h-full flex items-end gap-2 md:gap-4 overflow-x-auto pb-2 custom-scrollbar px-2">
-                   {weeklyStats.length === 0 ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">
-                         <BarChart2 size={48} className="mb-2 opacity-20"/>
-                         <span className="text-sm font-bold">데이터 수집 중...</span>
-                      </div>
-                   ) : (
-                      weeklyStats.map((stat, idx) => {
+            <div className="flex-1 flex flex-col relative overflow-hidden bg-slate-50/50 rounded-2xl border border-slate-100 p-4">
+               {weeklyStats.length === 0 ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">
+                     <BarChart2 size={48} className="mb-2 opacity-20"/>
+                     <span className="text-sm font-bold">데이터 수집 중...</span>
+                  </div>
+               ) : (
+                  <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 flex flex-col gap-2">
+                      {weeklyStats.map((stat, idx) => {
+                         const itemHeight = weeklyStats.length > 10 ? '36px' : '48px';
+
+                         if (viewMode === 'SPARK') {
+                             // Sparkline View Row
+                             return (
+                                 <div key={idx} className="flex items-center justify-between gap-4 w-full group/row shrink-0 bg-white rounded-xl border border-slate-100 p-2 hover:border-indigo-200 hover:shadow-sm transition-all" style={{height: '56px'}}>
+                                     <div className="w-24 shrink-0 pl-2">
+                                         <p className="text-xs font-bold text-slate-700 truncate leading-tight" title={stat.name}>{stat.name}</p>
+                                         <p className="text-[9px] text-slate-400 font-medium">({stat.count}회)</p>
+                                     </div>
+                                     
+                                     <div className="flex-1 grid grid-cols-3 gap-2 h-full items-center">
+                                         <Sparkline data={stat.sparkAttendees} color="text-blue-500" label="참여도" />
+                                         <Sparkline data={stat.sparkQuality} color="text-violet-500" label="일지 충실도" />
+                                         <Sparkline data={stat.sparkFocus} color="text-emerald-500" label="안전 의식" />
+                                     </div>
+                                 </div>
+                             )
+                         }
+
+                         // Existing Streamlined Bar View
                          const value = chartSortBy === 'COUNT' ? stat.count : (stat.avgScore || 0);
                          const maxVal = chartSortBy === 'COUNT' ? maxValue : 100;
-                         const heightPercent = Math.max(15, (value / maxVal) * 100);
+                         const widthPercent = Math.max(5, (value / maxVal) * 100);
                          
-                         let barGradient = "from-slate-200 to-slate-300";
-                         let textColor = "text-slate-400";
+                         let barGradient = "";
+                         let barText = "";
+                         
                          if (chartSortBy === 'SCORE') {
-                             if ((stat.avgScore || 0) >= 80) { barGradient = "from-violet-400 to-indigo-500"; textColor = "text-violet-600"; }
-                             else if ((stat.avgScore || 0) >= 50) { barGradient = "from-orange-300 to-amber-400"; textColor = "text-orange-600"; }
-                             else { barGradient = "from-red-300 to-rose-400"; textColor = "text-red-500"; }
+                             if ((stat.avgScore || 0) >= 80) { barGradient = "from-violet-500 to-indigo-600"; barText = "text-violet-700"; }
+                             else if ((stat.avgScore || 0) >= 50) { barGradient = "from-orange-400 to-amber-500"; barText = "text-orange-600"; }
+                             else { barGradient = "from-red-400 to-rose-500"; barText = "text-red-500"; }
                          } else {
-                             barGradient = "from-blue-300 to-blue-500";
-                             if (idx < 3) { barGradient = "from-blue-500 to-indigo-600"; textColor = "text-blue-700"; }
+                             const opacity = Math.max(0.4, 1 - (idx * 0.05)); 
+                             barGradient = `from-blue-500 to-indigo-600 opacity-[${opacity}]`;
+                             barText = "text-slate-700";
                          }
 
                          return (
-                            <div key={idx} className="flex flex-col items-center group/bar relative h-full justify-end w-12 md:w-14 shrink-0">
-                               {/* Tooltip */}
-                               <div className="mb-3 opacity-0 group-hover/bar:opacity-100 transition-all transform translate-y-2 group-hover/bar:translate-y-0 absolute bottom-full z-20 pointer-events-none">
-                                  <div className="bg-slate-800 text-white text-[10px] font-bold px-3 py-2 rounded-xl shadow-xl whitespace-nowrap flex flex-col items-center gap-0.5">
-                                     <span>{stat.name}</span>
-                                     <span className="text-slate-300">{stat.count}회 / AI {stat.avgScore || 0}점</span>
-                                  </div>
-                                  <div className="w-2 h-2 bg-slate-800 rotate-45 mx-auto -mt-1"></div>
+                            <div key={idx} className="flex items-center gap-3 w-full group/row shrink-0" style={{height: itemHeight}}>
+                               <div className="w-24 text-right shrink-0 flex flex-col justify-center">
+                                   <p className="text-xs font-bold text-slate-600 truncate leading-none" title={stat.name}>{stat.name}</p>
+                                   {chartSortBy === 'COUNT' && <span className="text-[9px] text-slate-400 font-medium leading-none mt-0.5">{stat.totalAttendees}명 참여</span>}
                                </div>
                                
-                               <div className={`w-full rounded-2xl bg-gradient-to-t ${barGradient} transition-all duration-500 relative shadow-lg group-hover/bar:shadow-xl group-hover/bar:scale-105`} style={{ height: `${heightPercent}%` }}></div>
-                               <div className="mt-3 text-center w-full"><p className={`text-[10px] font-bold ${textColor} transition-colors truncate w-full`}>{stat.name.split(' ')[0]}</p></div>
+                               <div className="flex-1 h-full relative flex items-center">
+                                   <div className="absolute inset-0 bg-slate-200/50 rounded-r-full rounded-l-md w-full h-2 top-1/2 -translate-y-1/2"></div>
+                                   <div 
+                                      className={`h-2.5 bg-gradient-to-r ${barGradient} rounded-r-full rounded-l-md shadow-sm relative z-10 transition-all duration-1000 ease-out group-hover/row:h-3.5 group-hover/row:brightness-110`} 
+                                      style={{ width: `${widthPercent}%` }}
+                                   >
+                                       <div className={`absolute -right-2 top-1/2 -translate-y-1/2 translate-x-full pl-2 text-xs font-black ${barText} whitespace-nowrap opacity-80 group-hover/row:opacity-100 transition-opacity`}>
+                                           {value}<span className="text-[9px] font-medium ml-0.5 opacity-70">{chartSortBy === 'COUNT' ? '회' : '점'}</span>
+                                       </div>
+                                   </div>
+                               </div>
                             </div>
                          )
-                      })
-                   )}
-                </div>
+                      })}
+                  </div>
+               )}
             </div>
          </div>
 

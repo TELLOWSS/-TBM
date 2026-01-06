@@ -12,6 +12,7 @@ const RiskAssessmentManager = React.lazy(() => import('./components/RiskAssessme
 import { HistoryModal } from './components/HistoryModal';
 import { TBMEntry, MonthlyRiskAssessment, TeamOption, TeamCategory } from './types';
 import { TEAMS } from './constants';
+import { StorageDB } from './utils/storageDB';
 import { Download, Upload, Trash2, X, Settings, Database, Eraser, Plus, Users, Edit3, Save, FileText, ScanLine, Camera, Lock, Server, MessageSquare, BrainCircuit, ShieldCheck, PlayCircle, Sparkles, Target, Eye, Radar, Hexagon, Layers, Zap, FileStack, ArrowRight, Loader2 } from 'lucide-react';
 
 // --- System Identity Modal (Design Philosophy) ---
@@ -352,6 +353,7 @@ const LoadingScreen = () => (
 
 function App() {
   const [currentView, setCurrentView] = useState('dashboard');
+  const [isLoading, setIsLoading] = useState(true); // Added loading state
   const [entries, setEntries] = useState<TBMEntry[]>([]);
   // [NEW] State for filtering reports (Show Single vs All)
   const [reportTargetEntries, setReportTargetEntries] = useState<TBMEntry[]>([]);
@@ -392,59 +394,84 @@ function App() {
     return [...monthlyAssessments].sort((a, b) => b.month.localeCompare(a.month))[0].priorities;
   }, [monthlyAssessments]);
 
+  // Load Data with Migration from LocalStorage to IndexedDB
   useEffect(() => {
-    // ... (Loading effect remains unchanged)
-    const savedEntries = localStorage.getItem('tbm_entries');
-    if (savedEntries) {
-      try {
-        const parsed = JSON.parse(savedEntries);
-        if (Array.isArray(parsed)) {
-            const sanitized = parsed.map((e: any, index: number) => {
-              const safeId = `ENTRY-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 7)}`;
-              return {
-                ...e,
-                id: (!e.id || e.id === 'undefined' || e.id === 'null') ? safeId : String(e.id),
-                teamName: e.teamName || '미지정 팀',
-                date: e.date || new Date().toISOString().split('T')[0],
-                time: e.time || '00:00',
-                attendeesCount: Number(e.attendeesCount) || 0,
-                workDescription: e.workDescription !== undefined ? String(e.workDescription) : '',
-                riskFactors: Array.isArray(e.riskFactors) ? e.riskFactors : [],
-                safetyFeedback: Array.isArray(e.safetyFeedback) ? e.safetyFeedback.map(String) : []
-              };
-            });
-            setEntries(sanitized);
+    const initData = async () => {
+        try {
+            // 1. TBM Entries
+            let loadedEntries = await StorageDB.get<TBMEntry[]>('tbm_entries');
+            if (!loadedEntries) {
+                // Migration: Check localStorage
+                const local = localStorage.getItem('tbm_entries');
+                if (local) {
+                    try {
+                        loadedEntries = JSON.parse(local);
+                        await StorageDB.set('tbm_entries', loadedEntries);
+                        localStorage.removeItem('tbm_entries'); // Clean up
+                    } catch (e) { console.error("Migration error", e); }
+                }
+            }
+            if (Array.isArray(loadedEntries)) {
+                // Sanitize IDs if missing
+                const sanitized = loadedEntries.map((e: any, index: number) => {
+                    const safeId = `ENTRY-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 7)}`;
+                    return {
+                        ...e,
+                        id: (!e.id || e.id === 'undefined' || e.id === 'null') ? safeId : String(e.id),
+                        teamName: e.teamName || '미지정 팀',
+                        date: e.date || new Date().toISOString().split('T')[0],
+                        time: e.time || '00:00',
+                        attendeesCount: Number(e.attendeesCount) || 0,
+                        workDescription: e.workDescription !== undefined ? String(e.workDescription) : '',
+                        riskFactors: Array.isArray(e.riskFactors) ? e.riskFactors : [],
+                        safetyFeedback: Array.isArray(e.safetyFeedback) ? e.safetyFeedback.map(String) : []
+                    };
+                });
+                setEntries(sanitized);
+            }
+
+            // 2. Teams
+            let loadedTeams = await StorageDB.get<TeamOption[]>('site_teams');
+            if (!loadedTeams) {
+                const local = localStorage.getItem('site_teams');
+                loadedTeams = local ? JSON.parse(local) : TEAMS;
+                await StorageDB.set('site_teams', loadedTeams);
+            }
+            setTeams(loadedTeams || TEAMS);
+
+            // 3. Monthly Assessments
+            let loadedMonthly = await StorageDB.get<MonthlyRiskAssessment[]>('monthly_assessment_list');
+            if (!loadedMonthly) {
+                const savedMonthly = localStorage.getItem('monthly_assessment_list');
+                const legacyMonthly = localStorage.getItem('monthly_assessment');
+                if (savedMonthly) {
+                    loadedMonthly = JSON.parse(savedMonthly);
+                } else if (legacyMonthly) {
+                    loadedMonthly = [JSON.parse(legacyMonthly)];
+                }
+                if (loadedMonthly) await StorageDB.set('monthly_assessment_list', loadedMonthly);
+            }
+            setMonthlyAssessments(loadedMonthly || []);
+
+            // 4. Signatures
+            let loadedSigs = await StorageDB.get<{safety: string | null, site: string | null}>('signatures');
+            if (!loadedSigs) {
+                const local = localStorage.getItem('signatures');
+                if (local) {
+                    loadedSigs = JSON.parse(local);
+                    await StorageDB.set('signatures', loadedSigs);
+                }
+            }
+            setSignatures(loadedSigs || { safety: null, site: null });
+
+        } catch (error) {
+            console.error("Data initialization failed:", error);
+        } finally {
+            setIsLoading(false);
         }
-      } catch (e) {
-        setEntries([]);
-      }
-    }
+    };
 
-    const savedTeams = localStorage.getItem('site_teams');
-    setTeams(savedTeams ? JSON.parse(savedTeams) : TEAMS);
-
-    const savedMonthly = localStorage.getItem('monthly_assessment_list');
-    const legacyMonthly = localStorage.getItem('monthly_assessment');
-
-    if (savedMonthly) {
-       try {
-         setMonthlyAssessments(JSON.parse(savedMonthly));
-       } catch (e) { setMonthlyAssessments([]); }
-    } else if (legacyMonthly) {
-       try {
-         const legacy = JSON.parse(legacyMonthly);
-         const newArray = [legacy];
-         setMonthlyAssessments(newArray);
-         localStorage.setItem('monthly_assessment_list', JSON.stringify(newArray));
-       } catch (e) { setMonthlyAssessments([]); }
-    }
-
-    const savedSignatures = localStorage.getItem('signatures');
-    if (savedSignatures) {
-      try {
-        setSignatures(JSON.parse(savedSignatures));
-      } catch (e) {}
-    }
+    initData();
   }, []);
 
   // ... (Methods handleAddTeam, handleDeleteTeam, handleSaveEntry, etc. remain unchanged)
@@ -453,7 +480,7 @@ function App() {
     const newTeam: TeamOption = { id: `team-${Date.now()}`, name: newTeamName.trim(), category: newTeamCategory };
     const updatedTeams = [...teams, newTeam];
     setTeams(updatedTeams);
-    localStorage.setItem('site_teams', JSON.stringify(updatedTeams));
+    StorageDB.set('site_teams', updatedTeams);
     setNewTeamName('');
     alert('팀이 추가되었습니다.');
   };
@@ -462,7 +489,7 @@ function App() {
     if(confirm("이 팀을 목록에서 제거하시겠습니까?")) {
         const updatedTeams = teams.filter(t => t.id !== id);
         setTeams(updatedTeams);
-        localStorage.setItem('site_teams', JSON.stringify(updatedTeams));
+        StorageDB.set('site_teams', updatedTeams);
     }
   };
 
@@ -478,9 +505,17 @@ function App() {
                 currentEntries.unshift(newItem);
             }
         });
-        localStorage.setItem('tbm_entries', JSON.stringify(currentEntries));
+        
+        // Optimistic Update
         setEntries(currentEntries);
         setEditingEntry(null); 
+        
+        // Async Save (Fire & Forget with catch)
+        StorageDB.set('tbm_entries', currentEntries).catch(err => {
+            console.error("Save failed:", err);
+            alert("저장 중 오류가 발생했습니다. (디스크 용량 확인 필요)");
+        });
+
         if (shouldExit) setCurrentView('dashboard');
         return true; 
     } catch (error: any) {
@@ -508,7 +543,7 @@ function App() {
      if (!targetId) return;
      const newEntries = entries.filter(e => String(e.id) !== targetId);
      setEntries(newEntries);
-     localStorage.setItem('tbm_entries', JSON.stringify(newEntries));
+     StorageDB.set('tbm_entries', newEntries);
      if (editingEntry && String(editingEntry.id) === targetId) {
          setEditingEntry(null);
          setCurrentView('dashboard');
@@ -518,13 +553,13 @@ function App() {
 
   const handleUpdateAssessments = (newAssessments: MonthlyRiskAssessment[]) => {
     setMonthlyAssessments(newAssessments);
-    localStorage.setItem('monthly_assessment_list', JSON.stringify(newAssessments));
+    StorageDB.set('monthly_assessment_list', newAssessments);
   };
 
   const handleUpdateSignature = (role: 'safety' | 'site', dataUrl: string) => {
     const newSignatures = { ...signatures, [role]: dataUrl };
     setSignatures(newSignatures);
-    localStorage.setItem('signatures', JSON.stringify(newSignatures));
+    StorageDB.set('signatures', newSignatures);
   };
 
   const handleExportData = () => {
@@ -533,61 +568,101 @@ function App() {
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'SAPA_BACKUP.json'; a.click();
   };
 
-  // [OVERHAULED] Smart Import Handler
+  // [OVERHAULED] Smart Import Handler with Layering (Merge) Logic
   const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if(!file) return;
       const reader = new FileReader();
-      reader.onload = (evt) => {
+      reader.onload = async (evt) => {
           try {
               const raw = JSON.parse(evt.target?.result as string);
-              let restoredTbmCount = 0;
-              let restoredRiskCount = 0;
+              
+              // Helper: Layer Merge (Update if ID exists, Add if New)
+              const mergeUnique = (existing: any[], incoming: any[]) => {
+                  const map = new Map();
+                  // 1. Add existing items to Map
+                  existing.forEach(item => {
+                      if (item.id) map.set(String(item.id), item);
+                  });
+                  // 2. Overlay incoming items
+                  incoming.forEach(item => {
+                      if (item.id) map.set(String(item.id), item);
+                  });
+                  // 3. Return combined array
+                  return Array.from(map.values());
+              };
+
+              let newEntries: TBMEntry[] = [...entries];
+              let newAssessments: MonthlyRiskAssessment[] = [...monthlyAssessments];
+              let newTeams: TeamOption[] = [...teams];
+              
+              let addedStats = { tbm: 0, risk: 0, teams: 0 };
 
               // Case 1: Full System Backup (Object with keys)
               if (!Array.isArray(raw)) {
                   if(raw.tbm_entries && Array.isArray(raw.tbm_entries)) {
-                      setEntries(raw.tbm_entries);
-                      localStorage.setItem('tbm_entries', JSON.stringify(raw.tbm_entries));
-                      restoredTbmCount = raw.tbm_entries.length;
+                      const merged = mergeUnique(entries, raw.tbm_entries);
+                      addedStats.tbm = merged.length - entries.length;
+                      newEntries = merged;
                   }
                   if(raw.monthly_assessment_list && Array.isArray(raw.monthly_assessment_list)) {
-                      setMonthlyAssessments(raw.monthly_assessment_list);
-                      localStorage.setItem('monthly_assessment_list', JSON.stringify(raw.monthly_assessment_list));
-                      restoredRiskCount = raw.monthly_assessment_list.length;
+                      const merged = mergeUnique(monthlyAssessments, raw.monthly_assessment_list);
+                      addedStats.risk = merged.length - monthlyAssessments.length;
+                      newAssessments = merged;
                   }
                   if(raw.site_teams && Array.isArray(raw.site_teams)) {
-                      setTeams(raw.site_teams);
-                      localStorage.setItem('site_teams', JSON.stringify(raw.site_teams));
+                      const merged = mergeUnique(teams, raw.site_teams);
+                      addedStats.teams = merged.length - teams.length;
+                      newTeams = merged;
                   }
               } 
-              // Case 2: Array Backup (Specific Lists)
+              // Case 2: Array Backup (Legacy lists)
               else if (Array.isArray(raw) && raw.length > 0) {
                   const firstItem = raw[0];
-                  // Check signature of TBM Entry (has teamName, date)
+                  // TBM Entry Check
                   if (firstItem.teamName && (firstItem.date || firstItem.workDescription)) {
-                      setEntries(raw);
-                      localStorage.setItem('tbm_entries', JSON.stringify(raw));
-                      restoredTbmCount = raw.length;
+                      const merged = mergeUnique(entries, raw);
+                      addedStats.tbm = merged.length - entries.length;
+                      newEntries = merged;
                   }
-                  // Check signature of Risk Assessment (has month, priorities)
+                  // Risk Assessment Check
                   else if (firstItem.month && firstItem.priorities) {
-                      setMonthlyAssessments(raw);
-                      localStorage.setItem('monthly_assessment_list', JSON.stringify(raw));
-                      restoredRiskCount = raw.length;
+                      const merged = mergeUnique(monthlyAssessments, raw);
+                      addedStats.risk = merged.length - monthlyAssessments.length;
+                      newAssessments = merged;
                   }
               }
 
-              if (restoredTbmCount > 0 || restoredRiskCount > 0) {
-                  alert(`✅ 데이터 복구 완료\n- TBM 일지: ${restoredTbmCount}건\n- 위험성평가: ${restoredRiskCount}건`);
+              // Update State & Storage
+              if (addedStats.tbm > 0 || addedStats.risk > 0 || addedStats.teams > 0) {
+                  setEntries(newEntries);
+                  await StorageDB.set('tbm_entries', newEntries);
+                  
+                  setMonthlyAssessments(newAssessments);
+                  await StorageDB.set('monthly_assessment_list', newAssessments);
+                  
+                  setTeams(newTeams);
+                  await StorageDB.set('site_teams', newTeams);
+
+                  alert(
+                      `✅ 빅데이터 병합(Layering) 완료\n\n` +
+                      `기존 데이터는 유지하고, 새로운 데이터만 추가했습니다.\n` + 
+                      `-----------------------------------\n` +
+                      `- TBM 일지: +${addedStats.tbm}건 추가 (총 ${newEntries.length}건)\n` +
+                      `- 위험성평가: +${addedStats.risk}건 추가\n` +
+                      `- 팀 목록: +${addedStats.teams}팀 추가`
+                  );
+                  
                   setIsSettingsOpen(false);
-                  if (restoredTbmCount > 0) setCurrentView('dashboard'); 
+                  if (addedStats.tbm > 0) setCurrentView('dashboard'); 
               } else {
-                  alert("⚠ 유효한 데이터 형식이 아닙니다.\n(TBM 일지 또는 위험성평가 데이터가 포함되어야 합니다)");
+                  alert("⚠ 추가할 새로운 데이터가 없습니다. (모든 데이터가 이미 존재함)");
               }
           } catch(err) { 
               console.error(err);
               alert("❌ 파일 처리 중 오류가 발생했습니다."); 
+          } finally {
+              if (fileInputRef.current) fileInputRef.current.value = '';
           }
       };
       reader.readAsText(file);
@@ -595,18 +670,17 @@ function App() {
 
   const handleCleanupData = () => {
      if (confirm('오류 데이터(빈 항목, ID 없음)를 강제로 정리하시겠습니까?')) {
-        setEntries(prev => {
-            const valid = prev.filter(e => e.id && e.id !== 'undefined' && e.teamName);
-            localStorage.setItem('tbm_entries', JSON.stringify(valid));
-            alert(`${prev.length - valid.length}개의 오류 항목이 삭제되었습니다.`);
-            return valid;
-        });
+        const valid = entries.filter(e => e.id && e.id !== 'undefined' && e.teamName);
+        setEntries(valid);
+        StorageDB.set('tbm_entries', valid);
+        alert(`${entries.length - valid.length}개의 오류 항목이 삭제되었습니다.`);
         setIsSettingsOpen(false);
      }
   };
 
-  const handleResetData = () => {
+  const handleResetData = async () => {
     if (confirm('모든 데이터를 삭제하고 초기화하시겠습니까?')) {
+        await StorageDB.clear();
         localStorage.clear();
         window.location.reload();
     }
@@ -681,6 +755,10 @@ function App() {
       { key: 'audit', label: 'Quality', icon: <Sparkles size={14}/>, color: 'text-violet-600', bg: 'bg-violet-100' },
       { key: 'insight', label: 'Insight', icon: <Radar size={14}/>, color: 'text-indigo-600', bg: 'bg-indigo-100' },
   ];
+
+  if (isLoading) {
+      return <LoadingScreen />;
+  }
 
   return (
     <div className="flex min-h-screen relative overflow-hidden bg-[#F1F5F9]">
@@ -819,8 +897,12 @@ function App() {
                   <div className="p-6 space-y-4">
                      <button onClick={handleExportData} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Download size={16}/> 데이터 백업</button>
                      <div className="relative">
-                        <button onClick={()=>fileInputRef.current?.click()} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Upload size={16}/> 데이터 복구</button>
+                        <button onClick={()=>fileInputRef.current?.click()} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Upload size={16}/> 데이터 복구/병합</button>
                         <input type="file" ref={fileInputRef} className="hidden" onChange={handleImportData} accept=".json"/>
+                     </div>
+                     <div className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg text-center leading-relaxed">
+                        <span className="font-bold text-slate-600">※ Big Data Layering System</span><br/>
+                        데이터 복구 시 기존 데이터는 유지되며, 중복되지 않는 새로운 항목만 자동으로 합쳐집니다.
                      </div>
                      <hr/>
                      <button onClick={handleCleanupData} className="w-full p-3 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg flex items-center justify-center gap-2 font-bold"><Eraser size={16}/> 오류 데이터 정리</button>

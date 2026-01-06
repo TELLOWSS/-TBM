@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { TBMEntry, TeamOption } from '../types';
-import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart } from 'lucide-react';
+import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity } from 'lucide-react';
 import JSZip from 'jszip';
 
 interface ReportCenterProps {
@@ -37,9 +37,9 @@ const calculateCorrelation = (x: number[], y: number[]) => {
     return numerator / Math.sqrt(denomX * denomY);
 };
 
-// [NEW] Linear Regression for Trend Analysis
+// Linear Regression for Trend Analysis
 const calculateLinearRegression = (y: number[]) => {
-    if (y.length === 0) return { slope: 0, intercept: 0 };
+    if (y.length < 2) return { slope: 0, intercept: 0 };
     const n = y.length;
     const x = Array.from({ length: n }, (_, i) => i + 1); // Time steps 1, 2, 3...
     
@@ -54,10 +54,48 @@ const calculateLinearRegression = (y: number[]) => {
     return { slope, intercept };
 };
 
+// Helper: Fetch Image as Base64 (Handles Blob URLs and Data URLs)
+const fetchImageAsBase64 = async (url: string): Promise<string> => {
+    if (!url) return "";
+    if (url.startsWith('data:')) {
+        return url.split(',')[1];
+    }
+    try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const res = reader.result as string;
+                resolve(res.split(',')[1]);
+            };
+            reader.readAsDataURL(blob);
+        });
+    } catch (e) {
+        console.warn("Failed to fetch image for ZIP:", url);
+        return "";
+    }
+};
+
+// Full Screen Loading Overlay
+const LoadingOverlay = ({ text }: { text: string }) => (
+    <div className="fixed inset-0 z-[999999] bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in text-white">
+        <div className="relative mb-6">
+            <div className="w-20 h-20 border-4 border-indigo-500/30 rounded-full animate-spin border-t-indigo-500"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+                <GraduationCap size={32} className="text-white animate-pulse" />
+            </div>
+        </div>
+        <h3 className="text-2xl font-black tracking-tight mb-2">Data Mining in Progress</h3>
+        <p className="text-slate-400 font-medium text-sm animate-pulse">{text}</p>
+    </div>
+);
+
 export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrintModal, signatures, teams }) => {
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [isZipping, setIsZipping] = useState(false);
   const [isResearching, setIsResearching] = useState(false);
+  const [loadingText, setLoadingText] = useState("");
 
   // Stats Calculation
   const stats = useMemo(() => {
@@ -80,97 +118,81 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
       return;
     }
 
-    if (!confirm(`총 ${filteredEntries.length}건의 데이터와 사진을 포함한\n압축 파일(ZIP)을 생성하시겠습니까?\n(동영상은 용량 문제로 제외됩니다)`)) {
+    if (!confirm(`총 ${filteredEntries.length}건의 데이터와 사진을 포함한\n압축 파일(ZIP)을 생성하시겠습니까?`)) {
        return;
     }
 
     setIsZipping(true);
-    try {
-      const zip = new JSZip();
-      const folderName = `TBM_일지_${new Date().toISOString().slice(0,10)}`;
-      const photoFolder = zip.folder(`${folderName}/현장사진`);
+    setLoadingText("이미지 및 데이터 압축 중...");
 
-      // 1. Define Headers
-      const headers = [
-         '일자', 
-         '시간', 
-         '팀명', 
-         '팀장', 
-         '참석인원', 
-         '작업내용', 
-         '중점 위험요인 및 대책', 
-         '안전 관리자 피드백',
-         'AI TBM 점수',
-         'AI 평가 내용',
-         '사진 파일명' 
-      ];
+    // Yield to render UI
+    setTimeout(async () => {
+        try {
+          const zip = new JSZip();
+          const folderName = `TBM_일지_${new Date().toISOString().slice(0,10)}`;
+          const photoFolder = zip.folder(`${folderName}/현장사진`);
 
-      // 2. Map Data to Rows & Add Photos
-      const rows = filteredEntries.map((entry, idx) => {
-         // Handle Photo adding to ZIP
-         let photoFileName = '';
-         // Safeguard teamName
-         const safeTeamName = (entry.teamName || 'unknown').replace(/[\/\\?%*:|"<>]/g, '_');
+          // 1. Define Headers
+          const headers = [
+             '일자', '시간', '팀명', '팀장', '참석인원', '작업내용', 
+             '중점 위험요인 및 대책', '안전 관리자 피드백',
+             'AI TBM 점수', 'AI 평가 내용', '사진 파일명' 
+          ];
 
-         if (entry.tbmPhotoUrl && photoFolder) {
-             const base64Data = entry.tbmPhotoUrl.split(',')[1];
-             const ext = entry.tbmPhotoUrl.includes('image/png') ? 'png' : 'jpg';
-             // Clean filename
-             const fileName = `${entry.date}_${safeTeamName}_${idx + 1}.${ext}`;
-             
-             photoFolder.file(fileName, base64Data, { base64: true });
-             photoFileName = fileName;
-         }
+          // 2. Map Data to Rows & Add Photos
+          const rowPromises = filteredEntries.map(async (entry, idx) => {
+             // Handle Photo adding to ZIP
+             let photoFileName = '';
+             const safeTeamName = (entry.teamName || 'unknown').replace(/[\/\\?%*:|"<>]/g, '_');
 
-         // Format Risk Factors
-         const risks = (entry.riskFactors || [])
-            .map(r => `[위험] ${r.risk}\n   └ [대책] ${r.measure}`)
-            .join('\n\n');
+             if (entry.tbmPhotoUrl && photoFolder) {
+                 const base64Data = await fetchImageAsBase64(entry.tbmPhotoUrl);
+                 if (base64Data) {
+                     const ext = entry.tbmPhotoUrl.includes('image/png') ? 'png' : 'jpg';
+                     const fileName = `${entry.date}_${safeTeamName}_${idx + 1}.${ext}`;
+                     photoFolder.file(fileName, base64Data, { base64: true });
+                     photoFileName = fileName;
+                 }
+             }
 
-         // Format Feedback
-         const feedback = (entry.safetyFeedback || []).join('\n');
+             const risks = (entry.riskFactors || [])
+                .map(r => `[위험] ${r.risk}\n   └ [대책] ${r.measure}`)
+                .join('\n\n');
 
-         // CSV Row Data
-         return [
-            entry.date,
-            entry.time,
-            entry.teamName,
-            entry.leaderName,
-            entry.attendeesCount,
-            entry.workDescription,
-            risks,
-            feedback,
-            entry.videoAnalysis ? `${entry.videoAnalysis.score}점` : '미실시',
-            entry.videoAnalysis ? entry.videoAnalysis.evaluation : '',
-            photoFileName 
-         ].map(field => {
-            const stringField = String(field || '');
-            return `"${stringField.replace(/"/g, '""')}"`;
-         }).join(',');
-      });
+             const feedback = (entry.safetyFeedback || []).join('\n');
 
-      // 3. Create CSV Content
-      const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
-      zip.file(`${folderName}/TBM_일지_내역서.csv`, csvContent);
+             return [
+                entry.date, entry.time, entry.teamName, entry.leaderName, entry.attendeesCount,
+                entry.workDescription, risks, feedback,
+                entry.videoAnalysis ? `${entry.videoAnalysis.score}점` : '미실시',
+                entry.videoAnalysis ? entry.videoAnalysis.evaluation : '',
+                photoFileName 
+             ].map(field => `"${String(field || '').replace(/"/g, '""')}"`).join(',');
+          });
 
-      // 4. Generate ZIP
-      const content = await zip.generateAsync({ type: "blob" });
-      
-      // 5. Trigger Download
-      const url = URL.createObjectURL(content);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${folderName}.zip`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+          const rows = await Promise.all(rowPromises);
+          const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+          zip.file(`${folderName}/TBM_일지_내역서.csv`, csvContent);
 
-    } catch (error) {
-      console.error("ZIP Generation Error", error);
-      alert("압축 파일 생성 중 오류가 발생했습니다.");
-    } finally {
-      setIsZipping(false);
-    }
+          const content = await zip.generateAsync({ type: "blob" });
+          
+          const url = URL.createObjectURL(content);
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `${folderName}.zip`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        } catch (error) {
+          console.error("ZIP Generation Error", error);
+          alert("압축 파일 생성 실패. 다시 시도해주세요.");
+        } finally {
+          setIsZipping(false);
+        }
+    }, 100);
   };
 
   // --- Research Data Export (Advanced PhD Mode) ---
@@ -180,48 +202,74 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
         return;
      }
 
-     if (!confirm("🎓 [박사 학위/연구용] 데이터셋 패키지 생성\n\n통계 분석(SPSS, R)용 CSV 파일과\n논문 작성에 바로 활용 가능한 '학술적 분석 리포트(Draft)'를 생성합니다.\n\n(과거 데이터 포함 시 결측값은 자동으로 보정됩니다)\n\n진행하시겠습니까?")) {
+     if (!confirm("🎓 [박사 학위/연구용] 데이터셋 패키지 생성\n\n팀별 시계열 개선 추이(Regression Trend)와 상관분석 데이터를 포함한\n'학술 분석 리포트(Draft)'를 생성합니다.\n\n진행하시겠습니까?")) {
         return;
      }
 
      setIsResearching(true);
+     setLoadingText("통계 데이터 마이닝 및 시계열 회귀 분석 중...");
 
-     try {
-        const zip = new JSZip();
-        const rootFolder = zip.folder(`Research_Data_Package_${new Date().toISOString().slice(0,10)}`);
-        
-        // --- 1. Statistical Analysis (Pre-calculation with Safety Checks) ---
-        // Sort entries by date for regression
-        const sortedEntries = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        
-        // Filter for AI Analyzed ones (Use synthetic logic if needed)
-        const aiAnalyzedEntries = sortedEntries.filter(e => e.videoAnalysis);
-        
-        const scores = aiAnalyzedEntries.map(e => e.videoAnalysis?.score ?? 0);
-        const focusScores = aiAnalyzedEntries.map(e => e.videoAnalysis?.focusAnalysis?.overall ?? 0);
-        const attendeeCounts = entries.map(e => e.attendeesCount || 0);
+     setTimeout(async () => {
+         try {
+            const zip = new JSZip();
+            const rootFolder = zip.folder(`Research_Data_Package_${new Date().toISOString().slice(0,10)}`);
+            
+            // --- 1. Statistical Analysis (Pre-calculation) ---
+            const sortedEntries = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            const aiAnalyzedEntries = sortedEntries.filter(e => e.videoAnalysis);
+            
+            const scores = aiAnalyzedEntries.map(e => e.videoAnalysis?.score ?? 0);
+            const meanScore = calculateMean(scores);
+            const sdScore = calculateSD(scores, meanScore);
+            
+            const scoreTrend = calculateLinearRegression(scores);
+            
+            const correlationData = entries
+                .filter(e => e.videoAnalysis && e.videoAnalysis.focusAnalysis) 
+                .map(e => ({
+                    focus: e.videoAnalysis!.focusAnalysis.overall,
+                    risks: e.riskFactors?.length || 0
+                }));
+            
+            const r_FocusRisk = calculateCorrelation(
+                correlationData.map(d => d.focus), 
+                correlationData.map(d => d.risks)
+            );
 
-        const meanScore = calculateMean(scores);
-        const sdScore = calculateSD(scores, meanScore);
-        
-        // [NEW] Trend Analysis (Linear Regression)
-        const scoreTrend = calculateLinearRegression(scores);
-        
-        // Correlation: Focus vs Risk Finding
-        const correlationData = entries
-            .filter(e => e.videoAnalysis && e.videoAnalysis.focusAnalysis) // Strict check
-            .map(e => ({
-                focus: e.videoAnalysis!.focusAnalysis.overall,
-                risks: e.riskFactors?.length || 0
-            }));
-        
-        const r_FocusRisk = calculateCorrelation(
-            correlationData.map(d => d.focus), 
-            correlationData.map(d => d.risks)
-        );
+            // --- TEAM SPECIFIC TREND ANALYSIS ---
+            const teamTrends: Record<string, {name: string, slopes: number, count: number, startScore: number, endScore: number}> = {};
+            const teamScoresMap: Record<string, {name: string, scores: number[]}> = {};
+            
+            sortedEntries.forEach(entry => {
+                if (!entry.teamId || !entry.videoAnalysis) return;
+                
+                if (!teamScoresMap[entry.teamId]) {
+                    teamScoresMap[entry.teamId] = { name: entry.teamName, scores: [] };
+                }
+                teamScoresMap[entry.teamId].scores.push(entry.videoAnalysis.score);
+            });
 
-        // --- 2. Generate Academic Report (Markdown) ---
-        const reportContent = `
+            Object.entries(teamScoresMap).forEach(([id, data]) => {
+                const { slope } = calculateLinearRegression(data.scores);
+                teamTrends[id] = {
+                    name: data.name,
+                    slopes: slope,
+                    count: data.scores.length,
+                    startScore: data.scores[0],
+                    endScore: data.scores[data.scores.length - 1]
+                };
+            });
+
+            const teamAnalysisRows = Object.values(teamTrends)
+                .sort((a, b) => b.slopes - a.slopes) 
+                .map(t => {
+                    const status = t.slopes > 0.5 ? '⭐⭐ 뚜렷한 개선' : t.slopes > 0 ? '⭐ 소폭 개선' : t.slopes > -0.5 ? '🟢 유지' : '🔴 하락세';
+                    return `| ${t.name} | ${t.count}회 | ${t.startScore} → ${t.endScore} | ${t.slopes.toFixed(3)} | ${status} |`;
+                })
+                .join('\n');
+
+            // --- 2. Generate Academic Report (Markdown) ---
+            const reportContent = `
 # 스마트 TBM 시스템 도입 효과 분석 보고서 (초안)
 **Generated by Smart Safety AI Engine**
 **Date:** ${new Date().toLocaleDateString()}
@@ -247,10 +295,10 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
 AI Vision 분석을 통해 산출된 TBM 활동의 평균 품질 점수는 **${meanScore.toFixed(2)}점** (SD=${sdScore.toFixed(2)})으로 나타났다. 
 
 ### 2.2 시계열 추세 분석 (Trend Analysis) - 시스템 도입 효과 입증
-시간 경과에 따른 TBM 품질 점수의 변화를 선형 회귀 분석(Linear Regression)으로 검증한 결과, **기울기(Slope)가 ${scoreTrend.slope.toFixed(4)}**로 나타났다.
+전체 TBM 품질 점수의 변화를 선형 회귀 분석(Linear Regression)으로 검증한 결과, **전체 기울기(Slope)가 ${scoreTrend.slope.toFixed(4)}**로 나타났다.
 > **해석:** 
 > ${scoreTrend.slope > 0 
-    ? "이는 시간이 지날수록 TBM 품질이 점진적으로 향상되고 있음을 통계적으로 입증한다. 시스템의 'AI 코칭' 기능이 관리자들의 진행 역량을 강화시키는 학습 효과(Learning Effect)를 유발한 것으로 해석된다." 
+    ? "이는 시간이 지날수록 현장 전체의 TBM 품질이 점진적으로 향상되고 있음을 통계적으로 입증한다. 시스템의 'AI 코칭' 기능이 관리자들의 진행 역량을 강화시키는 학습 효과(Learning Effect)를 유발한 것으로 해석된다." 
     : "품질 점수가 일정 수준에서 유지되고 있으며(Plateau), 이는 시스템 도입 초기부터 안정적인 소통 체계가 확립되었음을 의미한다."}
 
 ### 2.3 집중도와 위험요인 발굴의 상관관계 (Correlation Analysis)
@@ -261,87 +309,88 @@ AI Vision 분석을 통해 산출된 TBM 활동의 평균 품질 점수는 **${m
     ? "이는 통계적으로 유의미한 양의 상관관계를 보이며, **작업자들이 TBM에 집중할수록 잠재적 위험 요인을 더 적극적으로 찾아내고 공유함**을 입증한다." 
     : "상관관계가 다소 낮게 나타났으나, 이는 반복적인 공종 특성상 위험 요인이 정형화되어 있기 때문일 수 있으며 추가적인 변수 통제가 필요하다."}
 
-### 2.4 공종별 참여 현황
-총 누적 참여 인원은 ${attendeeCounts.reduce((a,b)=>a+b,0)}명이며, 회당 평균 ${calculateMean(attendeeCounts).toFixed(1)}명이 참여하였다.
+### 2.4 팀별 안전 역량 성장 추이 (Team Growth Trends)
+각 팀별로 시계열 선형 회귀 분석을 수행하여 안전 역량 개선도를 측정하였다.
+
+| 팀명 | 분석 횟수(N) | 점수 변화(Start → End) | 개선도(Slope) | 판정 |
+|---|---|---|---|---|
+${teamAnalysisRows}
 
 ---
 
 ## 3. 결론 및 제언 (Conclusion)
 
-본 데이터 분석 결과, 스마트 TBM 시스템은 단순한 기록 보관을 넘어 현장의 안전 활동을 '데이터화'하고 '가시화'하는 데 기여하였다. 특히 회귀 분석을 통해 입증된 **점진적 품질 향상(Positive Trend)**은 시스템이 안전 문화 정착에 실질적인 기여를 하고 있음을 시사한다.
-
-향후 연구에서는 누적된 '위험 요인 텍스트 데이터(Unstructured Text)'를 NLP(자연어 처리)로 분석하여, 계절별/공종별 사고 발생 패턴을 예측하는 모델로 고도화할 것을 제안한다.
+본 데이터 분석 결과, 스마트 TBM 시스템은 단순한 기록 보관을 넘어 현장의 안전 활동을 '데이터화'하고 '가시화'하는 데 기여하였다. 특히 팀별 추세 분석을 통해 **상위 개선 팀**과 **집중 관리 필요 팀**을 식별할 수 있었으며, 이는 맞춤형 안전 교육의 기초 자료로 활용될 수 있다.
 
 ---
 *본 문서는 학술 논문 및 성과 보고서 작성을 위한 기초 자료로 생성되었습니다.*
-        `;
-        
-        rootFolder?.file("01_Academic_Report_논문초안.md", reportContent);
+            `;
+            
+            rootFolder?.file("01_Academic_Report_논문초안.md", reportContent);
 
+            // --- 3. Generate Raw CSV for Tools (SPSS/R) ---
+            const bodyHeaders = [
+               "ID", "Date", "Month", "Week_Num", 
+               "Team_ID", "Team_Name", "Team_Category", "Attendees", 
+               "Risk_Count", "Feedback_Count",
+               "AI_Score", "AI_Focus", "AI_Distracted",
+               "Voice_Clarity_Code", "PPE_Status_Code",
+               "Time_Index"
+            ];
 
-        // --- 3. Generate Raw CSV for Tools (SPSS/R) ---
-        const bodyHeaders = [
-           "ID", "Date", "Month", "Week_Num", 
-           "Team_Category", "Attendees", 
-           "Risk_Count", "Feedback_Count",
-           "AI_Score", "AI_Focus", "AI_Distracted",
-           "Voice_Clarity_Code", "PPE_Status_Code",
-           "Time_Index" // For Regression
-        ];
+            const bodyRows = sortedEntries.map((e, index) => {
+               const dateObj = new Date(e.date);
+               const ai = e.videoAnalysis;
+               const teamCat = teams.find(t => t.id === e.teamId)?.category || 'Other';
+               
+               let voiceCode = 0; 
+               if (ai?.details?.voiceClarity === 'CLEAR') voiceCode = 2;
+               else if (ai?.details?.voiceClarity === 'MUFFLED') voiceCode = 1;
 
-        const bodyRows = sortedEntries.map((e, index) => {
-           const dateObj = new Date(e.date);
-           const ai = e.videoAnalysis;
-           const teamCat = teams.find(t => t.id === e.teamId)?.category || 'Other';
-           
-           // Encoding for SPSS (Handle missing data safely)
-           let voiceCode = 0; // Missing
-           if (ai?.details?.voiceClarity === 'CLEAR') voiceCode = 2;
-           else if (ai?.details?.voiceClarity === 'MUFFLED') voiceCode = 1;
+               const ppeCode = ai?.details?.ppeStatus === 'GOOD' ? 1 : 0;
 
-           const ppeCode = ai?.details?.ppeStatus === 'GOOD' ? 1 : 0;
+               const score = ai?.score ?? '';
+               const focus = ai?.focusAnalysis?.overall ?? '';
+               const distracted = ai?.focusAnalysis?.distractedCount ?? '';
 
-           // Safe Access for Deep Insight fields
-           const score = ai?.score ?? '';
-           const focus = ai?.focusAnalysis?.overall ?? '';
-           const distracted = ai?.focusAnalysis?.distractedCount ?? '';
+               return [
+                  e.id, e.date, e.date.substring(0, 7), Math.ceil(dateObj.getDate() / 7),
+                  e.teamId, e.teamName, teamCat, e.attendeesCount,
+                  e.riskFactors?.length || 0, e.safetyFeedback?.length || 0,
+                  score, focus, distracted,
+                  voiceCode, ppeCode,
+                  index + 1
+               ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+            });
 
-           return [
-              e.id, e.date, e.date.substring(0, 7), Math.ceil(dateObj.getDate() / 7),
-              teamCat, e.attendeesCount,
-              e.riskFactors?.length || 0, e.safetyFeedback?.length || 0,
-              score, focus, distracted,
-              voiceCode, ppeCode,
-              index + 1 // Time Index for Regression
-           ].map(v => `"${v}"`).join(',');
-        });
+            const csvContent = '\uFEFF' + [bodyHeaders.join(','), ...bodyRows].join('\n');
+            rootFolder?.file("02_Raw_Data_통계분석용.csv", csvContent);
 
-        const csvContent = '\uFEFF' + [bodyHeaders.join(','), ...bodyRows].join('\n');
-        rootFolder?.file("02_Raw_Data_통계분석용.csv", csvContent);
+            rootFolder?.file("READ_ME.txt", "본 데이터셋은 UTF-8 인코딩으로 작성되었습니다.");
 
-        // --- 4. Readme ---
-        rootFolder?.file("READ_ME.txt", "본 데이터셋은 UTF-8 인코딩으로 작성되었습니다. AI 분석 데이터가 없는 과거 기록은 0 또는 공란으로 처리되었습니다.");
+            const content = await zip.generateAsync({ type: "blob" });
+            const url = URL.createObjectURL(content);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Thesis_Data_Package_${new Date().toISOString().slice(0,10)}.zip`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-        // ZIP Generation
-        const content = await zip.generateAsync({ type: "blob" });
-        const url = URL.createObjectURL(content);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `Thesis_Data_Package_${new Date().toISOString().slice(0,10)}.zip`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-     } catch (error) {
-        console.error("Research Export Error", error);
-        alert("데이터 패키징 중 오류가 발생했습니다.");
-     } finally {
-        setIsResearching(false);
-     }
+         } catch (error: any) {
+            console.error("Research Export Error", error);
+            alert("데이터 패키징 중 오류가 발생했습니다: " + error.message);
+         } finally {
+            setIsResearching(false);
+         }
+     }, 100);
   };
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
+      {(isZipping || isResearching) && <LoadingOverlay text={loadingText} />}
       
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -366,7 +415,7 @@ AI Vision 분석을 통해 산출된 TBM 활동의 평균 품질 점수는 **${m
               className="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold rounded-xl hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed group"
               title="빅데이터/논문용 데이터 추출"
            >
-              {isResearching ? <Loader2 size={18} className="animate-spin"/> : <GraduationCap size={18} />}
+              <GraduationCap size={18} />
               <div className="flex flex-col items-start leading-none">
                   <span className="text-xs md:text-sm">학술 연구용 패키지</span>
                   <span className="text-[9px] text-indigo-400 group-hover:text-indigo-600 font-medium mt-0.5">논문 초안 및 통계 데이터</span>
@@ -379,8 +428,8 @@ AI Vision 분석을 통해 산출된 TBM 활동의 평균 품질 점수는 **${m
               disabled={isZipping || isResearching}
               className="flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-300 text-slate-600 font-bold rounded-xl hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
            >
-              {isZipping ? <Loader2 size={18} className="animate-spin"/> : <Package size={18} />}
-              <span className="text-xs md:text-sm">{isZipping ? '압축 중...' : '증빙용 ZIP'}</span>
+              <Package size={18} />
+              <span className="text-xs md:text-sm">증빙용 ZIP</span>
            </button>
 
            {/* Print */}
