@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { TBMEntry, TeamOption } from '../types';
-import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity } from 'lucide-react';
+import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity, Database } from 'lucide-react';
 import JSZip from 'jszip';
 
 interface ReportCenterProps {
@@ -80,14 +80,14 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
 // Full Screen Loading Overlay
 const LoadingOverlay = ({ text }: { text: string }) => (
     <div className="fixed inset-0 z-[999999] bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in text-white">
-        <div className="relative mb-6">
-            <div className="w-20 h-20 border-4 border-indigo-500/30 rounded-full animate-spin border-t-indigo-500"></div>
+        <div className="bg-white/10 p-6 rounded-full mb-6 relative border border-white/10 shadow-2xl">
+            <Loader2 size={48} className="text-indigo-400 animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center">
-                <GraduationCap size={32} className="text-white animate-pulse" />
+               <Database size={20} className="text-white opacity-80" />
             </div>
         </div>
-        <h3 className="text-2xl font-black tracking-tight mb-2">Data Mining in Progress</h3>
-        <p className="text-slate-400 font-medium text-sm animate-pulse">{text}</p>
+        <h3 className="text-2xl font-black text-white tracking-tight mb-2">Data Mining in Progress</h3>
+        <p className="text-slate-300 font-medium text-sm animate-pulse">{text}</p>
     </div>
 );
 
@@ -106,6 +106,27 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
       photos: entries.filter(e => e.tbmPhotoUrl).length
     };
   }, [entries, signatures]);
+
+  // [Fix] Robust Deduplication for Filter List
+  // Combines Master Teams + Active Teams from Entries -> Removes Duplicates by ID
+  const uniqueTeams = useMemo(() => {
+      const teamMap = new Map<string, string>();
+      
+      // 1. Add Master Teams
+      teams.forEach(t => teamMap.set(t.id, t.name));
+      
+      // 2. Add Active Teams from Entries (to cover teams not in master list or handle dynamic IDs)
+      entries.forEach(e => {
+          if (e.teamId && e.teamName) {
+              teamMap.set(e.teamId, e.teamName);
+          }
+      });
+
+      // 3. Convert to Array and Sort Alphabetically
+      return Array.from(teamMap.entries())
+          .map(([id, name]) => ({ id, name }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+  }, [teams, entries]);
 
   const filteredEntries = selectedTeam === 'all' 
     ? entries 
@@ -209,6 +230,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
      setIsResearching(true);
      setLoadingText("통계 데이터 마이닝 및 시계열 회귀 분석 중...");
 
+     // Critical: Yield to main thread to show loading screen
      setTimeout(async () => {
          try {
             const zip = new JSZip();
@@ -524,7 +546,7 @@ ${teamAnalysisRows}
          >
             전체 보기
          </button>
-         {teams.map(team => (
+         {uniqueTeams.map(team => (
             <button 
                key={team.id}
                onClick={() => setSelectedTeam(team.id)}
