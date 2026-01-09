@@ -179,40 +179,43 @@ export const evaluateTBMVideo = async (
     const risksText = textContext.riskFactors?.length > 0 
         ? textContext.riskFactors.map(r => `${r.risk}`).join(', ')
         : "위험요인 없음";
+    
+    // Use the actual work description or a fallback
+    const workName = textContext.workDescription ? textContext.workDescription : "금일 작업";
 
     // [OPTIMIZATION] Professional Engineer Persona Prompt
-    // Using a focused prompt to ensure logical, non-poetic output.
+    // Increased Temperature and Context Injection for Variety
     const prompt = `
       You are a 30-year veteran Construction Safety Professional Engineer (건설안전기술사).
-      Your task is to analyze this TBM video and provide a critical, logical assessment.
+      Analyze this TBM video.
       
-      Context:
-      - Work: ${textContext.workDescription}
-      - Risks: ${risksText}
+      SPECIFIC CONTEXT (Must be mentioned):
+      - Target Work: "${workName}"
+      - Identified Risks: ${risksText}
       
       CRITICAL INSTRUCTION FOR 'evaluation':
-      1.  **NEVER** output simple phrases like "분석 완료" or "양호함".
-      2.  You MUST write 2-3 logical sentences following this structure: [Observation/Fact] -> [Technical Judgment/Risk] -> [Action Item].
-      3.  Tone: Authoritative, cynical, evidence-based. No emotions.
-      4.  If the video is short/silent, criticize the lack of detail.
+      1. **Uniqueness**: Do NOT use the same sentence structure every time. Vary your vocabulary.
+      2. **Specificity**: You MUST explicitly mention the work name ("${workName}") in your evaluation text.
+      3. **Structure**: Observation -> Judgment -> Action Item.
+      4. **Tone**: Professional, strict, but helpful.
       
-      Examples of good output:
-      - "팀장의 발성이 명확하여 전달력은 우수하나, 후열 근로자들의 시선이 분산되어 있어 실질적인 위험 공유가 미흡함. 지적확인 환호를 통해 집중도 제고 필요."
-      - "형식적인 시나리오 리딩에 그치고 있어 작업자들의 위험 인지도가 낮음. 금일 고위험 작업인 '크레인 인양'에 대한 구체적인 신호 체계 교육이 누락됨."
+      Examples of diverse outputs:
+      - "금일 '${workName}' 작업의 TBM을 모니터링한 결과, 팀장의 리딩은 우수하나..."
+      - "위험성평가상 '${risksText.substring(0, 10)}...' 등이 언급되었으나, 작업자들의 반응이 다소 소극적임..."
+      - "'${workName}' 투입 전 TBM 절차는 준수되었으나, 개인보호구 착용 상태 점검이 형식적임..."
 
       Output strictly in JSON.
       Fields: rubric(logQuality, focus, voice, ppe, deductions[]), score, evaluation, details(participation, voiceClarity, ppeStatus, interaction), focusAnalysis(overall, distractedCount, focusZones), insight(mentionedTopics, missingTopics, suggestion), feedback[].
     `;
 
-    // [FIX] Decreased timeout to 35s (30s target + 5s buffer) for field efficiency
-    // If it takes longer than 35s, we abort to allow manual entry.
     const apiCall = () => ai.models.generateContent({
       model: "gemini-3-flash-preview", 
       contents: [{ role: "user", parts: [{ inlineData: { mimeType: cleanMimeType, data: base64Video } }, { text: prompt }] }],
       config: {
-        temperature: 0.2, 
-        topP: 0.8,
-        maxOutputTokens: 1024, // [OPTIMIZATION] Limit output length for speed
+        // [MODIFIED] Increased temperature from 0.2 to 0.7 to prevent identical responses across teams
+        temperature: 0.7, 
+        topP: 0.9,
+        maxOutputTokens: 1024,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -293,16 +296,33 @@ export const evaluateTBMVideo = async (
       let finalEvaluation = raw.evaluation || "분석 결과 없음";
       const isGeneric = finalEvaluation.length < 20 || ["분석 완료", "분석완료", "이상 없음", "특이사항 없음", "양호"].some((k: string) => finalEvaluation.includes(k));
 
-      // [NATURAL FALLBACK] If AI response is robotic, replace with expert template based on score
+      // [IMPROVED NATURAL FALLBACK]
+      // Instead of one static template, use randomized templates + Work Context to create variety
       if (isGeneric) {
-          const issues = finalRubric.deductions.length > 0 ? finalRubric.deductions.join(", ") : "구체적인 위험 공유 부족";
+          const issues = finalRubric.deductions.length > 0 ? finalRubric.deductions.join(", ") : "위험요인 전파 미흡";
+          const workContext = textContext.workDescription ? `'${textContext.workDescription}'` : "금일";
           
           if (totalScore >= 80) {
-              finalEvaluation = `전반적인 TBM 진행 상태와 근로자 참여도는 우수한 편입니다. 다만, 완벽한 무재해 달성을 위해 '${issues}' 부분은 조금 더 세밀한 관리가 필요해 보입니다.`;
+              const templates = [
+                  `전반적인 ${workContext} TBM 진행 상태와 근로자 참여도는 우수합니다. 다만, 완벽한 무재해 달성을 위해 '${issues}' 부분은 조금 더 세밀한 관리가 필요합니다.`,
+                  `${workContext} 작업 전 TBM 활동이 체계적으로 이루어졌습니다. '${issues}' 사항만 보완한다면 더욱 안전한 작업 환경이 조성될 것입니다.`,
+                  `팀장의 리딩 하에 ${workContext} 위험 예지 활동이 양호하게 수행되었습니다. 향후 '${issues}' 관련 내용은 작업자 개별 확인이 권장됩니다.`
+              ];
+              finalEvaluation = templates[Math.floor(Math.random() * templates.length)];
           } else if (totalScore >= 60) {
-              finalEvaluation = `TBM의 형식과 절차는 준수하고 있으나, 실질적인 위험 예방 효과를 높이기 위해서는 '${issues}' 측면의 보완이 시급합니다. 관리자의 주도적인 리딩이 요구됩니다.`;
+              const templates = [
+                  `${workContext} TBM의 형식과 절차는 준수하고 있으나, 실질적인 예방 효과를 위해 '${issues}' 측면의 보완이 시급합니다.`,
+                  `금일 ${workContext} 작업의 위험성이 충분히 공유되지 않았을 수 있습니다. 특히 '${issues}' 요인에 대해 작업자 재교육이 필요해 보입니다.`,
+                  `TBM 진행은 무난하였으나, '${issues}' 등으로 인해 ${workContext} 작업 간 안전 공백이 우려됩니다. 관리자의 주도적인 확인이 요구됩니다.`
+              ];
+              finalEvaluation = templates[Math.floor(Math.random() * templates.length)];
           } else {
-              finalEvaluation = `현 시점의 TBM 활동은 형식적인 절차에 그칠 우려가 있습니다. 특히 '${issues}' 요인이 식별된 바, 작업 투입 전 재교육 및 명확한 지적확인이 선행되어야 합니다.`;
+              const templates = [
+                  `현 시점의 ${workContext} TBM 활동은 형식적인 절차에 그칠 우려가 있습니다. 특히 '${issues}' 요인이 식별된 바, 작업 투입 전 재교육이 선행되어야 합니다.`,
+                  `${workContext} 작업의 고위험성에 비해 TBM 집중도가 현저히 낮습니다. '${issues}' 등의 문제점을 즉시 개선하고 지적확인을 실시하십시오.`,
+                  `AI 분석 결과, ${workContext} 관련 안전 수칙 전달이 미흡합니다. '${issues}' 항목에 대해 팀원 전원이 다시 숙지하도록 조치바랍니다.`
+              ];
+              finalEvaluation = templates[Math.floor(Math.random() * templates.length)];
           }
       }
 
