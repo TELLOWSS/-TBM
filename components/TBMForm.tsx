@@ -382,6 +382,14 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       });
   };
 
+  // --- NEW: Handle Evaluation Text Update (Fix for Read-only Error Message) ---
+  const handleEvaluationChange = (newText: string) => {
+      setVideoAnalysis(prev => {
+          if (!prev) return null;
+          return { ...prev, evaluation: newText };
+      });
+  };
+
   // Video Analysis Logic (Triggers AI)
   const handleRunVideoAnalysis = async () => {
     if (!tbmVideoFile) return;
@@ -400,20 +408,23 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
         );
 
         if (result.score === 0 || result.evaluation.includes("분석 실패")) {
-            throw new Error(result.evaluation);
+            // [FIX] Even on soft failure, we use the result object so the UI becomes editable
+            // Throwing error would trigger the catch block which does the same fallback
+            // But if the server returns a specific error message in evaluation, we want to show it.
+            setVideoAnalysis(result); 
+            // alert("AI 분석 지연 또는 오류가 발생했습니다. 직접 점수와 내용을 수정해주세요.");
+        } else {
+            setVideoAnalysis(result);
+            if (result.feedback && result.feedback.length > 0) {
+                const currentFeedback = [...safetyFeedback];
+                result.feedback.forEach(fb => {
+                    if (!currentFeedback.includes(fb)) currentFeedback.push(fb);
+                });
+                setSafetyFeedback(currentFeedback);
+            }
+            alert("AI 분석이 완료되었습니다. 결과 점수를 수정할 수 있습니다.");
         }
-
-        setVideoAnalysis(result);
         
-        if (result.feedback && result.feedback.length > 0) {
-            const currentFeedback = [...safetyFeedback];
-            result.feedback.forEach(fb => {
-                if (!currentFeedback.includes(fb)) currentFeedback.push(fb);
-            });
-            setSafetyFeedback(currentFeedback);
-        }
-        
-        alert("AI 분석이 완료되었습니다. 결과 점수를 수정할 수 있습니다.");
     } catch (e) {
         console.error(e);
         alert("AI 분석에 실패했습니다. 수동 채점 모드로 전환합니다.");
@@ -421,7 +432,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
         // [FAILSAFE] Initialize Editable Template on Failure
         setVideoAnalysis({
             score: 0,
-            evaluation: "AI 분석 실패 (네트워크/시간초과). 아래 항목을 직접 평가해주세요.",
+            evaluation: "AI 분석 실패 (네트워크/시간초과). 아래 내용을 직접 수정하여 평가를 완료해주세요.",
             analysisSource: 'VIDEO',
             rubric: { logQuality: 0, focus: 0, voice: 0, ppe: 0, deductions: [] },
             details: { participation: 'MODERATE', voiceClarity: 'MUFFLED', ppeStatus: 'BAD', interaction: false },
@@ -776,9 +787,18 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                         ))}
                                     </div>
                                     
-                                    <p className="text-[10px] text-slate-600 italic bg-white p-2 rounded border border-slate-100">
-                                        "{videoAnalysis.evaluation}"
-                                    </p>
+                                    {/* [UPDATED] Editable Evaluation Textarea */}
+                                    <div className="relative">
+                                        <textarea 
+                                            value={videoAnalysis.evaluation}
+                                            onChange={(e) => handleEvaluationChange(e.target.value)}
+                                            className="w-full text-[10px] text-slate-600 italic bg-white p-2 rounded border border-slate-200 min-h-[60px] outline-none focus:border-indigo-300 resize-none"
+                                            placeholder="AI 분석 결과 멘트"
+                                        />
+                                        <div className="absolute bottom-2 right-2 text-[8px] text-slate-300 pointer-events-none">
+                                            <PenTool size={8}/>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>

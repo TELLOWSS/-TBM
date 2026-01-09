@@ -177,72 +177,42 @@ export const evaluateTBMVideo = async (
     if (mimeType.includes('mp4')) cleanMimeType = 'video/mp4';
 
     const risksText = textContext.riskFactors?.length > 0 
-        ? textContext.riskFactors.map(r => `- 위험: ${r.risk} / 대책: ${r.measure}`).join('\n')
-        : "위험요인 없음 (텍스트 누락)";
+        ? textContext.riskFactors.map(r => `${r.risk}`).join(', ')
+        : "위험요인 없음";
 
-    const guidelinesText = safetyGuidelines.length > 0
-        ? safetyGuidelines.map(g => `- [${g.category}] ${g.content} (${g.level === 'HIGH' ? '중점' : '일반'})`).join('\n')
-        : "등록된 중점 관리 항목 없음";
-
-    const workContext = `
-      [INPUT DATA 1: Written Log]
-      - Work Description: ${textContext.workDescription}
-      - Risk Assessment (Created by Team):
-      ${risksText}
-
-      [INPUT DATA 2: Monthly Priority Guidelines (Site Rules)]
-      ${guidelinesText}
-    `;
-
-    // [CRITICAL PROMPT UPDATE FOR FAST FORWARD]
+    // [OPTIMIZATION] Professional Engineer Persona Prompt
+    // Using a focused prompt to ensure logical, non-poetic output.
     const prompt = `
-      You are a specialized 'Construction Safety Forensic AI'.
+      You are a 30-year veteran Construction Safety Professional Engineer (건설안전기술사).
+      Your task is to analyze this TBM video and provide a critical, logical assessment.
       
-      *** IMPORTANT: VIDEO IS ACCELERATED 3X SPEED ***
-      - The uploaded video is a "Hyper-Lapse" (3x speed) to cover the whole TBM quickly.
-      - **Visuals:** People will move fast. This is normal. Focus on PPE (helmets) and formation.
-      - **Audio:** Voices will be high-pitched and fast. Do NOT penalize for "fast speaking". 
-      - Assess "Voice" based on volume energy and presence, not dictation accuracy.
-
-      [TASK 1: EVIDENCE-BASED SCORING]
-      - PPE Score (Max 20): -10 (No Helmet), -5 (No Chin Strap).
-      - Voice (Max 20): Check if the leader is speaking loudly enough (despite 3x speed).
-      - Focus (Max 30): Are workers facing the leader? (Ignore fast head movements).
-      - Log Quality (Max 30): Assess if the written log is specific and detailed.
-
-      [TASK 2: SAFETY MANAGER FEEDBACK GENERATION (CRITICAL)]
-      You must generate 'feedback' strings acting as the Site Safety Manager.
-      **Logic:**
-      1. Analyze the [Work Description].
-      2. Check if any [Monthly Priority Guidelines] apply to this work.
-      3. **COMPARE:** Did the team include the applicable guidelines in their [Risk Assessment]?
-      4. **IF MISSING:** Generate a feedback: "월간 중점 사항인 [Guideline Content] 내용이 누락되었습니다. 작업자에게 전파 바랍니다."
-      5. **IF GOOD:** Generate a feedback: "작업 특성에 맞는 위험요인이 잘 도출되었습니다. 계획대로 이행 바랍니다."
-      6. If the work description matches no guidelines, provide general safety advice based on the video (e.g., "목소리를 더 크게 하여 전달력을 높이세요").
-
-      [OUTPUT REQUIREMENT]
-      Return a JSON object. **All text values must be in Korean.**
+      Context:
+      - Work: ${textContext.workDescription}
+      - Risks: ${risksText}
       
-      Structure:
-      - rubric: { logQuality, focus, voice, ppe, deductions: string[] }
-      - score: Total sum.
-      - evaluation: Summary.
-      - focusAnalysis: { overall, distractedCount }
-      - insight: { missingTopics, suggestion }
-      - feedback: string[] (The Safety Manager Comments)
+      CRITICAL INSTRUCTION FOR 'evaluation':
+      1.  **NEVER** output simple phrases like "분석 완료" or "양호함".
+      2.  You MUST write 2-3 logical sentences following this structure: [Observation/Fact] -> [Technical Judgment/Risk] -> [Action Item].
+      3.  Tone: Authoritative, cynical, evidence-based. No emotions.
+      4.  If the video is short/silent, criticize the lack of detail.
+      
+      Examples of good output:
+      - "팀장의 발성이 명확하여 전달력은 우수하나, 후열 근로자들의 시선이 분산되어 있어 실질적인 위험 공유가 미흡함. 지적확인 환호를 통해 집중도 제고 필요."
+      - "형식적인 시나리오 리딩에 그치고 있어 작업자들의 위험 인지도가 낮음. 금일 고위험 작업인 '크레인 인양'에 대한 구체적인 신호 체계 교육이 누락됨."
 
-      ${workContext}
+      Output strictly in JSON.
+      Fields: rubric(logQuality, focus, voice, ppe, deductions[]), score, evaluation, details(participation, voiceClarity, ppeStatus, interaction), focusAnalysis(overall, distractedCount, focusZones), insight(mentionedTopics, missingTopics, suggestion), feedback[].
     `;
 
-    // [FIX] Decreased timeout to 120s (2 minutes) for fail-fast behavior
-    // If it takes longer than 2 minutes, it's better to fail and switch to text analysis.
+    // [FIX] Decreased timeout to 35s (30s target + 5s buffer) for field efficiency
+    // If it takes longer than 35s, we abort to allow manual entry.
     const apiCall = () => ai.models.generateContent({
       model: "gemini-3-flash-preview", 
       contents: [{ role: "user", parts: [{ inlineData: { mimeType: cleanMimeType, data: base64Video } }, { text: prompt }] }],
       config: {
-        temperature: 0.1, 
-        topP: 0.1, 
-        topK: 1,
+        temperature: 0.2, 
+        topP: 0.8,
+        maxOutputTokens: 1024, // [OPTIMIZATION] Limit output length for speed
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -298,11 +268,11 @@ export const evaluateTBMVideo = async (
       },
     });
 
-    // 120 Seconds strict timeout (Fail Fast)
+    // 35 Seconds strict timeout (Fail Fast)
     const response = await withRetry<GenerateContentResponse>(
-        () => promiseWithTimeout(apiCall(), 120000, "AI Server Response Timeout (120s)"),
-        1, // Reduced retries to 1 for video. If it fails, fallback to text.
-        2000
+        () => promiseWithTimeout(apiCall(), 35000, "분석 시간 초과 (30초)"),
+        1, // 1 retry only for speed
+        1000
     );
 
     if (response.text) {
@@ -319,9 +289,26 @@ export const evaluateTBMVideo = async (
       const finalRubric = raw.rubric || defaultRubric;
       const totalScore = (finalRubric.logQuality || 0) + (finalRubric.focus || 0) + (finalRubric.voice || 0) + (finalRubric.ppe || 0);
 
+      // [FAIL-SAFE] Check if evaluation is too short or generic
+      let finalEvaluation = raw.evaluation || "분석 결과 없음";
+      const isGeneric = finalEvaluation.length < 20 || ["분석 완료", "분석완료", "이상 없음", "특이사항 없음", "양호"].some((k: string) => finalEvaluation.includes(k));
+
+      // [NATURAL FALLBACK] If AI response is robotic, replace with expert template based on score
+      if (isGeneric) {
+          const issues = finalRubric.deductions.length > 0 ? finalRubric.deductions.join(", ") : "구체적인 위험 공유 부족";
+          
+          if (totalScore >= 80) {
+              finalEvaluation = `전반적인 TBM 진행 상태와 근로자 참여도는 우수한 편입니다. 다만, 완벽한 무재해 달성을 위해 '${issues}' 부분은 조금 더 세밀한 관리가 필요해 보입니다.`;
+          } else if (totalScore >= 60) {
+              finalEvaluation = `TBM의 형식과 절차는 준수하고 있으나, 실질적인 위험 예방 효과를 높이기 위해서는 '${issues}' 측면의 보완이 시급합니다. 관리자의 주도적인 리딩이 요구됩니다.`;
+          } else {
+              finalEvaluation = `현 시점의 TBM 활동은 형식적인 절차에 그칠 우려가 있습니다. 특히 '${issues}' 요인이 식별된 바, 작업 투입 전 재교육 및 명확한 지적확인이 선행되어야 합니다.`;
+          }
+      }
+
       return {
           score: totalScore,
-          evaluation: raw.evaluation || "분석 완료",
+          evaluation: finalEvaluation,
           analysisSource: 'VIDEO',
           rubric: finalRubric,
           details: {
@@ -350,14 +337,15 @@ export const evaluateTBMVideo = async (
     throw new Error("No response text");
   } catch (error: any) {
     console.error("Gemini Insight Error:", error);
+    // [FAILSAFE] Return a zero-score object that allows the UI to render the edit controls
     return {
       score: 0,
-      evaluation: `분석 실패: ${error.message || "서버 응답 없음"}`,
+      evaluation: `[분석 실패] ${error.message || "서버 응답 없음"}. 직접 내용을 수정해주세요.`,
       analysisSource: 'VIDEO',
-      rubric: { logQuality: 0, focus: 0, voice: 0, ppe: 0, deductions: ["시스템 오류로 분석 불가"] },
+      rubric: { logQuality: 0, focus: 0, voice: 0, ppe: 0, deductions: ["분석 시간 초과 또는 오류"] },
       details: { participation: 'BAD', voiceClarity: 'NONE', ppeStatus: 'BAD', interaction: false },
       focusAnalysis: { overall: 0, distractedCount: 0, focusZones: { front: 'LOW', back: 'LOW', side: 'LOW' } },
-      insight: { mentionedTopics: [], missingTopics: [], suggestion: "네트워크 상태를 확인하고 다시 시도해주세요." },
+      insight: { mentionedTopics: [], missingTopics: [], suggestion: "수동으로 내용을 입력해주세요." },
       feedback: []
     };
   }
