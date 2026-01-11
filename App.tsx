@@ -193,6 +193,18 @@ const LoadingScreen = () => (
     </div>
 );
 
+// --- HELPER: Team Deduplication Logic ---
+const deduplicateTeams = (teams: TeamOption[]): TeamOption[] => {
+    const uniqueMap = new Map<string, TeamOption>();
+    teams.forEach(t => {
+        const normalizedName = t.name.trim().replace(/\s+/g, ' '); // Normalize spaces
+        if (!uniqueMap.has(normalizedName)) {
+            uniqueMap.set(normalizedName, t);
+        }
+    });
+    return Array.from(uniqueMap.values());
+};
+
 function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(true); 
@@ -225,8 +237,20 @@ function App() {
         try {
             let loadedEntries = await StorageDB.get<TBMEntry[]>('tbm_entries');
             if (Array.isArray(loadedEntries)) setEntries(loadedEntries);
+            
+            // [FIX] Duplicate Team Clean-up on Load
             let loadedTeams = await StorageDB.get<TeamOption[]>('site_teams');
-            setTeams(loadedTeams || TEAMS);
+            if (loadedTeams) {
+                const cleanTeams = deduplicateTeams(loadedTeams);
+                // If duplicates found, update DB immediately
+                if (cleanTeams.length !== loadedTeams.length) {
+                    await StorageDB.set('site_teams', cleanTeams);
+                }
+                setTeams(cleanTeams);
+            } else {
+                setTeams(TEAMS);
+            }
+
             let loadedMonthly = await StorageDB.get<MonthlyRiskAssessment[]>('monthly_assessment_list');
             setMonthlyAssessments(loadedMonthly || []);
             let loadedSigs = await StorageDB.get<{safety: string | null, site: string | null}>('signatures');
@@ -238,6 +262,13 @@ function App() {
 
   const handleAddTeam = () => {
     if(!newTeamName.trim()) return;
+    const nameToCheck = newTeamName.trim().replace(/\s+/g, ' ');
+    // Check duplication
+    if (teams.some(t => t.name.trim().replace(/\s+/g, ' ') === nameToCheck)) {
+        alert("이미 존재하는 팀 이름입니다.");
+        return;
+    }
+
     const newTeam: TeamOption = { id: `team-${Date.now()}`, name: newTeamName.trim(), category: newTeamCategory };
     const updatedTeams = [...teams, newTeam];
     setTeams(updatedTeams); StorageDB.set('site_teams', updatedTeams); setNewTeamName(''); alert('팀이 추가되었습니다.');
@@ -289,7 +320,7 @@ function App() {
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'SAPA_BACKUP.json'; a.click();
   };
 
-  // [FIXED] Smart Import Function with Overwrite Option
+  // [FIXED] Smart Import Function with Overwrite Option & Team Deduplication
   const handleImportData = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
@@ -369,7 +400,9 @@ function App() {
                           importStats.risk += data.monthly_assessment_list.length;
                       }
                       if (data.site_teams && Array.isArray(data.site_teams)) {
-                          mergedTeams = mergeItems(mergedTeams, data.site_teams);
+                          // [FIX] Deduplicate teams when merging
+                          const combined = [...mergedTeams, ...data.site_teams];
+                          mergedTeams = deduplicateTeams(combined);
                           importStats.teams += data.site_teams.length;
                       }
                       if (data.signatures) {
@@ -411,24 +444,50 @@ function App() {
 
   const handleCleanupData = () => { if (confirm('오류 데이터 정리?')) { const valid = entries.filter(e => e.id && e.id !== 'undefined' && e.teamName); setEntries(valid); StorageDB.set('tbm_entries', valid); setIsSettingsOpen(false); } };
   
-  // [NEW] Granular Clear Functions
+  // [NEW] Granular Clear Functions with Improved UX (Hard Reset & Safety Buffer)
   const handleClearRiskData = async () => {
-      if(confirm("경고: 모든 '위험성평가' 데이터를 삭제하시겠습니까?\n(TBM 일지와 팀 정보는 유지됩니다)")) {
-          setMonthlyAssessments([]);
-          await StorageDB.set('monthly_assessment_list', []);
-          alert("위험성평가 데이터가 초기화되었습니다.");
+      if(confirm("⚠️ 경고: 모든 '위험성평가' 데이터가 영구적으로 삭제됩니다.\n\n삭제 후, 시스템이 자동 갱신됩니다.")) {
+          try {
+              // 1. Clear DB First
+              await StorageDB.set('monthly_assessment_list', []);
+              // 2. Clear State
+              setMonthlyAssessments([]);
+              // 3. User Feedback & Safety Buffer (Ensure DB write commits)
+              alert("✅ 위험성평가 데이터가 모두 초기화되었습니다.\n[확인]을 누르면 시스템이 갱신됩니다.");
+              await new Promise(resolve => setTimeout(resolve, 500)); // 0.5s buffer
+              
+              // 4. Force Reload
+              window.location.href = window.location.href; // Hard Reload
+          } catch (e) {
+              alert("DB 초기화 중 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.");
+          }
       }
   };
 
   const handleClearTBMData = async () => {
-      if(confirm("경고: 모든 'TBM 일지' 데이터를 삭제하시겠습니까?\n(위험성평가와 팀 정보는 유지됩니다)")) {
-          setEntries([]);
-          await StorageDB.set('tbm_entries', []);
-          alert("TBM 일지 데이터가 초기화되었습니다.");
+      if(confirm("⚠️ 경고: 모든 'TBM 일지' 데이터가 영구적으로 삭제됩니다.\n\n삭제 후, 시스템이 자동 갱신됩니다.")) {
+          try {
+              await StorageDB.set('tbm_entries', []);
+              setEntries([]);
+              alert("✅ TBM 일지 데이터가 모두 초기화되었습니다.\n[확인]을 누르면 시스템이 갱신됩니다.");
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              window.location.href = window.location.href;
+          } catch (e) {
+              alert("DB 초기화 중 오류가 발생했습니다.");
+          }
       }
   };
 
-  const handleResetData = async () => { if (confirm('경고: 시스템을 완전히 초기화하시겠습니까?\n모든 데이터가 영구적으로 삭제됩니다.')) { await StorageDB.clear(); localStorage.clear(); window.location.reload(); } };
+  const handleResetData = async () => { 
+      if (confirm('경고: 시스템을 완전히 초기화하시겠습니까?\n모든 데이터가 영구적으로 삭제됩니다.')) { 
+          setIsSettingsOpen(false);
+          await StorageDB.clear(); 
+          localStorage.clear(); 
+          await new Promise(resolve => setTimeout(resolve, 500));
+          window.location.reload(); 
+      } 
+  };
 
   const renderContent = () => {
     return (
@@ -529,14 +588,14 @@ function App() {
                      </div>
                      <hr/>
                      <div className="grid grid-cols-2 gap-3">
-                         <button onClick={handleClearRiskData} className="p-3 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg flex flex-col items-center justify-center gap-1 font-bold text-xs hover:bg-orange-100">
+                         <button onClick={handleClearRiskData} className="p-3 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg flex flex-col items-center justify-center gap-1 font-bold text-xs hover:bg-orange-100 transition-colors">
                              <Trash2 size={14}/> 위험성평가만 비우기
                          </button>
-                         <button onClick={handleClearTBMData} className="p-3 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg flex flex-col items-center justify-center gap-1 font-bold text-xs hover:bg-orange-100">
+                         <button onClick={handleClearTBMData} className="p-3 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg flex flex-col items-center justify-center gap-1 font-bold text-xs hover:bg-orange-100 transition-colors">
                              <Trash2 size={14}/> TBM 일지만 비우기
                          </button>
                      </div>
-                     <button onClick={handleResetData} className="w-full p-3 border border-red-200 bg-red-50 text-red-700 rounded-lg flex items-center justify-center gap-2 font-bold hover:bg-red-100"><RefreshCw size={16}/> 시스템 전체 초기화 (Factory Reset)</button>
+                     <button onClick={handleResetData} className="w-full p-3 border border-red-200 bg-red-50 text-red-700 rounded-lg flex items-center justify-center gap-2 font-bold hover:bg-red-100 transition-colors"><RefreshCw size={16}/> 시스템 전체 초기화 (Factory Reset)</button>
                   </div>
               )}
             </div>

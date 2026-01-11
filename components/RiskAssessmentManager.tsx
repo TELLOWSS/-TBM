@@ -2,7 +2,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { MonthlyRiskAssessment, SafetyGuideline } from '../types';
 import { extractMonthlyPriorities, ExtractedPriority, MonthlyExtractionResult } from '../services/geminiService';
-import { Upload, Loader2, Trash2, ShieldCheck, Plus, RefreshCcw, Calendar, TrendingUp, Search, Edit2, Save, X, Download, FileJson, Layers, ArrowRight, BarChart3, AlertTriangle, CheckCircle2, ChevronDown, GitMerge, Scale, BookOpen, AlertOctagon, FileText, PieChart, Activity, FileStack, Sparkles, BrainCircuit } from 'lucide-react';
+import { Upload, Loader2, Trash2, ShieldCheck, Plus, RefreshCcw, Calendar, TrendingUp, Search, Edit2, Save, X, Download, FileJson, Layers, ArrowRight, BarChart3, AlertTriangle, CheckCircle2, ChevronDown, GitMerge, Scale, BookOpen, AlertOctagon, FileText, PieChart, Activity, FileStack, Sparkles, BrainCircuit, Clock } from 'lucide-react';
 
 interface RiskAssessmentManagerProps {
   assessments: MonthlyRiskAssessment[];
@@ -166,7 +166,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   }, [assessments]);
 
   const monthlyAssessments = useMemo(() => {
-      return assessments.filter(a => a.type !== 'INITIAL' && a.type !== 'REGULAR').sort((a, b) => b.month.localeCompare(a.month));
+      // Sort first by Month, then by CreatedAt (newest first) to handle duplicates
+      return assessments.filter(a => a.type !== 'INITIAL' && a.type !== 'REGULAR').sort((a, b) => {
+          const monthDiff = b.month.localeCompare(a.month);
+          if (monthDiff !== 0) return monthDiff;
+          return (b.createdAt || 0) - (a.createdAt || 0);
+      });
   }, [assessments]);
 
   // Initial State from Props
@@ -729,7 +734,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
              </div>
              <div className="text-center">
                 <h3 className="font-bold text-sm">정기 위험성평가 수립</h3>
-                <p className="text-[10px] text-indigo-200 mt-1 font-medium">최초 + 월간 + 피드백 통합</p>
+                <p className="text-xs text-indigo-200 mt-1 font-medium">최초 + 월간 + 피드백 통합</p>
              </div>
           </button>
 
@@ -808,9 +813,15 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                          : 'bg-white text-slate-600 border-slate-100 hover:border-slate-300'
                       }`}
                    >
-                      <div className="flex flex-col items-start">
+                      <div className="flex flex-col items-start text-left">
                           <span className="font-bold text-sm">{month.month}월</span>
-                          <span className="text-[9px] opacity-70">월간/수시</span>
+                          {/* Show Created Date to distinguish duplicates */}
+                          <div className="flex items-center gap-1 mt-0.5 opacity-80">
+                              <Clock size={8} />
+                              <span className="text-[9px]">
+                                {new Date(month.createdAt || 0).toLocaleDateString().slice(5)} 등록
+                              </span>
+                          </div>
                       </div>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedMonthId === month.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
                          {month.priorities.length}건
@@ -849,6 +860,8 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                               activeAssessment.type === 'INITIAL' ? '최초 위험성평가 (Baseline)' : 
                               `${activeAssessment.month}월 월간/수시 위험성평가`}
                           </h2>
+                          {/* Debug info for duplicates */}
+                          <p className="text-[10px] text-slate-400 mt-1 font-mono">ID: {activeAssessment.id}</p>
                        </div>
                        
                        <div className="flex items-center gap-2">
