@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { TBMEntry, TeamOption } from '../types';
-import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity, Database } from 'lucide-react';
+import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity, Database, BrainCircuit, Microscope } from 'lucide-react';
 import JSZip from 'jszip';
 
 interface ReportCenterProps {
@@ -77,25 +77,70 @@ const fetchImageAsBase64 = async (url: string): Promise<string> => {
     }
 };
 
-// Full Screen Loading Overlay
-const LoadingOverlay = ({ text }: { text: string }) => (
-    <div className="fixed inset-0 z-[999999] bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in text-white">
-        <div className="bg-white/10 p-6 rounded-full mb-6 relative border border-white/10 shadow-2xl">
-            <Loader2 size={48} className="text-indigo-400 animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center">
-               <Database size={20} className="text-white opacity-80" />
+// [NEW] Premium Research HUD Overlay (Visualizing the Deep Research)
+const ResearchOverlay = ({ progress, status }: { progress: number, status: string }) => (
+    <div className="fixed inset-0 z-[999999] bg-[#0F172A]/80 backdrop-blur-xl flex flex-col items-center justify-center animate-fade-in">
+        <div className="bg-slate-900/90 backdrop-blur-md rounded-[2.5rem] p-12 shadow-2xl flex flex-col items-center max-w-md w-full mx-4 border border-indigo-500/30 relative overflow-hidden">
+            {/* Ambient Background Glow */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-indigo-500/20 rounded-full blur-[60px] pointer-events-none"></div>
+            
+            <div className="relative z-10 flex flex-col items-center">
+                <div className="relative w-24 h-24 mb-8 flex items-center justify-center">
+                    {/* Pulsing Rings */}
+                    <div className="absolute inset-0 rounded-full border-2 border-indigo-400 animate-ping opacity-20"></div>
+                    <div className="absolute inset-0 rounded-full border border-indigo-300 opacity-30 scale-125 animate-pulse"></div>
+                    <div className="absolute inset-0 rounded-full border-t-2 border-indigo-500 animate-spin duration-3000"></div>
+                    
+                    <div className="bg-slate-800 p-5 rounded-3xl shadow-xl border border-slate-700 relative z-10">
+                        <Microscope size={40} className="text-indigo-400 animate-pulse" />
+                    </div>
+                </div>
+                
+                <h3 className="text-3xl font-black text-white mb-2 tracking-tight">Deep Research</h3>
+                <p className="text-sm text-indigo-200/80 text-center leading-relaxed mb-10 font-medium">
+                    빅데이터를 통계적으로 분석하고<br/>
+                    <span className="text-indigo-400 font-bold">학술 연구용 데이터셋</span>을 구축합니다.
+                </p>
+                
+                <div className="w-full space-y-3">
+                    <div className="flex justify-between text-[10px] font-bold text-indigo-300 uppercase tracking-wider">
+                        <span>Analysis Phase</span>
+                        <span className="font-mono">{Math.round(progress)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden shadow-inner border border-slate-700">
+                        <div 
+                            className="h-full bg-gradient-to-r from-indigo-600 via-violet-500 to-fuchsia-500 rounded-full transition-all duration-300 ease-out shadow-[0_0_15px_rgba(99,102,241,0.6)]" 
+                            style={{ width: `${progress}%` }}
+                        ></div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <p className="text-[11px] text-slate-400 font-medium h-4 animate-pulse">
+                            {status}
+                        </p>
+                        <Activity size={12} className="text-emerald-500 animate-bounce" />
+                    </div>
+                </div>
             </div>
         </div>
-        <h3 className="text-2xl font-black text-white tracking-tight mb-2">Data Mining in Progress</h3>
-        <p className="text-slate-300 font-medium text-sm animate-pulse">{text}</p>
+    </div>
+);
+
+// Standard Simple Loading for basic zip
+const SimpleLoadingOverlay = ({ text }: { text: string }) => (
+    <div className="fixed inset-0 z-[999999] bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in text-white">
+        <Loader2 size={48} className="text-emerald-400 animate-spin mb-4" />
+        <p className="text-slate-300 font-bold animate-pulse">{text}</p>
     </div>
 );
 
 export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrintModal, signatures, teams }) => {
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [isZipping, setIsZipping] = useState(false);
+  
+  // Research State
   const [isResearching, setIsResearching] = useState(false);
-  const [loadingText, setLoadingText] = useState("");
+  const [researchProgress, setResearchProgress] = useState(0);
+  const [researchStatus, setResearchStatus] = useState("Initializing...");
 
   // Stats Calculation
   const stats = useMemo(() => {
@@ -107,22 +152,15 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
     };
   }, [entries, signatures]);
 
-  // [Fix] Robust Deduplication for Filter List
-  // Combines Master Teams + Active Teams from Entries -> Removes Duplicates by ID
+  // Deduplication for Filter List
   const uniqueTeams = useMemo(() => {
       const teamMap = new Map<string, string>();
-      
-      // 1. Add Master Teams
       teams.forEach(t => teamMap.set(t.id, t.name));
-      
-      // 2. Add Active Teams from Entries (to cover teams not in master list or handle dynamic IDs)
       entries.forEach(e => {
           if (e.teamId && e.teamName) {
               teamMap.set(e.teamId, e.teamName);
           }
       });
-
-      // 3. Convert to Array and Sort Alphabetically
       return Array.from(teamMap.entries())
           .map(([id, name]) => ({ id, name }))
           .sort((a, b) => a.name.localeCompare(b.name));
@@ -144,25 +182,20 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
     }
 
     setIsZipping(true);
-    setLoadingText("이미지 및 데이터 압축 중...");
 
-    // Yield to render UI
     setTimeout(async () => {
         try {
           const zip = new JSZip();
           const folderName = `TBM_일지_${new Date().toISOString().slice(0,10)}`;
           const photoFolder = zip.folder(`${folderName}/현장사진`);
 
-          // 1. Define Headers
           const headers = [
              '일자', '시간', '팀명', '팀장', '참석인원', '작업내용', 
              '중점 위험요인 및 대책', '안전 관리자 피드백',
              'AI TBM 점수', 'AI 평가 내용', '사진 파일명' 
           ];
 
-          // 2. Map Data to Rows & Add Photos
           const rowPromises = filteredEntries.map(async (entry, idx) => {
-             // Handle Photo adding to ZIP
              let photoFileName = '';
              const safeTeamName = (entry.teamName || 'unknown').replace(/[\/\\?%*:|"<>]/g, '_');
 
@@ -196,7 +229,6 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
           zip.file(`${folderName}/TBM_일지_내역서.csv`, csvContent);
 
           const content = await zip.generateAsync({ type: "blob" });
-          
           const url = URL.createObjectURL(content);
           const link = document.createElement('a');
           link.href = url;
@@ -204,94 +236,116 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          
           setTimeout(() => URL.revokeObjectURL(url), 1000);
 
         } catch (error) {
           console.error("ZIP Generation Error", error);
-          alert("압축 파일 생성 실패. 다시 시도해주세요.");
+          alert("압축 파일 생성 실패.");
         } finally {
           setIsZipping(false);
         }
     }, 100);
   };
 
-  // --- Research Data Export (Advanced PhD Mode) ---
+  // --- Research Data Export (Deep Analysis Simulation) ---
   const handleResearchExport = async () => {
      if (entries.length === 0) {
         alert("분석할 데이터가 없습니다.");
         return;
      }
 
+     // 1. Initial Prompt
      if (!confirm("🎓 [박사 학위/연구용] 데이터셋 패키지 생성\n\n팀별 시계열 개선 추이(Regression Trend)와 상관분석 데이터를 포함한\n'학술 분석 리포트(Draft)'를 생성합니다.\n\n진행하시겠습니까?")) {
         return;
      }
 
      setIsResearching(true);
-     setLoadingText("통계 데이터 마이닝 및 시계열 회귀 분석 중...");
+     setResearchProgress(0);
+     
+     // --- STEP 1: Initialization & Data Mining (0 - 30%) ---
+     setResearchStatus("Initializing Data Mining...");
+     await new Promise(r => setTimeout(r, 800)); // Visual Delay
+     
+     setResearchStatus("Extracting Time-Series Vectors...");
+     setResearchProgress(15);
+     await new Promise(r => setTimeout(r, 800));
 
-     // Critical: Yield to main thread to show loading screen
-     setTimeout(async () => {
-         try {
-            const zip = new JSZip();
-            const rootFolder = zip.folder(`Research_Data_Package_${new Date().toISOString().slice(0,10)}`);
-            
-            // --- 1. Statistical Analysis (Pre-calculation) ---
-            const sortedEntries = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            const aiAnalyzedEntries = sortedEntries.filter(e => e.videoAnalysis);
-            
-            const scores = aiAnalyzedEntries.map(e => e.videoAnalysis?.score ?? 0);
-            const meanScore = calculateMean(scores);
-            const sdScore = calculateSD(scores, meanScore);
-            
-            const scoreTrend = calculateLinearRegression(scores);
-            
-            const correlationData = entries
-                .filter(e => e.videoAnalysis && e.videoAnalysis.focusAnalysis) 
-                .map(e => ({
-                    focus: e.videoAnalysis!.focusAnalysis.overall,
-                    risks: e.riskFactors?.length || 0
-                }));
-            
-            const r_FocusRisk = calculateCorrelation(
-                correlationData.map(d => d.focus), 
-                correlationData.map(d => d.risks)
-            );
+     try {
+        const zip = new JSZip();
+        const rootFolder = zip.folder(`Research_Data_Package_${new Date().toISOString().slice(0,10)}`);
+        
+        // Sorting Data
+        setResearchStatus("Sorting & Cleaning Data...");
+        setResearchProgress(25);
+        await new Promise(r => setTimeout(r, 600));
 
-            // --- TEAM SPECIFIC TREND ANALYSIS ---
-            const teamTrends: Record<string, {name: string, slopes: number, count: number, startScore: number, endScore: number}> = {};
-            const teamScoresMap: Record<string, {name: string, scores: number[]}> = {};
-            
-            sortedEntries.forEach(entry => {
-                if (!entry.teamId || !entry.videoAnalysis) return;
-                
-                if (!teamScoresMap[entry.teamId]) {
-                    teamScoresMap[entry.teamId] = { name: entry.teamName, scores: [] };
-                }
-                teamScoresMap[entry.teamId].scores.push(entry.videoAnalysis.score);
-            });
+        const sortedEntries = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const aiAnalyzedEntries = sortedEntries.filter(e => e.videoAnalysis);
+        
+        // --- STEP 2: Statistical Calculation (30 - 60%) ---
+        setResearchStatus("Calculating Linear Regression...");
+        setResearchProgress(35);
+        
+        const scores = aiAnalyzedEntries.map(e => e.videoAnalysis?.score ?? 0);
+        const meanScore = calculateMean(scores);
+        const sdScore = calculateSD(scores, meanScore);
+        const scoreTrend = calculateLinearRegression(scores);
+        
+        await new Promise(r => setTimeout(r, 800));
+        setResearchStatus("Analyzing Correlation Matrix...");
+        setResearchProgress(50);
 
-            Object.entries(teamScoresMap).forEach(([id, data]) => {
-                const { slope } = calculateLinearRegression(data.scores);
-                teamTrends[id] = {
-                    name: data.name,
-                    slopes: slope,
-                    count: data.scores.length,
-                    startScore: data.scores[0],
-                    endScore: data.scores[data.scores.length - 1]
-                };
-            });
+        const correlationData = entries
+            .filter(e => e.videoAnalysis && e.videoAnalysis.focusAnalysis) 
+            .map(e => ({
+                focus: e.videoAnalysis!.focusAnalysis.overall,
+                risks: e.riskFactors?.length || 0
+            }));
+        
+        const r_FocusRisk = calculateCorrelation(
+            correlationData.map(d => d.focus), 
+            correlationData.map(d => d.risks)
+        );
 
-            const teamAnalysisRows = Object.values(teamTrends)
-                .sort((a, b) => b.slopes - a.slopes) 
-                .map(t => {
-                    const status = t.slopes > 0.5 ? '⭐⭐ 뚜렷한 개선' : t.slopes > 0 ? '⭐ 소폭 개선' : t.slopes > -0.5 ? '🟢 유지' : '🔴 하락세';
-                    return `| ${t.name} | ${t.count}회 | ${t.startScore} → ${t.endScore} | ${t.slopes.toFixed(3)} | ${status} |`;
-                })
-                .join('\n');
+        // Team Trends Calculation
+        const teamTrends: Record<string, {name: string, slopes: number, count: number, startScore: number, endScore: number}> = {};
+        const teamScoresMap: Record<string, {name: string, scores: number[]}> = {};
+        
+        sortedEntries.forEach(entry => {
+            if (!entry.teamId || !entry.videoAnalysis) return;
+            if (!teamScoresMap[entry.teamId]) {
+                teamScoresMap[entry.teamId] = { name: entry.teamName, scores: [] };
+            }
+            teamScoresMap[entry.teamId].scores.push(entry.videoAnalysis.score);
+        });
 
-            // --- 2. Generate Academic Report (Markdown) ---
-            const reportContent = `
+        Object.entries(teamScoresMap).forEach(([id, data]) => {
+            const { slope } = calculateLinearRegression(data.scores);
+            teamTrends[id] = {
+                name: data.name,
+                slopes: slope,
+                count: data.scores.length,
+                startScore: data.scores[0],
+                endScore: data.scores[data.scores.length - 1]
+            };
+        });
+
+        await new Promise(r => setTimeout(r, 800));
+
+        // --- STEP 3: NLP & Report Generation (60 - 90%) ---
+        setResearchStatus("Generating Academic Report (NLP)...");
+        setResearchProgress(70);
+        await new Promise(r => setTimeout(r, 1000));
+
+        const teamAnalysisRows = Object.values(teamTrends)
+            .sort((a, b) => b.slopes - a.slopes) 
+            .map(t => {
+                const status = t.slopes > 0.5 ? '⭐⭐ 뚜렷한 개선' : t.slopes > 0 ? '⭐ 소폭 개선' : t.slopes > -0.5 ? '🟢 유지' : '🔴 하락세';
+                return `| ${t.name} | ${t.count}회 | ${t.startScore} → ${t.endScore} | ${t.slopes.toFixed(3)} | ${status} |`;
+            })
+            .join('\n');
+
+        const reportContent = `
 # 스마트 TBM 시스템 도입 효과 분석 보고서 (초안)
 **Generated by Smart Safety AI Engine**
 **Date:** ${new Date().toLocaleDateString()}
@@ -346,73 +400,83 @@ ${teamAnalysisRows}
 
 ---
 *본 문서는 학술 논문 및 성과 보고서 작성을 위한 기초 자료로 생성되었습니다.*
-            `;
-            
-            rootFolder?.file("01_Academic_Report_논문초안.md", reportContent);
+        `;
+        
+        rootFolder?.file("01_Academic_Report_논문초안.md", reportContent);
 
-            // --- 3. Generate Raw CSV for Tools (SPSS/R) ---
-            const bodyHeaders = [
-               "ID", "Date", "Month", "Week_Num", 
-               "Team_ID", "Team_Name", "Team_Category", "Attendees", 
-               "Risk_Count", "Feedback_Count",
-               "AI_Score", "AI_Focus", "AI_Distracted",
-               "Voice_Clarity_Code", "PPE_Status_Code",
-               "Time_Index"
-            ];
+        setResearchStatus("Structuring CSV Dataset...");
+        setResearchProgress(85);
+        await new Promise(r => setTimeout(r, 600));
 
-            const bodyRows = sortedEntries.map((e, index) => {
-               const dateObj = new Date(e.date);
-               const ai = e.videoAnalysis;
-               const teamCat = teams.find(t => t.id === e.teamId)?.category || 'Other';
-               
-               let voiceCode = 0; 
-               if (ai?.details?.voiceClarity === 'CLEAR') voiceCode = 2;
-               else if (ai?.details?.voiceClarity === 'MUFFLED') voiceCode = 1;
+        const bodyHeaders = [
+           "ID", "Date", "Month", "Week_Num", 
+           "Team_ID", "Team_Name", "Team_Category", "Attendees", 
+           "Risk_Count", "Feedback_Count",
+           "AI_Score", "AI_Focus", "AI_Distracted",
+           "Voice_Clarity_Code", "PPE_Status_Code",
+           "Time_Index"
+        ];
 
-               const ppeCode = ai?.details?.ppeStatus === 'GOOD' ? 1 : 0;
+        const bodyRows = sortedEntries.map((e, index) => {
+           const dateObj = new Date(e.date);
+           const ai = e.videoAnalysis;
+           const teamCat = teams.find(t => t.id === e.teamId)?.category || 'Other';
+           
+           let voiceCode = 0; 
+           if (ai?.details?.voiceClarity === 'CLEAR') voiceCode = 2;
+           else if (ai?.details?.voiceClarity === 'MUFFLED') voiceCode = 1;
 
-               const score = ai?.score ?? '';
-               const focus = ai?.focusAnalysis?.overall ?? '';
-               const distracted = ai?.focusAnalysis?.distractedCount ?? '';
+           const ppeCode = ai?.details?.ppeStatus === 'GOOD' ? 1 : 0;
 
-               return [
-                  e.id, e.date, e.date.substring(0, 7), Math.ceil(dateObj.getDate() / 7),
-                  e.teamId, e.teamName, teamCat, e.attendeesCount,
-                  e.riskFactors?.length || 0, e.safetyFeedback?.length || 0,
-                  score, focus, distracted,
-                  voiceCode, ppeCode,
-                  index + 1
-               ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
-            });
+           const score = ai?.score ?? '';
+           const focus = ai?.focusAnalysis?.overall ?? '';
+           const distracted = ai?.focusAnalysis?.distractedCount ?? '';
 
-            const csvContent = '\uFEFF' + [bodyHeaders.join(','), ...bodyRows].join('\n');
-            rootFolder?.file("02_Raw_Data_통계분석용.csv", csvContent);
+           return [
+              e.id, e.date, e.date.substring(0, 7), Math.ceil(dateObj.getDate() / 7),
+              e.teamId, e.teamName, teamCat, e.attendeesCount,
+              e.riskFactors?.length || 0, e.safetyFeedback?.length || 0,
+              score, focus, distracted,
+              voiceCode, ppeCode,
+              index + 1
+           ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+        });
 
-            rootFolder?.file("READ_ME.txt", "본 데이터셋은 UTF-8 인코딩으로 작성되었습니다.");
+        const csvContent = '\uFEFF' + [bodyHeaders.join(','), ...bodyRows].join('\n');
+        rootFolder?.file("02_Raw_Data_통계분석용.csv", csvContent);
+        rootFolder?.file("READ_ME.txt", "본 데이터셋은 UTF-8 인코딩으로 작성되었습니다.");
 
-            const content = await zip.generateAsync({ type: "blob" });
-            const url = URL.createObjectURL(content);
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `Thesis_Data_Package_${new Date().toISOString().slice(0,10)}.zip`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        // --- STEP 4: Packaging (90 - 100%) ---
+        setResearchStatus("Compressing Final Package...");
+        setResearchProgress(95);
+        await new Promise(r => setTimeout(r, 800));
 
-         } catch (error: any) {
-            console.error("Research Export Error", error);
-            alert("데이터 패키징 중 오류가 발생했습니다: " + error.message);
-         } finally {
-            setIsResearching(false);
-         }
-     }, 100);
+        const content = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(content);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `Thesis_Data_Package_${new Date().toISOString().slice(0,10)}.zip`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setResearchProgress(100);
+        setResearchStatus("Download Started!");
+        await new Promise(r => setTimeout(r, 500));
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+     } catch (error: any) {
+        console.error("Research Export Error", error);
+        alert("데이터 패키징 중 오류가 발생했습니다: " + error.message);
+     } finally {
+        setIsResearching(false);
+     }
   };
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
-      {(isZipping || isResearching) && <LoadingOverlay text={loadingText} />}
+      {isZipping && <SimpleLoadingOverlay text="이미지 및 데이터 압축 중..." />}
+      {isResearching && <ResearchOverlay progress={researchProgress} status={researchStatus} />}
       
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -434,13 +498,16 @@ ${teamAnalysisRows}
            <button 
               onClick={handleResearchExport}
               disabled={isZipping || isResearching}
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold rounded-xl hover:bg-indigo-100 hover:border-indigo-300 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed group"
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 border border-indigo-500 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
               title="빅데이터/논문용 데이터 추출"
            >
-              <GraduationCap size={18} />
+              {/* Shine Effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none"></div>
+              
+              <GraduationCap size={20} className="group-hover:rotate-12 transition-transform" />
               <div className="flex flex-col items-start leading-none">
                   <span className="text-xs md:text-sm">학술 연구용 패키지</span>
-                  <span className="text-[9px] text-indigo-400 group-hover:text-indigo-600 font-medium mt-0.5">논문 초안 및 통계 데이터</span>
+                  <span className="text-[9px] text-indigo-200 font-medium mt-0.5">Deep Research & Mining</span>
               </div>
            </button>
 
@@ -457,7 +524,7 @@ ${teamAnalysisRows}
            {/* Print */}
            <button 
               onClick={onOpenPrintModal}
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-blue-600 transition-colors shadow-lg shadow-slate-900/20"
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-700 transition-colors shadow-lg shadow-slate-900/20"
            >
               <Printer size={18} /> 출력/PDF
            </button>

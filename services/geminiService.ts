@@ -400,16 +400,19 @@ export const extractMonthlyPriorities = async (
             Output strictly in JSON format matching the schema.
           `;
       } else {
-          // [UPDATE MODE] For Monthly Assessment
+          // [UPDATED] For Monthly Assessment - ALSO FULL EXTRACTION REQUESTED
           prompt = `
-            [TASK: MONTHLY RISK ASSESSMENT UPDATE]
+            [TASK: MONTHLY RISK ASSESSMENT DIGITIZATION]
             This is a 'Monthly/Routine Risk Assessment' document (월간/수시 위험성평가).
-            Your goal is to extract **Key Management Items** and **New/Changed Risks**.
+            
+            **CRITICAL INSTRUCTION: EXTRACT ALL ROWS.**
+            The user wants to digitize the ENTIRE document, not just changed items.
             
             Strict Instructions:
-            1. Focus on items marked as 'Priority', 'High Risk', 'Management Target', or 'Changed'.
-            2. Extract: content, level, category.
-            3. Detect the month (YYYY-MM).
+            1. Extract **EVERY SINGLE RISK ITEM** visible in the document table.
+            2. Do NOT skip items just because they seem "Low" risk. We need the full data.
+            3. Extract: content, level (HIGH/GENERAL based on risk rating), category.
+            4. Detect the month (YYYY-MM).
             
             Output strictly in JSON format matching the schema.
           `;

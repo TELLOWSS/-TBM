@@ -568,52 +568,70 @@ function App() {
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'SAPA_BACKUP.json'; a.click();
   };
 
-  // [OVERHAULED] Smart Import Handler with Layering (Merge) Logic
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if(!file) return;
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-          try {
-              const raw = JSON.parse(evt.target?.result as string);
-              
-              // Helper: Layer Merge (Update if ID exists, Add if New)
-              const mergeUnique = (existing: any[], incoming: any[]) => {
-                  const map = new Map();
-                  // 1. Add existing items to Map
-                  existing.forEach(item => {
-                      if (item.id) map.set(String(item.id), item);
-                  });
-                  // 2. Overlay incoming items
-                  incoming.forEach(item => {
-                      if (item.id) map.set(String(item.id), item);
-                  });
-                  // 3. Return combined array
-                  return Array.from(map.values());
+  // [OVERHAULED] Smart Import Handler with Layering (Merge) Logic - MULTI FILE SUPPORT
+  const handleImportData = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if(!files || files.length === 0) return;
+
+      // Helper to read file
+      const readFile = (file: File): Promise<any> => {
+          return new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (evt) => {
+                  try {
+                      resolve(JSON.parse(evt.target?.result as string));
+                  } catch (e) {
+                      console.warn(`Skipping invalid JSON file: ${file.name}`);
+                      resolve(null);
+                  }
               };
+              reader.readAsText(file);
+          });
+      };
 
-              let newEntries: TBMEntry[] = [...entries];
-              let newAssessments: MonthlyRiskAssessment[] = [...monthlyAssessments];
-              let newTeams: TeamOption[] = [...teams];
-              
-              let addedStats = { tbm: 0, risk: 0, teams: 0 };
+      try {
+          // Read all files in parallel
+          const fileContents = await Promise.all(Array.from(files).map(readFile));
+          const validContents = fileContents.filter(c => c !== null);
 
+          if (validContents.length === 0) {
+              alert("유효한 데이터 파일이 없습니다.");
+              return;
+          }
+
+          let newEntries: TBMEntry[] = [...entries];
+          let newAssessments: MonthlyRiskAssessment[] = [...monthlyAssessments];
+          let newTeams: TeamOption[] = [...teams];
+          
+          let addedStats = { tbm: 0, risk: 0, teams: 0 };
+
+          // Helper: Layer Merge (Update if ID exists, Add if New)
+          const mergeUnique = (existing: any[], incoming: any[]) => {
+              const map = new Map();
+              // 1. Add existing items to Map
+              existing.forEach(item => {
+                  if (item.id) map.set(String(item.id), item);
+              });
+              // 2. Overlay incoming items
+              incoming.forEach(item => {
+                  if (item.id) map.set(String(item.id), item);
+              });
+              // 3. Return combined array
+              return Array.from(map.values());
+          };
+
+          // Iterate through all loaded JSON objects
+          for (const raw of validContents) {
               // Case 1: Full System Backup (Object with keys)
               if (!Array.isArray(raw)) {
                   if(raw.tbm_entries && Array.isArray(raw.tbm_entries)) {
-                      const merged = mergeUnique(entries, raw.tbm_entries);
-                      addedStats.tbm = merged.length - entries.length;
-                      newEntries = merged;
+                      newEntries = mergeUnique(newEntries, raw.tbm_entries);
                   }
                   if(raw.monthly_assessment_list && Array.isArray(raw.monthly_assessment_list)) {
-                      const merged = mergeUnique(monthlyAssessments, raw.monthly_assessment_list);
-                      addedStats.risk = merged.length - monthlyAssessments.length;
-                      newAssessments = merged;
+                      newAssessments = mergeUnique(newAssessments, raw.monthly_assessment_list);
                   }
                   if(raw.site_teams && Array.isArray(raw.site_teams)) {
-                      const merged = mergeUnique(teams, raw.site_teams);
-                      addedStats.teams = merged.length - teams.length;
-                      newTeams = merged;
+                      newTeams = mergeUnique(newTeams, raw.site_teams);
                   }
               } 
               // Case 2: Array Backup (Legacy lists)
@@ -621,51 +639,52 @@ function App() {
                   const firstItem = raw[0];
                   // TBM Entry Check
                   if (firstItem.teamName && (firstItem.date || firstItem.workDescription)) {
-                      const merged = mergeUnique(entries, raw);
-                      addedStats.tbm = merged.length - entries.length;
-                      newEntries = merged;
+                      newEntries = mergeUnique(newEntries, raw);
                   }
                   // Risk Assessment Check
                   else if (firstItem.month && firstItem.priorities) {
-                      const merged = mergeUnique(monthlyAssessments, raw);
-                      addedStats.risk = merged.length - monthlyAssessments.length;
-                      newAssessments = merged;
+                      newAssessments = mergeUnique(newAssessments, raw);
                   }
               }
-
-              // Update State & Storage
-              if (addedStats.tbm > 0 || addedStats.risk > 0 || addedStats.teams > 0) {
-                  setEntries(newEntries);
-                  await StorageDB.set('tbm_entries', newEntries);
-                  
-                  setMonthlyAssessments(newAssessments);
-                  await StorageDB.set('monthly_assessment_list', newAssessments);
-                  
-                  setTeams(newTeams);
-                  await StorageDB.set('site_teams', newTeams);
-
-                  alert(
-                      `✅ 빅데이터 병합(Layering) 완료\n\n` +
-                      `기존 데이터는 유지하고, 새로운 데이터만 추가했습니다.\n` + 
-                      `-----------------------------------\n` +
-                      `- TBM 일지: +${addedStats.tbm}건 추가 (총 ${newEntries.length}건)\n` +
-                      `- 위험성평가: +${addedStats.risk}건 추가\n` +
-                      `- 팀 목록: +${addedStats.teams}팀 추가`
-                  );
-                  
-                  setIsSettingsOpen(false);
-                  if (addedStats.tbm > 0) setCurrentView('dashboard'); 
-              } else {
-                  alert("⚠ 추가할 새로운 데이터가 없습니다. (모든 데이터가 이미 존재함)");
-              }
-          } catch(err) { 
-              console.error(err);
-              alert("❌ 파일 처리 중 오류가 발생했습니다."); 
-          } finally {
-              if (fileInputRef.current) fileInputRef.current.value = '';
           }
-      };
-      reader.readAsText(file);
+
+          // Calculate Diffs
+          addedStats.tbm = newEntries.length - entries.length;
+          addedStats.risk = newAssessments.length - monthlyAssessments.length;
+          addedStats.teams = newTeams.length - teams.length;
+
+          // Update State & Storage
+          if (addedStats.tbm > 0 || addedStats.risk > 0 || addedStats.teams > 0) {
+              setEntries(newEntries);
+              await StorageDB.set('tbm_entries', newEntries);
+              
+              setMonthlyAssessments(newAssessments);
+              await StorageDB.set('monthly_assessment_list', newAssessments);
+              
+              setTeams(newTeams);
+              await StorageDB.set('site_teams', newTeams);
+
+              alert(
+                  `✅ 대량 데이터 병합(Bulk Merge) 완료\n` +
+                  `총 ${files.length}개의 파일을 처리했습니다.\n` + 
+                  `-----------------------------------\n` +
+                  `- TBM 일지: +${addedStats.tbm}건 추가\n` +
+                  `- 위험성평가: +${addedStats.risk}건 추가\n` +
+                  `- 팀 목록: +${addedStats.teams}팀 추가`
+              );
+              
+              setIsSettingsOpen(false);
+              if (addedStats.tbm > 0) setCurrentView('dashboard'); 
+          } else {
+              alert("⚠ 데이터가 이미 최신 상태입니다. (새로운 내용 없음)");
+          }
+
+      } catch(err) { 
+          console.error(err);
+          alert("❌ 대량 파일 처리 중 오류가 발생했습니다."); 
+      } finally {
+          if (fileInputRef.current) fileInputRef.current.value = '';
+      }
   };
 
   const handleCleanupData = () => {
@@ -897,8 +916,8 @@ function App() {
                   <div className="p-6 space-y-4">
                      <button onClick={handleExportData} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Download size={16}/> 데이터 백업 (통합)</button>
                      <div className="relative">
-                        <button onClick={()=>fileInputRef.current?.click()} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Upload size={16}/> 데이터 복구/병합</button>
-                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleImportData} accept=".json"/>
+                        <button onClick={()=>fileInputRef.current?.click()} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Upload size={16}/> 데이터 대량 복구/병합 (Multi-File)</button>
+                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleImportData} accept=".json" multiple/>
                      </div>
                      <div className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg text-center leading-relaxed">
                         <span className="font-bold text-slate-600">※ Big Data Layering System</span><br/>

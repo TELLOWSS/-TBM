@@ -63,19 +63,29 @@ const AnalysisOverlay = ({ progress }: { progress: number }) => (
     </div>
 );
 
-// --- Premium Component: Arch Risk Gauge ---
-// Solves clipping issues and provides a modern "Speedometer" look
+// --- Premium Component: Arch Risk Gauge (Fixed Layout & Counts) ---
 const RiskGauge = ({ highCount, totalCount }: { highCount: number, totalCount: number }) => {
+    // 1. Calculate Percentage
     const percentage = totalCount > 0 ? Math.min(100, Math.round((highCount / totalCount) * 100)) : 0;
-    
-    // Arch Settings
-    const radius = 80;
-    const stroke = 12;
-    const normalizedRadius = radius - stroke * 2;
-    const circumference = normalizedRadius * Math.PI; // Half circle (PI * r)
+    const generalCount = totalCount - highCount;
+
+    // 2. Gauge Dimensions (Fixed to prevent clipping)
+    // Canvas Size: 180px width, 100px height
+    // Radius: 70px
+    // Stroke: 12px
+    // Padding: 20px (to safely contain the stroke)
+    const width = 180;
+    const height = 90; // Half height
+    const cx = width / 2;
+    const cy = height; // Bottom center
+    const r = 70; 
+    const strokeWidth = 14;
+
+    // 3. SVG Path Logic (Arch)
+    const circumference = Math.PI * r;
     const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
-    // Color Logic
+    // 4. Color Logic
     let colorStart = "#10B981"; // Green
     let colorEnd = "#34D399";
     let label = "안전";
@@ -92,34 +102,32 @@ const RiskGauge = ({ highCount, totalCount }: { highCount: number, totalCount: n
     }
 
     return (
-        <div className="flex flex-col items-center justify-center relative w-full">
-            <div className="relative w-40 h-24 overflow-hidden flex justify-center items-end pb-0">
-                <svg
-                    height={radius}
-                    width={radius * 2}
-                    viewBox={`0 0 ${radius * 2} ${radius}`}
-                    className="overflow-visible"
-                >
+        <div className="flex flex-col items-center justify-center w-full">
+            {/* Gauge Graphic */}
+            <div className="relative flex justify-center items-end" style={{ width: width, height: height }}>
+                <svg width={width} height={height + strokeWidth} viewBox={`0 -${strokeWidth} ${width} ${height + strokeWidth * 2}`} className="overflow-visible">
                     <defs>
                         <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                             <stop offset="0%" stopColor={colorStart} />
                             <stop offset="100%" stopColor={colorEnd} />
                         </linearGradient>
                     </defs>
+                    
                     {/* Background Track */}
                     <path
-                        d={`M ${stroke} ${radius - stroke} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${radius * 2 - stroke} ${radius - stroke}`}
-                        fill="transparent"
+                        d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+                        fill="none"
                         stroke="#F1F5F9"
-                        strokeWidth={stroke}
+                        strokeWidth={strokeWidth}
                         strokeLinecap="round"
                     />
+                    
                     {/* Progress Arc */}
                     <path
-                        d={`M ${stroke} ${radius - stroke} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${radius * 2 - stroke} ${radius - stroke}`}
-                        fill="transparent"
+                        d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+                        fill="none"
                         stroke="url(#gaugeGradient)"
-                        strokeWidth={stroke}
+                        strokeWidth={strokeWidth}
                         strokeDasharray={circumference}
                         strokeDashoffset={strokeDashoffset}
                         strokeLinecap="round"
@@ -127,17 +135,22 @@ const RiskGauge = ({ highCount, totalCount }: { highCount: number, totalCount: n
                     />
                 </svg>
                 
-                {/* Center Content */}
-                <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center mb-2">
-                    <span className="text-3xl font-black text-slate-800 tracking-tight leading-none">{percentage}%</span>
-                    <span className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wide">High Risk Ratio</span>
+                {/* Center Percentage */}
+                <div className="absolute bottom-0 flex flex-col items-center mb-1">
+                    <span className="text-3xl font-black text-slate-800 tracking-tighter leading-none">{percentage}<span className="text-sm text-slate-400">%</span></span>
                 </div>
             </div>
-            
-            {/* Status Badge */}
-            <div className={`mt-2 px-4 py-1.5 rounded-full text-xs font-black shadow-sm border border-black/5 ${bgColor} ${textColor} flex items-center gap-1`}>
-                {label === '위험' ? <AlertTriangle size={12}/> : label === '주의' ? <AlertOctagon size={12}/> : <CheckCircle2 size={12}/>}
-                {label} 단계
+
+            {/* Counts Breakdown (Requested by User) */}
+            <div className="flex gap-2 mt-4 w-full justify-center">
+                <div className="flex flex-col items-center bg-red-50 border border-red-100 px-3 py-1.5 rounded-xl min-w-[70px]">
+                    <span className="text-[10px] font-bold text-red-400 uppercase">상(High)</span>
+                    <span className="text-lg font-black text-red-600 leading-none">{highCount}</span>
+                </div>
+                <div className="flex flex-col items-center bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl min-w-[70px]">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">중·하</span>
+                    <span className="text-lg font-black text-slate-600 leading-none">{generalCount}</span>
+                </div>
             </div>
         </div>
     );
@@ -145,9 +158,9 @@ const RiskGauge = ({ highCount, totalCount }: { highCount: number, totalCount: n
 
 export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ assessments, onSave }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0); // [NEW] Progress State
+  const [loadingProgress, setLoadingProgress] = useState(0); 
   
-  // [NEW] Separate Assessments by Type
+  // Separate Assessments by Type
   const initialAssessments = useMemo(() => {
       return assessments.filter(a => a.type === 'INITIAL' || a.type === 'REGULAR').sort((a, b) => b.createdAt - a.createdAt);
   }, [assessments]);
@@ -159,45 +172,39 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   // Initial State from Props
   const [selectedMonthId, setSelectedMonthId] = useState<string>('');
 
-  // [CRITICAL FIX] Auto-Select Logic
-  // Whenever assessments list changes (e.g. loads from DB), ensure something is selected if possible.
+  // Auto-Select Logic
   useEffect(() => {
-      // If we already have a valid selection, do nothing.
       if (selectedMonthId && assessments.some(a => a.id === selectedMonthId)) return;
 
-      // If no valid selection, try to pick the best candidate.
       if (monthlyAssessments.length > 0) {
-          // Prefer latest Monthly/Operational assessment
-          setSelectedMonthId(monthlyAssessments[0].id); // Already sorted descending by month
+          setSelectedMonthId(monthlyAssessments[0].id);
       } else if (initialAssessments.length > 0) {
-          // Fallback to Initial/Regular assessment
           setSelectedMonthId(initialAssessments[0].id);
       } else {
-          // Nothing to select
           setSelectedMonthId('');
       }
   }, [assessments, monthlyAssessments, initialAssessments, selectedMonthId]);
 
   const [newMonthMode, setNewMonthMode] = useState(false);
-  const [targetMonth, setTargetMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  // Default to next month based on latest assessment or current date
+  const [targetMonth, setTargetMonth] = useState(() => {
+      const today = new Date();
+      return today.toISOString().slice(0, 7);
+  }); 
   const [uploadType, setUploadType] = useState<'MONTHLY' | 'INITIAL'>('MONTHLY');
 
-  // --- NEW: Regular Assessment Builder State ---
+  // --- Regular Assessment Builder State ---
   const [showRegularBuilder, setShowRegularBuilder] = useState(false);
   const [regularTargetYear, setRegularTargetYear] = useState(new Date().getFullYear().toString());
-  const [baseAssessmentId, setBaseAssessmentId] = useState<string>(''); // [NEW] Base Assessment Selection
+  const [baseAssessmentId, setBaseAssessmentId] = useState<string>('');
   const [aggregatedRisks, setAggregatedRisks] = useState<AggregatedRisk[]>([]);
   const [regularStep, setRegularStep] = useState<'SELECT' | 'REVIEW'>('SELECT');
 
-  // Get current selected assessment
   const activeAssessment = assessments.find(a => a.id === selectedMonthId);
   
-  // Get previous month assessment for comparison
   const previousAssessment = useMemo(() => {
      if (!activeAssessment) return null;
-     // Only compare within the same type group
      const list = activeAssessment.type === 'INITIAL' || activeAssessment.type === 'REGULAR' ? initialAssessments : monthlyAssessments;
-     
      const currentIndex = list.findIndex(a => a.id === activeAssessment.id);
      if (currentIndex !== -1 && currentIndex < list.length - 1) {
         return list[currentIndex + 1];
@@ -205,25 +212,19 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
      return null;
   }, [activeAssessment, initialAssessments, monthlyAssessments]);
 
-  // Candidates from analysis
   const [candidates, setCandidates] = useState<ExtractedPriority[]>([]);
-  
-  // Manual Input State
   const [manualInput, setManualInput] = useState('');
   const [manualCategory, setManualCategory] = useState('공통');
   
-  // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Search & Edit State ---
   const [searchTerm, setSearchTerm] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<{content: string, level: string, category: string}>({
       content: '', level: 'GENERAL', category: '공통'
   });
 
-  // Calculate filtered priorities for display check
   const displayPriorities = useMemo(() => {
     if (!activeAssessment) return [];
     if (!searchTerm.trim()) return activeAssessment.priorities;
@@ -234,23 +235,20 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
     );
   }, [activeAssessment, searchTerm]);
 
-  // --- Statistics Calculation ---
   const stats = useMemo(() => {
       if (!activeAssessment) return null;
       const total = activeAssessment.priorities.length;
       const high = activeAssessment.priorities.filter(p => p.level === 'HIGH').length;
       const general = total - high;
       
-      // Category Stats
       const catMap: Record<string, number> = {};
       activeAssessment.priorities.forEach(p => {
           catMap[p.category] = (catMap[p.category] || 0) + 1;
       });
       const topCategories = Object.entries(catMap)
           .sort((a, b) => b[1] - a[1])
-          .slice(0, 3); // Top 3
+          .slice(0, 3);
 
-      // Comparison
       let diff = 0;
       if (previousAssessment) {
           diff = total - previousAssessment.priorities.length;
@@ -259,14 +257,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       return { total, high, general, topCategories, diff };
   }, [activeAssessment, previousAssessment]);
 
-  // --- Helpers ---
   const normalizeString = (str: string) => {
     return (str || '').replace(/[\s\n\r.,\-()[\]]/g, '').trim();
   };
 
   // --- Handlers ---
 
-  // 1. Data Backup (Export)
   const handleExportBackup = () => {
     if (assessments.length === 0) {
       alert("백업할 데이터가 없습니다.");
@@ -284,53 +280,72 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
     URL.revokeObjectURL(url);
   };
 
-  // 2. Data Restore (Import)
   const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const loadedData = JSON.parse(event.target?.result as string);
-        if (Array.isArray(loadedData)) {
-          // Merge logic: Overwrite existing items with same ID, add new ones
-          // Explicitly typed Map to avoid inference issues
-          const currentMap = new Map<string, MonthlyRiskAssessment>();
-          assessments.forEach(item => currentMap.set(item.id, item));
-          
-          (loadedData as any[]).forEach((item: any) => {
-             // Basic validation
-             if(item.id && item.month && Array.isArray(item.priorities)) {
-                currentMap.set(item.id, item as MonthlyRiskAssessment);
-             }
-          });
-
-          const merged: MonthlyRiskAssessment[] = Array.from(currentMap.values());
-          onSave(merged);
-          alert(`✅ 위험성평가 데이터 복구 완료: 총 ${merged.length}회차 분량 로드됨.`);
-          
-          // Select the most recent one (will happen automatically via useEffect, but safe to force)
-          if (merged.length > 0) {
-             const latest = merged.sort((a, b) => b.month.localeCompare(a.month))[0];
-             setSelectedMonthId(latest.id);
-          }
-        } else {
-          alert("올바르지 않은 백업 파일 형식입니다.");
-        }
-      } catch (err) {
-        console.error(err);
-        alert("파일을 읽는 중 오류가 발생했습니다.");
-      } finally {
-        if(backupInputRef.current) backupInputRef.current.value = '';
-      }
+    // Helper to read file
+    const readFile = (file: File): Promise<any> => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    resolve(JSON.parse(evt.target?.result as string));
+                } catch (e) {
+                    console.warn(`Skipping invalid JSON file: ${file.name}`);
+                    resolve(null);
+                }
+            };
+            reader.readAsText(file);
+        });
     };
-    reader.readAsText(file);
+
+    // Use async/await inside the handler (need to make handler async)
+    (async () => {
+        try {
+            const fileContents = await Promise.all(Array.from(files).map(readFile));
+            const validContents = fileContents.filter(c => c !== null);
+
+            const currentMap = new Map<string, MonthlyRiskAssessment>();
+            assessments.forEach(item => currentMap.set(item.id, item));
+            
+            let loadedCount = 0;
+
+            validContents.forEach(loadedData => {
+                if (Array.isArray(loadedData)) {
+                    (loadedData as any[]).forEach((item: any) => {
+                        if(item.id && item.month && Array.isArray(item.priorities)) {
+                            currentMap.set(item.id, item as MonthlyRiskAssessment);
+                            loadedCount++;
+                        }
+                    });
+                }
+            });
+
+            if (loadedCount > 0) {
+                const merged: MonthlyRiskAssessment[] = Array.from(currentMap.values());
+                onSave(merged);
+                alert(`✅ 대량 복구 완료: 총 ${files.length}개 파일에서 데이터를 병합했습니다.`);
+                
+                if (merged.length > 0) {
+                    // Sort to find latest
+                    const latest = merged.sort((a, b) => b.month.localeCompare(a.month))[0];
+                    setSelectedMonthId(latest.id);
+                }
+            } else {
+                alert("올바르지 않은 백업 파일 형식이거나 새로운 데이터가 없습니다.");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("파일을 읽는 중 오류가 발생했습니다.");
+        } finally {
+            if(backupInputRef.current) backupInputRef.current.value = '';
+        }
+    })();
   };
 
   // --- REGULAR ASSESSMENT LOGIC (Overhauled) ---
   const handleOpenRegularBuilder = () => {
-      // Auto-select the latest INITIAL assessment as base
       const latestInitial = initialAssessments.length > 0 ? initialAssessments[0].id : '';
       setBaseAssessmentId(latestInitial);
       setShowRegularBuilder(true);
@@ -339,10 +354,8 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
   const handleAnalyzeRegular = () => {
       const baseAssessment = assessments.find(a => a.id === baseAssessmentId);
-      // Filter for Monthly assessments in the target year
       const targetAssessments = monthlyAssessments.filter(a => a.month.startsWith(regularTargetYear));
       
-      // Allow proceeding if at least ONE data source exists
       if (!baseAssessment && targetAssessments.length === 0) {
           alert("분석할 데이터가 없습니다.\n\n1. '기초 데이터(최초 위험성평가)'를 선택하거나\n2. '분석 연도'에 해당하는 월간 데이터가 있어야 합니다.");
           return;
@@ -350,7 +363,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
       const riskMap = new Map<string, AggregatedRisk>();
 
-      // 1. Load Base (Initial) Assessment
       if (baseAssessment) {
           baseAssessment.priorities.forEach(p => {
               const key = normalizeString(p.content);
@@ -365,7 +377,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           });
       }
 
-      // 2. Merge Monthly Data
       targetAssessments.forEach(monthData => {
           monthData.priorities.forEach(p => {
               const key = normalizeString(p.content); 
@@ -388,7 +399,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           });
       });
 
-      // Sort
       const sortedRisks = Array.from(riskMap.values()).sort((a, b) => {
           if (a.level === 'HIGH' && b.level !== 'HIGH') return -1;
           if (a.level !== 'HIGH' && b.level === 'HIGH') return 1;
@@ -413,7 +423,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       const newAssessment: MonthlyRiskAssessment = {
           id: `REGULAR-${regularTargetYear}-${Date.now()}`,
           month: `${regularTargetYear}-Yearly`, 
-          type: 'REGULAR', // [NEW] Mark as Regular
+          type: 'REGULAR', 
           fileName: title,
           priorities: finalPriorities,
           createdAt: Date.now()
@@ -434,7 +444,9 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
   // --- End Regular Logic ---
 
+  // [FIX] Create New Month Logic
   const handleCreateMonth = () => {
+     // Check if month already exists in non-initial assessments
      if (assessments.some(a => a.month === targetMonth && a.type !== 'INITIAL' && a.type !== 'REGULAR')) {
         alert("이미 해당 월의 평가가 존재합니다.");
         return;
@@ -444,7 +456,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
         id: `MONTH-${Date.now()}`,
         month: targetMonth,
         type: 'MONTHLY',
-        fileName: 'New Assessment',
+        fileName: '신규 월간 평가',
         priorities: [],
         createdAt: Date.now()
      };
@@ -471,13 +483,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       const file = e.target.files[0];
       
       setIsAnalyzing(true);
-      setLoadingProgress(0); // Reset progress
+      setLoadingProgress(0); 
 
-      // Start simulated progress timer
       const timer = setInterval(() => {
           setLoadingProgress(prev => {
-              if (prev >= 90) return prev; // Cap at 90% until done
-              return prev + (prev < 50 ? 5 : 2); // Fast start, slow end
+              if (prev >= 90) return prev; 
+              return prev + (prev < 50 ? 5 : 2); 
           });
       }, 300);
 
@@ -489,12 +500,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
         try {
           const base64Data = base64Url.split(',')[1];
-          // [UPDATED] Pass uploadType to ensure correct extraction mode (Initial = Full, Monthly = Key)
+          // [UPDATED] Using uploadType for both logic but always requesting FULL extraction as per feedback
           const result: MonthlyExtractionResult = await extractMonthlyPriorities(base64Data, file.type, uploadType);
           
           clearInterval(timer);
           setLoadingProgress(100);
-          await new Promise(r => setTimeout(r, 600)); // Show 100% briefly
+          await new Promise(r => setTimeout(r, 600)); 
 
           const { items: extracted, detectedMonth } = result;
 
@@ -519,7 +530,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           } else {
               // Logic for MONTHLY
               if (detectedMonth && activeAssessment && detectedMonth !== activeAssessment.month && activeAssessment.type !== 'INITIAL') {
-                 // Suggest moving to detected month if active is MONTHLY
                  if (confirm(`📄 문서 분석: [${detectedMonth}월] 자료입니다.\n\n해당 월로 등록하시겠습니까?`)) {
                     const existingTarget = monthlyAssessments.find(a => a.month === detectedMonth);
                     if (existingTarget) {
@@ -541,7 +551,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                        isNewCreated = true;
                     }
                  } else {
-                     targetAssessment = activeAssessment; // Stick to current
+                     targetAssessment = activeAssessment;
                  }
               } else {
                   targetAssessment = activeAssessment;
@@ -549,13 +559,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           }
 
           if (!targetAssessment) {
-             // Fallback for new Initial or Monthly if nothing selected
              alert("평가 데이터를 저장할 대상을 선택하거나 새로 생성해주세요.");
              setIsAnalyzing(false);
              return;
           }
 
-          // Merge priorities
+          // [UPDATED] Full Extraction Logic: Use extracted items directly (but filter duplicates)
           const currentPriorities = [...targetAssessment.priorities];
           let addedCount = 0;
           
@@ -572,18 +581,15 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
              }
           });
           
-          // Sort
+          // Sort: HIGH first
           currentPriorities.sort((a, b) => {
              if (a.level === 'HIGH' && b.level !== 'HIGH') return -1;
              if (a.level !== 'HIGH' && b.level === 'HIGH') return 1;
              return 0;
           });
 
-          // Save Final
           if (isNewCreated) {
-              // Target is the object ref.
               targetAssessment.priorities = currentPriorities;
-              // Re-save with updated priorities
               const freshList = assessments.some(a => a.id === targetAssessment!.id) 
                   ? assessments.map(a => a.id === targetAssessment!.id ? targetAssessment! : a)
                   : [targetAssessment!, ...assessments];
@@ -650,7 +656,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
      if (confirm("정말 이 데이터를 삭제하시겠습니까?")) {
         const updated = assessments.filter(a => a.id !== selectedMonthId);
         onSave(updated);
-        // Ensure auto-selection runs again
         setSelectedMonthId('');
      }
   }
@@ -709,7 +714,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
        {isAnalyzing && <AnalysisOverlay progress={loadingProgress} />}
 
        {/* 0. Hidden Inputs for Upload (Moved to top-level to ensure availability) */}
-       <input type="file" ref={backupInputRef} className="hidden" accept=".json" onChange={handleImportBackup}/>
+       <input type="file" ref={backupInputRef} className="hidden" accept=".json" onChange={handleImportBackup} multiple/>
        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="application/pdf,image/*"/>
 
        {/* 1. Sidebar (Split: Initial vs Monthly) */}
@@ -852,10 +857,16 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                              <span>문서 분석/추가</span>
                           </button>
                           <div className="flex flex-col gap-1">
-                              <button onClick={() => backupInputRef.current?.click()} className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold" title="백업/복구">
-                                  <Upload size={16}/>
-                              </button>
-                              <button onClick={handleDeleteMonth} className="p-2 bg-white border border-slate-200 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors text-xs font-bold" title="삭제">
+                              {/* [MODIFIED] Grouped Backup/Restore Buttons */}
+                              <div className="flex gap-1">
+                                  <button onClick={handleExportBackup} className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold" title="데이터 백업 (다운로드)">
+                                      <Download size={16}/>
+                                  </button>
+                                  <button onClick={() => backupInputRef.current?.click()} className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold" title="데이터 복구 (업로드)">
+                                      <Upload size={16}/>
+                                  </button>
+                              </div>
+                              <button onClick={handleDeleteMonth} className="p-2 bg-white border border-slate-200 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors text-xs font-bold flex justify-center" title="현재 월 삭제">
                                   <Trash2 size={16}/>
                               </button>
                           </div>
@@ -1106,7 +1117,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                       onClick={() => backupInputRef.current?.click()} 
                       className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-50 hover:border-slate-300 flex items-center gap-3 transition-colors"
                    >
-                      <Download size={18}/> 기존 데이터 복구
+                      <Upload size={18}/> 기존 데이터 복구
                    </button>
                 </div>
              </div>
