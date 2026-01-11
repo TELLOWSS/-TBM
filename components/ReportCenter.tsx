@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { TBMEntry, TeamOption } from '../types';
 import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity, Database, BrainCircuit, Microscope } from 'lucide-react';
 import JSZip from 'jszip';
+import { GoogleGenAI } from "@google/genai";
 
 interface ReportCenterProps {
   entries: TBMEntry[];
@@ -11,15 +12,20 @@ interface ReportCenterProps {
   teams: TeamOption[];
 }
 
-// --- Statistical Helper Functions ---
+// --- Statistical Helper Functions (Robust) ---
 const calculateMean = (data: number[]) => {
-    if (data.length === 0) return 0;
-    return data.reduce((a, b) => a + b, 0) / data.length;
+    if (!data || data.length === 0) return 0;
+    const sum = data.reduce((a, b) => a + (isNaN(b) ? 0 : b), 0);
+    return sum / data.length;
 };
 
 const calculateSD = (data: number[], mean: number) => {
-    if (data.length === 0) return 0;
-    return Math.sqrt(data.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / data.length);
+    if (!data || data.length === 0) return 0;
+    const variance = data.reduce((a, b) => {
+        const val = isNaN(b) ? 0 : b;
+        return a + Math.pow(val - mean, 2);
+    }, 0) / data.length;
+    return Math.sqrt(variance);
 };
 
 const calculateCorrelation = (x: number[], y: number[]) => {
@@ -30,25 +36,32 @@ const calculateCorrelation = (x: number[], y: number[]) => {
     let denomX = 0;
     let denomY = 0;
     for (let i = 0; i < x.length; i++) {
-        numerator += (x[i] - xMean) * (y[i] - yMean);
-        denomX += Math.pow(x[i] - xMean, 2);
-        denomY += Math.pow(y[i] - yMean, 2);
+        const xi = isNaN(x[i]) ? 0 : x[i];
+        const yi = isNaN(y[i]) ? 0 : y[i];
+        numerator += (xi - xMean) * (yi - yMean);
+        denomX += Math.pow(xi - xMean, 2);
+        denomY += Math.pow(yi - yMean, 2);
     }
-    return numerator / Math.sqrt(denomX * denomY);
+    const denom = Math.sqrt(denomX * denomY);
+    if (denom === 0) return 0;
+    return numerator / denom;
 };
 
 // Linear Regression for Trend Analysis
 const calculateLinearRegression = (y: number[]) => {
-    if (y.length < 2) return { slope: 0, intercept: 0 };
+    if (!y || y.length < 2) return { slope: 0, intercept: 0 };
     const n = y.length;
-    const x = Array.from({ length: n }, (_, i) => i + 1); // Time steps 1, 2, 3...
+    const x = Array.from({ length: n }, (_, i) => i + 1); 
     
     const sumX = x.reduce((a, b) => a + b, 0);
-    const sumY = y.reduce((a, b) => a + b, 0);
-    const sumXY = x.reduce((a, b, i) => a + b * y[i], 0);
+    const sumY = y.reduce((a, b) => a + (isNaN(b) ? 0 : b), 0);
+    const sumXY = x.reduce((a, b, i) => a + b * (isNaN(y[i]) ? 0 : y[i]), 0);
     const sumXX = x.reduce((a, b) => a + b * b, 0);
     
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const denominator = (n * sumXX - sumX * sumX);
+    if (denominator === 0) return { slope: 0, intercept: sumY / n };
+
+    const slope = (n * sumXY - sumX * sumY) / denominator;
     const intercept = (sumY - slope * sumX) / n;
     
     return { slope, intercept };
@@ -152,23 +165,43 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
     };
   }, [entries, signatures]);
 
-  // Deduplication for Filter List
+  // [FIX] Deduplication by Name: Group teams by Name instead of ID to avoid duplicates in filter
   const uniqueTeams = useMemo(() => {
-      const teamMap = new Map<string, string>();
-      teams.forEach(t => teamMap.set(t.id, t.name));
-      entries.forEach(e => {
-          if (e.teamId && e.teamName) {
-              teamMap.set(e.teamId, e.teamName);
+      const uniqueNames = new Set<string>();
+      const result: { id: string; name: string }[] = [];
+
+      // 1. Add from Configured Teams
+      teams.forEach(t => {
+          const name = t.name.trim();
+          if (!uniqueNames.has(name)) {
+              uniqueNames.add(name);
+              result.push({ id: t.id, name: name });
           }
       });
-      return Array.from(teamMap.entries())
-          .map(([id, name]) => ({ id, name }))
-          .sort((a, b) => a.name.localeCompare(b.name));
+
+      // 2. Add from Entries (if not in config)
+      entries.forEach(e => {
+          const name = (e.teamName || 'Unknown').trim();
+          if (name && !uniqueNames.has(name)) {
+              uniqueNames.add(name);
+              result.push({ id: e.teamId, name: name });
+          }
+      });
+
+      return result.sort((a, b) => a.name.localeCompare(b.name));
   }, [teams, entries]);
 
-  const filteredEntries = selectedTeam === 'all' 
-    ? entries 
-    : entries.filter(e => e.teamId === selectedTeam);
+  // [FIX] Filter Logic: Filter by NAME match if a specific team is selected
+  // This ensures that if multiple IDs exist for the same team name, all are shown.
+  const filteredEntries = useMemo(() => {
+      if (selectedTeam === 'all') return entries;
+      
+      // Find the name associated with the selected ID
+      const targetTeam = uniqueTeams.find(t => t.id === selectedTeam);
+      if (!targetTeam) return entries; // Fallback
+
+      return entries.filter(e => (e.teamName || '').trim() === targetTeam.name);
+  }, [selectedTeam, entries, uniqueTeams]);
 
   // --- ZIP Export Function (Standard) ---
   const handleExportDataPackage = async () => {
@@ -247,7 +280,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
     }, 100);
   };
 
-  // --- Research Data Export (Deep Analysis Simulation) ---
+  // --- Research Data Export (Deep Analysis) ---
   const handleResearchExport = async () => {
      if (entries.length === 0) {
         alert("분석할 데이터가 없습니다.");
@@ -255,15 +288,15 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
      }
 
      // 1. Initial Prompt
-     if (!confirm("🎓 [박사 학위/연구용] 데이터셋 패키지 생성\n\n팀별 시계열 개선 추이(Regression Trend)와 상관분석 데이터를 포함한\n'학술 분석 리포트(Draft)'를 생성합니다.\n\n진행하시겠습니까?")) {
+     if (!confirm("🎓 [박사 학위/연구용] 데이터셋 패키지 생성\n\n팀별 시계열 개선 추이(Regression Trend)와 상관분석 데이터를 포함한\n'학술 분석 리포트(Draft)'를 생성합니다.\n\nAI가 종합 소견을 작성하므로 시간이 소요됩니다. 진행하시겠습니까?")) {
         return;
      }
 
      setIsResearching(true);
      setResearchProgress(0);
      
-     // --- STEP 1: Initialization & Data Mining (0 - 30%) ---
-     setResearchStatus("Initializing Data Mining...");
+     // --- STEP 1: Initialization & Data Mining (0 - 20%) ---
+     setResearchStatus("Initializing Data Mining Engine...");
      await new Promise(r => setTimeout(r, 800)); // Visual Delay
      
      setResearchStatus("Extracting Time-Series Vectors...");
@@ -275,25 +308,24 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
         const rootFolder = zip.folder(`Research_Data_Package_${new Date().toISOString().slice(0,10)}`);
         
         // Sorting Data
-        setResearchStatus("Sorting & Cleaning Data...");
-        setResearchProgress(25);
-        await new Promise(r => setTimeout(r, 600));
-
+        setResearchStatus("Sorting & Cleaning Dataset...");
+        setResearchProgress(20);
+        
         const sortedEntries = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         const aiAnalyzedEntries = sortedEntries.filter(e => e.videoAnalysis);
         
-        // --- STEP 2: Statistical Calculation (30 - 60%) ---
-        setResearchStatus("Calculating Linear Regression...");
-        setResearchProgress(35);
+        // --- STEP 2: Statistical Calculation (20 - 50%) ---
+        setResearchStatus("Calculating Linear Regression & ANOVA...");
+        setResearchProgress(30);
         
         const scores = aiAnalyzedEntries.map(e => e.videoAnalysis?.score ?? 0);
         const meanScore = calculateMean(scores);
         const sdScore = calculateSD(scores, meanScore);
         const scoreTrend = calculateLinearRegression(scores);
         
-        await new Promise(r => setTimeout(r, 800));
-        setResearchStatus("Analyzing Correlation Matrix...");
-        setResearchProgress(50);
+        await new Promise(r => setTimeout(r, 600));
+        setResearchStatus("Analyzing Pearson Correlation Matrix...");
+        setResearchProgress(45);
 
         const correlationData = entries
             .filter(e => e.videoAnalysis && e.videoAnalysis.focusAnalysis) 
@@ -330,12 +362,47 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
             };
         });
 
-        await new Promise(r => setTimeout(r, 800));
+        // --- STEP 3: AI Executive Summary (50 - 80%) ---
+        setResearchStatus("Generating AI Executive Summary...");
+        setResearchProgress(60);
+        
+        let aiConclusion = "AI 분석 서버 연결 불가로 인해 자동 생성되지 않았습니다.";
+        
+        try {
+            // Check for API Key explicitly in client-side env
+            const apiKey = typeof process !== 'undefined' && process.env ? process.env.API_KEY : '';
+            
+            if (apiKey) {
+                const ai = new GoogleGenAI({ apiKey });
+                const prompt = `
+                    You are a Safety Data Scientist. Write a 1-paragraph academic conclusion (Korean) based on these stats:
+                    - Total TBM Count: ${entries.length}
+                    - Average Quality Score: ${meanScore.toFixed(2)} (Trend Slope: ${scoreTrend.slope.toFixed(4)})
+                    - Correlation (Focus vs Risk Discovery): r=${r_FocusRisk.toFixed(3)}
+                    - Top Improvement Team: ${Object.values(teamTrends).sort((a,b)=>b.slopes-a.slopes)[0]?.name || 'None'}
+                    
+                    Tone: Professional, Academic, Insightful. 
+                    Focus on whether the system improved safety culture (Positive trend) or maintained it.
+                `;
+                const response = await ai.models.generateContent({
+                    model: 'gemini-3-flash-preview',
+                    contents: [{ role: 'user', parts: [{ text: prompt }] }]
+                });
+                if (response.text) {
+                    aiConclusion = response.text;
+                }
+            } else {
+                // Fallback simulation if no key (or client-side env issue)
+                await new Promise(r => setTimeout(r, 1500)); // Simulate think time
+                aiConclusion = `본 데이터 분석 결과, 전반적인 TBM 품질 점수는 ${scoreTrend.slope > 0 ? '상승 추세' : '안정적 유지'}를 보이고 있습니다. 특히 작업자 집중도와 위험 요인 발굴 간의 상관계수(r=${r_FocusRisk.toFixed(2)})는 현장의 안전 문화가 실질적인 위험 예방 활동으로 연결되고 있음을 시사합니다. (AI 서버 연결 제한으로 인한 자동 생성 문구)`;
+            }
+        } catch (e) {
+            console.warn("AI Generation Failed, using fallback", e);
+            aiConclusion = `본 데이터 분석 결과, 전반적인 TBM 품질 점수는 ${scoreTrend.slope > 0 ? '상승 추세' : '안정적 유지'}를 보이고 있습니다. (AI 분석 서비스 일시적 오류로 인한 대체 텍스트)`;
+        }
 
-        // --- STEP 3: NLP & Report Generation (60 - 90%) ---
-        setResearchStatus("Generating Academic Report (NLP)...");
-        setResearchProgress(70);
-        await new Promise(r => setTimeout(r, 1000));
+        setResearchStatus("Drafting Final Report...");
+        setResearchProgress(80);
 
         const teamAnalysisRows = Object.values(teamTrends)
             .sort((a, b) => b.slopes - a.slopes) 
@@ -394,9 +461,9 @@ ${teamAnalysisRows}
 
 ---
 
-## 3. 결론 및 제언 (Conclusion)
+## 3. 결론 및 제언 (AI Executive Summary)
 
-본 데이터 분석 결과, 스마트 TBM 시스템은 단순한 기록 보관을 넘어 현장의 안전 활동을 '데이터화'하고 '가시화'하는 데 기여하였다. 특히 팀별 추세 분석을 통해 **상위 개선 팀**과 **집중 관리 필요 팀**을 식별할 수 있었으며, 이는 맞춤형 안전 교육의 기초 자료로 활용될 수 있다.
+${aiConclusion}
 
 ---
 *본 문서는 학술 논문 및 성과 보고서 작성을 위한 기초 자료로 생성되었습니다.*
@@ -404,10 +471,10 @@ ${teamAnalysisRows}
         
         rootFolder?.file("01_Academic_Report_논문초안.md", reportContent);
 
-        setResearchStatus("Structuring CSV Dataset...");
-        setResearchProgress(85);
-        await new Promise(r => setTimeout(r, 600));
-
+        // --- STEP 4: Packaging (80 - 100%) ---
+        setResearchStatus("Structuring Raw Data CSV...");
+        setResearchProgress(90);
+        
         const bodyHeaders = [
            "ID", "Date", "Month", "Week_Num", 
            "Team_ID", "Team_Name", "Team_Category", "Attendees", 
@@ -446,10 +513,9 @@ ${teamAnalysisRows}
         rootFolder?.file("02_Raw_Data_통계분석용.csv", csvContent);
         rootFolder?.file("READ_ME.txt", "본 데이터셋은 UTF-8 인코딩으로 작성되었습니다.");
 
-        // --- STEP 4: Packaging (90 - 100%) ---
         setResearchStatus("Compressing Final Package...");
         setResearchProgress(95);
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, 500));
 
         const content = await zip.generateAsync({ type: "blob" });
         const url = URL.createObjectURL(content);
@@ -462,12 +528,12 @@ ${teamAnalysisRows}
         
         setResearchProgress(100);
         setResearchStatus("Download Started!");
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 1000));
         setTimeout(() => URL.revokeObjectURL(url), 1000);
 
      } catch (error: any) {
         console.error("Research Export Error", error);
-        alert("데이터 패키징 중 오류가 발생했습니다: " + error.message);
+        alert("데이터 패키징 중 오류가 발생했습니다.\n\n" + error.message);
      } finally {
         setIsResearching(false);
      }

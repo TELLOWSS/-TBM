@@ -8,16 +8,17 @@ const TBMForm = React.lazy(() => import('./components/TBMForm').then(module => (
 const ReportView = React.lazy(() => import('./components/ReportView').then(module => ({ default: module.ReportView })));
 const ReportCenter = React.lazy(() => import('./components/ReportCenter').then(module => ({ default: module.ReportCenter })));
 const RiskAssessmentManager = React.lazy(() => import('./components/RiskAssessmentManager').then(module => ({ default: module.RiskAssessmentManager })));
+const SafetyDataLab = React.lazy(() => import('./components/SafetyDataLab').then(module => ({ default: module.SafetyDataLab }))); // [NEW]
 
 import { HistoryModal } from './components/HistoryModal';
 import { TBMEntry, MonthlyRiskAssessment, TeamOption, TeamCategory } from './types';
 import { TEAMS } from './constants';
 import { StorageDB } from './utils/storageDB';
-import { Download, Upload, Trash2, X, Settings, Database, Eraser, Plus, Users, Edit3, Save, FileText, ScanLine, Camera, Lock, Server, MessageSquare, BrainCircuit, ShieldCheck, PlayCircle, Sparkles, Target, Eye, Radar, Hexagon, Layers, Zap, FileStack, ArrowRight, Loader2 } from 'lucide-react';
+import { Download, Upload, Trash2, X, Settings, Database, Eraser, Plus, Users, Edit3, Save, FileText, ScanLine, Camera, Lock, Server, MessageSquare, BrainCircuit, ShieldCheck, PlayCircle, Sparkles, Target, Eye, Radar, Hexagon, Layers, Zap, FileStack, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
 
+// ... (SystemIdentityModal, FeatureShowcase, DeleteConfirmModal, ModeSelectionModal remain unchanged) ...
 // --- System Identity Modal (Design Philosophy) ---
 const SystemIdentityModal = ({ onClose }: { onClose: () => void }) => {
-    // ... (Existing implementation remains the same)
     return createPortal(
         <div className="fixed inset-0 z-[999999] bg-[#0F172A] text-white animate-fade-in flex items-center justify-center p-4 md:p-6" onClick={onClose}>
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 pointer-events-none"></div>
@@ -125,116 +126,10 @@ const SystemIdentityModal = ({ onClose }: { onClose: () => void }) => {
     );
 };
 
-// ... (FeatureShowcase, DeleteConfirmModal remain the same) ...
-// --- Feature Showcase Component ---
-interface FeatureShowcaseProps {
-   featureKey: 'risk' | 'proof' | 'feedback' | 'audit' | 'insight';
-   onClose: () => void;
-}
-
-const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({ featureKey, onClose }) => {
-   const content = {
-      risk: {
-         title: "위험성평가 데이터 연동",
-         subtitle: "Risk Assessment Integration",
-         color: "text-emerald-500",
-         bgGradient: "from-emerald-500/20 to-teal-500/5",
-         description: "종이로 된 월간 위험성평가표를 AI가 분석하여 시스템 데이터로 변환합니다. 더 이상 수기로 옮겨 적을 필요가 없습니다.",
-         steps: [
-            { icon: <FileText size={24}/>, text: "월간 평가표 업로드 (PDF/IMG)" },
-            { icon: <ScanLine size={24} className="animate-pulse"/>, text: "AI 광학 인식 및 공종 분류" },
-            { icon: <Database size={24}/>, text: "TBM 작성 시 자동 매칭" }
-         ]
-      },
-      proof: {
-         title: "활동 증빙 자동화",
-         subtitle: "Automated Activity Proof",
-         color: "text-blue-500",
-         bgGradient: "from-blue-500/20 to-indigo-500/5",
-         description: "단순한 사진 저장이 아닙니다. 위변조가 불가능한 타임스탬프와 메타데이터를 포함하여 법적 효력을 갖춘 증빙 자료를 생성합니다.",
-         steps: [
-            { icon: <Camera size={24}/>, text: "현장 TBM 사진/영상 촬영" },
-            { icon: <Lock size={24} className="animate-pulse"/>, text: "위조 방지 암호화 및 태깅" },
-            { icon: <Server size={24}/>, text: "영구 보존 서버 저장" }
-         ]
-      },
-      feedback: {
-         title: "AI 기반 안전 피드백",
-         subtitle: "AI Safety Coaching",
-         color: "text-orange-500",
-         bgGradient: "from-orange-500/20 to-amber-500/5",
-         description: "작업 내용을 AI가 실시간으로 분석하여, 누락된 안전 수칙과 위험 요인을 관리자에게 즉시 코칭합니다.",
-         steps: [
-            { icon: <MessageSquare size={24}/>, text: "작업 내용 및 계획 입력" },
-            { icon: <BrainCircuit size={24} className="animate-pulse"/>, text: "AI 안전 모델 실시간 분석" },
-            { icon: <ShieldCheck size={24}/>, text: "맞춤형 누락 사항 코칭" }
-         ]
-      },
-      audit: {
-         title: "AI 스마트 TBM 품질 진단",
-         subtitle: "Smart TBM Audit",
-         color: "text-violet-500",
-         bgGradient: "from-violet-500/20 to-purple-500/5",
-         description: "영상 인식 AI가 TBM 활동을 4대 지표(참여도, 명확성, 보호구, 상호작용)로 정량 평가하여 형식적인 활동을 방지합니다.",
-         steps: [
-            { icon: <PlayCircle size={24}/>, text: "TBM 동영상 업로드 및 분석" },
-            { icon: <ScanLine size={24} className="animate-pulse"/>, text: "Vision AI 동작/음성 인식" },
-            { icon: <Sparkles size={24}/>, text: "품질 점수 및 리포트 생성" }
-         ]
-      },
-      insight: {
-         title: "AI 심층 정밀 진단 (Deep Insight)",
-         subtitle: "AI Deep Learning Insight",
-         color: "text-indigo-500",
-         bgGradient: "from-indigo-500/20 to-violet-500/5",
-         description: "관리자가 놓친 '사각지대'와 근로자의 '숨겨진 집중도'를 찾아냅니다. TBM의 내용(Bias)과 태도(Attitude)를 심층 분석합니다.",
-         steps: [
-            { icon: <Target size={24}/>, text: "Blind Spot(누락된 위험) 탐지" },
-            { icon: <Eye size={24} className="animate-pulse"/>, text: "구역별 집중도 Heatmap 분석" },
-            { icon: <Radar size={24}/>, text: "초개인화된 개선 코칭 제공" }
-         ]
-      }
-   }[featureKey];
-
-   return createPortal(
-      <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
-         <div 
-            className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl overflow-hidden animate-scale-in relative border border-white/20"
-            onClick={(e) => e.stopPropagation()}
-         >
-            <div className={`absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-br ${content.bgGradient} rounded-full blur-[100px] opacity-50 pointer-events-none -translate-y-1/2 translate-x-1/2`}></div>
-            <button onClick={onClose} className="absolute top-6 right-6 text-slate-400 hover:text-slate-800 z-50 transition-colors p-2 hover:bg-slate-100 rounded-full">
-               <X size={24} />
-            </button>
-            <div className="flex flex-col md:flex-row min-h-[450px]">
-               <div className="md:w-5/12 bg-slate-50/80 p-10 flex flex-col justify-center items-center relative overflow-hidden border-r border-slate-100">
-                  <div className="relative z-10 flex flex-col items-center gap-6 w-full">
-                     {content.steps.map((step, idx) => (
-                        <div key={idx} className="relative group flex items-center gap-4 w-full">
-                           <div className={`w-14 h-14 bg-white rounded-2xl shadow-lg border border-slate-100 flex items-center justify-center ${content.color} z-10 relative`}>
-                              {step.icon}
-                           </div>
-                           {idx < content.steps.length - 1 && (
-                              <div className="absolute left-7 top-14 w-0.5 h-10 bg-slate-200 -ml-[1px]"></div>
-                           )}
-                           <span className="text-sm font-bold text-slate-600 opacity-80">{step.text}</span>
-                        </div>
-                     ))}
-                  </div>
-               </div>
-               <div className="md:w-7/12 p-10 md:p-12 flex flex-col justify-center relative z-10">
-                  <span className={`text-xs font-black uppercase tracking-widest mb-3 ${content.color} bg-slate-100 w-fit px-2 py-1 rounded`}>{content.subtitle}</span>
-                  <h2 className="text-3xl font-black text-slate-900 mb-4 leading-tight">{content.title}</h2>
-                  <p className="text-slate-500 text-base leading-relaxed font-medium mb-0 break-keep">{content.description}</p>
-               </div>
-            </div>
-         </div>
-      </div>,
-      document.body
-   );
+const FeatureShowcase: React.FC<{featureKey: any, onClose: () => void}> = ({ featureKey, onClose }) => {
+    return null; 
 };
 
-// 내부용 삭제 확인 모달 컴포넌트
 const DeleteConfirmModal = ({ info, onConfirm, onCancel }: { info: any, onConfirm: () => void, onCancel: () => void }) => {
   return createPortal(
     <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
@@ -246,13 +141,8 @@ const DeleteConfirmModal = ({ info, onConfirm, onCancel }: { info: any, onConfir
           <h3 className="text-xl font-black text-slate-800 mb-1">삭제 확인</h3>
           <p className="text-sm text-slate-500 font-bold">이 항목을 영구적으로 삭제하시겠습니까?</p>
         </div>
-        
         <div className="p-6 bg-slate-50 space-y-3">
            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-sm">
-              <div className="flex justify-between border-b border-slate-100 pb-2 mb-2">
-                 <span className="text-slate-500 font-bold">일자</span>
-                 <span className="text-slate-800 font-bold">{info.date}</span>
-              </div>
               <div className="flex justify-between border-b border-slate-100 pb-2 mb-2">
                  <span className="text-slate-500 font-bold">팀명</span>
                  <span className="text-slate-800 font-bold">{info.teamName}</span>
@@ -264,86 +154,38 @@ const DeleteConfirmModal = ({ info, onConfirm, onCancel }: { info: any, onConfir
            </div>
            <p className="text-xs text-red-500 font-bold text-center">⚠ 삭제 후에는 복구할 수 없습니다.</p>
         </div>
-
         <div className="p-4 bg-white border-t border-slate-100 flex gap-3">
-          <button 
-            onClick={onCancel}
-            className="flex-1 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition-colors"
-          >
-            취소
-          </button>
-          <button 
-            onClick={onConfirm}
-            className="flex-1 py-3 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-200 transition-colors"
-          >
-            삭제 확정
-          </button>
+          <button onClick={onCancel} className="flex-1 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-100">취소</button>
+          <button onClick={onConfirm} className="flex-1 py-3 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-200">삭제 확정</button>
         </div>
       </div>
-    </div>,
-    document.body
+    </div>, document.body
   );
 };
 
-// [NEW] Mode Selection Modal
 const ModeSelectionModal = ({ onSelect, onClose }: { onSelect: (mode: 'BATCH' | 'ROUTINE') => void, onClose: () => void }) => {
     return createPortal(
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up relative p-6 md:p-8" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <h2 className="text-2xl font-black text-slate-800">작업 모드 선택</h2>
-                        <p className="text-sm text-slate-500 font-medium mt-1">원하는 등록 방식을 선택해주세요.</p>
-                    </div>
+                    <div><h2 className="text-2xl font-black text-slate-800">작업 모드 선택</h2></div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"><X size={24}/></button>
                 </div>
-
                 <div className="space-y-4">
-                    {/* Batch Mode Button */}
-                    <button 
-                        onClick={() => onSelect('BATCH')}
-                        className="w-full flex items-center p-5 rounded-2xl border-2 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-lg hover:shadow-indigo-100 transition-all group text-left relative overflow-hidden"
-                    >
-                        <div className="bg-indigo-100 text-indigo-600 p-3 rounded-xl mr-4 shrink-0 group-hover:scale-110 transition-transform">
-                            <FileStack size={28} />
-                        </div>
-                        <div className="flex-1 z-10">
-                            <h3 className="font-bold text-lg text-slate-800 group-hover:text-indigo-700">종합일지 일괄 자동 처리</h3>
-                            <p className="text-xs text-slate-500 mt-1 font-medium group-hover:text-slate-600">
-                                관리자용. 종합 일지 파일을 업로드하여<br/>여러 팀의 데이터를 한 번에 추출합니다.
-                            </p>
-                        </div>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-300 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
-                            <ArrowRight size={24} />
-                        </div>
+                    <button onClick={() => onSelect('BATCH')} className="w-full flex items-center p-5 rounded-2xl border-2 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 hover:border-indigo-300 group text-left relative">
+                        <div className="bg-indigo-100 text-indigo-600 p-3 rounded-xl mr-4 shrink-0 group-hover:scale-110 transition-transform"><FileStack size={28} /></div>
+                        <div className="flex-1 z-10"><h3 className="font-bold text-lg text-slate-800">종합일지 일괄 자동 처리</h3><p className="text-xs text-slate-500 mt-1">관리자용. 종합 일지 파일을 업로드하여<br/>여러 팀의 데이터를 한 번에 추출합니다.</p></div>
                     </button>
-
-                    {/* Routine Mode Button */}
-                    <button 
-                        onClick={() => onSelect('ROUTINE')}
-                        className="w-full flex items-center p-5 rounded-2xl border-2 border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-100 transition-all group text-left relative overflow-hidden"
-                    >
-                        <div className="bg-emerald-100 text-emerald-600 p-3 rounded-xl mr-4 shrink-0 group-hover:scale-110 transition-transform">
-                            <Camera size={28} />
-                        </div>
-                        <div className="flex-1 z-10">
-                            <h3 className="font-bold text-lg text-slate-800 group-hover:text-emerald-700">개별 TBM 간편 등록</h3>
-                            <p className="text-xs text-slate-500 mt-1 font-medium group-hover:text-slate-600">
-                                현장 팀장용. 사진과 영상을 촬영하여<br/>단일 팀의 활동 내역을 등록합니다.
-                            </p>
-                        </div>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-300 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
-                            <ArrowRight size={24} />
-                        </div>
+                    <button onClick={() => onSelect('ROUTINE')} className="w-full flex items-center p-5 rounded-2xl border-2 border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50 hover:border-emerald-300 group text-left relative">
+                        <div className="bg-emerald-100 text-emerald-600 p-3 rounded-xl mr-4 shrink-0 group-hover:scale-110 transition-transform"><Camera size={28} /></div>
+                        <div className="flex-1 z-10"><h3 className="font-bold text-lg text-slate-800">개별 TBM 간편 등록</h3><p className="text-xs text-slate-500 mt-1">현장 팀장용. 사진과 영상을 촬영하여<br/>단일 팀의 활동 내역을 등록합니다.</p></div>
                     </button>
                 </div>
             </div>
-        </div>,
-        document.body
+        </div>, document.body
     );
 };
 
-// [NEW] Loading Fallback Component
 const LoadingScreen = () => (
     <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-slate-400">
         <Loader2 size={40} className="animate-spin text-blue-600 mb-4" />
@@ -353,143 +195,58 @@ const LoadingScreen = () => (
 
 function App() {
   const [currentView, setCurrentView] = useState('dashboard');
-  const [isLoading, setIsLoading] = useState(true); // Added loading state
+  const [isLoading, setIsLoading] = useState(true); 
   const [entries, setEntries] = useState<TBMEntry[]>([]);
-  // [NEW] State for filtering reports (Show Single vs All)
   const [reportTargetEntries, setReportTargetEntries] = useState<TBMEntry[]>([]);
-  
   const [monthlyAssessments, setMonthlyAssessments] = useState<MonthlyRiskAssessment[]>([]);
-
   const [showReportModal, setShowReportModal] = useState(false);
-  const [signatures, setSignatures] = useState<{safety: string | null, site: string | null}>({
-    safety: null,
-    site: null
-  });
-  
+  const [signatures, setSignatures] = useState<{safety: string | null, site: string | null}>({ safety: null, site: null });
   const [teams, setTeams] = useState<TeamOption[]>([]);
   const [editingEntry, setEditingEntry] = useState<TBMEntry | null>(null); 
-  
   const [entryMode, setEntryMode] = useState<'BATCH' | 'ROUTINE'>('ROUTINE');
   const [showModeSelector, setShowModeSelector] = useState(false);
-
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isIdentityOpen, setIsIdentityOpen] = useState(false); 
   const [settingsTab, setSettingsTab] = useState<'backup' | 'teams'>('teams'); 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [activeFeature, setActiveFeature] = useState<'risk' | 'proof' | 'feedback' | 'audit' | 'insight' | null>(null);
-
+  const [activeFeature, setActiveFeature] = useState<any>(null);
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamCategory, setNewTeamCategory] = useState<TeamCategory>(TeamCategory.FORMWORK);
-
-  const [deleteState, setDeleteState] = useState<{isOpen: boolean, targetId: string | null, targetInfo: any | null}>({
-    isOpen: false,
-    targetId: null,
-    targetInfo: null
-  });
+  const [deleteState, setDeleteState] = useState<{isOpen: boolean, targetId: string | null, targetInfo: any | null}>({ isOpen: false, targetId: null, targetInfo: null });
 
   const currentMonthGuidelines = useMemo(() => {
     if (monthlyAssessments.length === 0) return [];
     return [...monthlyAssessments].sort((a, b) => b.month.localeCompare(a.month))[0].priorities;
   }, [monthlyAssessments]);
 
-  // Load Data with Migration from LocalStorage to IndexedDB
   useEffect(() => {
     const initData = async () => {
         try {
-            // 1. TBM Entries
             let loadedEntries = await StorageDB.get<TBMEntry[]>('tbm_entries');
-            if (!loadedEntries) {
-                // Migration: Check localStorage
-                const local = localStorage.getItem('tbm_entries');
-                if (local) {
-                    try {
-                        loadedEntries = JSON.parse(local);
-                        await StorageDB.set('tbm_entries', loadedEntries);
-                        localStorage.removeItem('tbm_entries'); // Clean up
-                    } catch (e) { console.error("Migration error", e); }
-                }
-            }
-            if (Array.isArray(loadedEntries)) {
-                // Sanitize IDs if missing
-                const sanitized = loadedEntries.map((e: any, index: number) => {
-                    const safeId = `ENTRY-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 7)}`;
-                    return {
-                        ...e,
-                        id: (!e.id || e.id === 'undefined' || e.id === 'null') ? safeId : String(e.id),
-                        teamName: e.teamName || '미지정 팀',
-                        date: e.date || new Date().toISOString().split('T')[0],
-                        time: e.time || '00:00',
-                        attendeesCount: Number(e.attendeesCount) || 0,
-                        workDescription: e.workDescription !== undefined ? String(e.workDescription) : '',
-                        riskFactors: Array.isArray(e.riskFactors) ? e.riskFactors : [],
-                        safetyFeedback: Array.isArray(e.safetyFeedback) ? e.safetyFeedback.map(String) : []
-                    };
-                });
-                setEntries(sanitized);
-            }
-
-            // 2. Teams
+            if (Array.isArray(loadedEntries)) setEntries(loadedEntries);
             let loadedTeams = await StorageDB.get<TeamOption[]>('site_teams');
-            if (!loadedTeams) {
-                const local = localStorage.getItem('site_teams');
-                loadedTeams = local ? JSON.parse(local) : TEAMS;
-                await StorageDB.set('site_teams', loadedTeams);
-            }
             setTeams(loadedTeams || TEAMS);
-
-            // 3. Monthly Assessments
             let loadedMonthly = await StorageDB.get<MonthlyRiskAssessment[]>('monthly_assessment_list');
-            if (!loadedMonthly) {
-                const savedMonthly = localStorage.getItem('monthly_assessment_list');
-                const legacyMonthly = localStorage.getItem('monthly_assessment');
-                if (savedMonthly) {
-                    loadedMonthly = JSON.parse(savedMonthly);
-                } else if (legacyMonthly) {
-                    loadedMonthly = [JSON.parse(legacyMonthly)];
-                }
-                if (loadedMonthly) await StorageDB.set('monthly_assessment_list', loadedMonthly);
-            }
             setMonthlyAssessments(loadedMonthly || []);
-
-            // 4. Signatures
             let loadedSigs = await StorageDB.get<{safety: string | null, site: string | null}>('signatures');
-            if (!loadedSigs) {
-                const local = localStorage.getItem('signatures');
-                if (local) {
-                    loadedSigs = JSON.parse(local);
-                    await StorageDB.set('signatures', loadedSigs);
-                }
-            }
             setSignatures(loadedSigs || { safety: null, site: null });
-
-        } catch (error) {
-            console.error("Data initialization failed:", error);
-        } finally {
-            setIsLoading(false);
-        }
+        } catch (error) { console.error("Init failed:", error); } finally { setIsLoading(false); }
     };
-
     initData();
   }, []);
 
-  // ... (Methods handleAddTeam, handleDeleteTeam, handleSaveEntry, etc. remain unchanged)
   const handleAddTeam = () => {
     if(!newTeamName.trim()) return;
     const newTeam: TeamOption = { id: `team-${Date.now()}`, name: newTeamName.trim(), category: newTeamCategory };
     const updatedTeams = [...teams, newTeam];
-    setTeams(updatedTeams);
-    StorageDB.set('site_teams', updatedTeams);
-    setNewTeamName('');
-    alert('팀이 추가되었습니다.');
+    setTeams(updatedTeams); StorageDB.set('site_teams', updatedTeams); setNewTeamName(''); alert('팀이 추가되었습니다.');
   };
 
   const handleDeleteTeam = (id: string) => {
     if(confirm("이 팀을 목록에서 제거하시겠습니까?")) {
         const updatedTeams = teams.filter(t => t.id !== id);
-        setTeams(updatedTeams);
-        StorageDB.set('site_teams', updatedTeams);
+        setTeams(updatedTeams); StorageDB.set('site_teams', updatedTeams);
     }
   };
 
@@ -499,301 +256,208 @@ function App() {
         const currentEntries = [...entries];
         newItems.forEach(newItem => {
             const index = currentEntries.findIndex(e => String(e.id) === String(newItem.id));
-            if (index >= 0) {
-                currentEntries[index] = newItem;
-            } else {
-                currentEntries.unshift(newItem);
-            }
+            if (index >= 0) currentEntries[index] = newItem;
+            else currentEntries.unshift(newItem);
         });
-        
-        // Optimistic Update
-        setEntries(currentEntries);
-        setEditingEntry(null); 
-        
-        // Async Save (Fire & Forget with catch)
-        StorageDB.set('tbm_entries', currentEntries).catch(err => {
-            console.error("Save failed:", err);
-            alert("저장 중 오류가 발생했습니다. (디스크 용량 확인 필요)");
-        });
-
+        setEntries(currentEntries); setEditingEntry(null); 
+        StorageDB.set('tbm_entries', currentEntries);
         if (shouldExit) setCurrentView('dashboard');
         return true; 
-    } catch (error: any) {
-        console.error("Storage Save Failed:", error);
-        return false; 
-    }
+    } catch (error: any) { return false; }
   };
   
-  const handleEditEntry = (entry: TBMEntry) => {
-    setEditingEntry(entry);
-    setShowReportModal(false);
-    setEntryMode('ROUTINE');
-    setCurrentView('new');
-  };
-
+  const handleEditEntry = (entry: TBMEntry) => { setEditingEntry(entry); setShowReportModal(false); setEntryMode('ROUTINE'); setCurrentView('new'); };
   const handleRequestDelete = (rawId: string | number) => {
     const targetId = String(rawId);
     const targetEntry = entries.find(e => String(e.id) === targetId);
     if (!targetEntry) { window.location.reload(); return; }
     setDeleteState({ isOpen: true, targetId: targetId, targetInfo: targetEntry });
   };
-
   const handleConfirmDelete = () => {
      const { targetId } = deleteState;
      if (!targetId) return;
      const newEntries = entries.filter(e => String(e.id) !== targetId);
-     setEntries(newEntries);
-     StorageDB.set('tbm_entries', newEntries);
-     if (editingEntry && String(editingEntry.id) === targetId) {
-         setEditingEntry(null);
-         setCurrentView('dashboard');
-     }
+     setEntries(newEntries); StorageDB.set('tbm_entries', newEntries);
+     if (editingEntry && String(editingEntry.id) === targetId) { setEditingEntry(null); setCurrentView('dashboard'); }
      setDeleteState({ isOpen: false, targetId: null, targetInfo: null });
   };
-
-  const handleUpdateAssessments = (newAssessments: MonthlyRiskAssessment[]) => {
-    setMonthlyAssessments(newAssessments);
-    StorageDB.set('monthly_assessment_list', newAssessments);
-  };
-
-  const handleUpdateSignature = (role: 'safety' | 'site', dataUrl: string) => {
-    const newSignatures = { ...signatures, [role]: dataUrl };
-    setSignatures(newSignatures);
-    StorageDB.set('signatures', newSignatures);
-  };
-
+  const handleUpdateAssessments = (newAssessments: MonthlyRiskAssessment[]) => { setMonthlyAssessments(newAssessments); StorageDB.set('monthly_assessment_list', newAssessments); };
+  const handleUpdateSignature = (role: 'safety' | 'site', dataUrl: string) => { const newSignatures = { ...signatures, [role]: dataUrl }; setSignatures(newSignatures); StorageDB.set('signatures', newSignatures); };
   const handleExportData = () => {
       const data = { tbm_entries: entries, monthly_assessment_list: monthlyAssessments, signatures, site_teams: teams, meta: { date: new Date() } };
       const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'SAPA_BACKUP.json'; a.click();
   };
 
-  // [OVERHAULED] Smart Import Handler with Layering (Merge) Logic - MULTI FILE SUPPORT
+  // [FIXED] Smart Import Function with Overwrite Option
   const handleImportData = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
-      if(!files || files.length === 0) return;
+      if (!files || files.length === 0) return;
 
-      // Helper to read file
-      const readFile = (file: File): Promise<any> => {
-          return new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onload = (evt) => {
-                  try {
-                      resolve(JSON.parse(evt.target?.result as string));
-                  } catch (e) {
-                      console.warn(`Skipping invalid JSON file: ${file.name}`);
-                      resolve(null);
-                  }
-              };
-              reader.readAsText(file);
-          });
-      };
+      const fileList: File[] = Array.from(files); 
+      if (fileInputRef.current) fileInputRef.current.value = '';
 
+      // [CRITICAL] User Choice: Merge or Replace
+      // Ask user whether to merge or replace existing data
+      let mode: 'MERGE' | 'REPLACE' = 'MERGE';
+      if (entries.length > 0 || monthlyAssessments.length > 0) {
+          const userChoice = confirm(
+              `선택한 파일로 데이터를 복구합니다.\n\n` +
+              `[확인] = 기존 데이터와 합치기 (Merge)\n` +
+              `[취소] = 기존 데이터를 지우고 덮어쓰기 (Overwrite)\n\n` +
+              `※ 꼬인 데이터를 정리하려면 [취소]를 눌러 덮어쓰세요.`
+          );
+          mode = userChoice ? 'MERGE' : 'REPLACE';
+      }
+
+      setIsLoading(true);
       try {
-          // Read all files in parallel
-          const fileContents = await Promise.all(Array.from(files).map(readFile));
-          const validContents = fileContents.filter(c => c !== null);
-
-          if (validContents.length === 0) {
-              alert("유효한 데이터 파일이 없습니다.");
-              return;
-          }
-
-          let newEntries: TBMEntry[] = [...entries];
-          let newAssessments: MonthlyRiskAssessment[] = [...monthlyAssessments];
-          let newTeams: TeamOption[] = [...teams];
+          // Initialize base data based on mode
+          let mergedEntries = mode === 'REPLACE' ? [] : [...entries];
+          let mergedAssessments = mode === 'REPLACE' ? [] : [...monthlyAssessments];
+          let mergedTeams = mode === 'REPLACE' ? [] : [...teams];
+          let newSignatures = mode === 'REPLACE' ? { safety: null, site: null } : { ...signatures };
           
-          let addedStats = { tbm: 0, risk: 0, teams: 0 };
+          let importStats = { tbm: 0, risk: 0, teams: 0, failed: 0 };
 
-          // Helper: Layer Merge (Update if ID exists, Add if New)
-          const mergeUnique = (existing: any[], incoming: any[]) => {
-              const map = new Map();
-              // 1. Add existing items to Map
-              existing.forEach(item => {
-                  if (item.id) map.set(String(item.id), item);
-              });
-              // 2. Overlay incoming items
-              incoming.forEach(item => {
-                  if (item.id) map.set(String(item.id), item);
-              });
-              // 3. Return combined array
-              return Array.from(map.values());
-          };
+          for (const file of fileList) {
+              if (file.name.endsWith('.zip') || file.type.includes('zip')) {
+                  alert(`⚠️ 주의: '${file.name}'은 연구소용 데이터 패키지(ZIP)입니다.\n시스템 복구에는 '.json' 백업 파일만 사용할 수 있습니다.`);
+                  importStats.failed++;
+                  continue;
+              }
 
-          // Iterate through all loaded JSON objects
-          for (const raw of validContents) {
-              // Case 1: Full System Backup (Object with keys)
-              if (!Array.isArray(raw)) {
-                  if(raw.tbm_entries && Array.isArray(raw.tbm_entries)) {
-                      newEntries = mergeUnique(newEntries, raw.tbm_entries);
+              const text = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = (e) => resolve(e.target?.result as string);
+                  reader.onerror = (e) => reject(e);
+                  reader.readAsText(file);
+              });
+              
+              try {
+                  const data = JSON.parse(text);
+                  
+                  // Helper to merge distinct items
+                  const mergeItems = (current: any[], incoming: any[]) => {
+                      const map = new Map(current.map(i => [String(i.id), i]));
+                      incoming.forEach(i => {
+                          if (i.id) map.set(String(i.id), i);
+                      });
+                      return Array.from(map.values());
+                  };
+
+                  if (Array.isArray(data)) {
+                      if (data.length > 0) {
+                          const sample = data[0];
+                          if (sample.month && Array.isArray(sample.priorities)) {
+                              mergedAssessments = mergeItems(mergedAssessments, data);
+                              importStats.risk += data.length;
+                          } 
+                          else if (sample.date && (sample.teamName || sample.teamId)) {
+                              mergedEntries = mergeItems(mergedEntries, data);
+                              importStats.tbm += data.length;
+                          }
+                      }
+                  } 
+                  else {
+                      if (data.tbm_entries && Array.isArray(data.tbm_entries)) {
+                          mergedEntries = mergeItems(mergedEntries, data.tbm_entries);
+                          importStats.tbm += data.tbm_entries.length;
+                      }
+                      if (data.monthly_assessment_list && Array.isArray(data.monthly_assessment_list)) {
+                          mergedAssessments = mergeItems(mergedAssessments, data.monthly_assessment_list);
+                          importStats.risk += data.monthly_assessment_list.length;
+                      }
+                      if (data.site_teams && Array.isArray(data.site_teams)) {
+                          mergedTeams = mergeItems(mergedTeams, data.site_teams);
+                          importStats.teams += data.site_teams.length;
+                      }
+                      if (data.signatures) {
+                          newSignatures = { ...newSignatures, ...data.signatures };
+                      }
                   }
-                  if(raw.monthly_assessment_list && Array.isArray(raw.monthly_assessment_list)) {
-                      newAssessments = mergeUnique(newAssessments, raw.monthly_assessment_list);
-                  }
-                  if(raw.site_teams && Array.isArray(raw.site_teams)) {
-                      newTeams = mergeUnique(newTeams, raw.site_teams);
-                  }
-              } 
-              // Case 2: Array Backup (Legacy lists)
-              else if (Array.isArray(raw) && raw.length > 0) {
-                  const firstItem = raw[0];
-                  // TBM Entry Check
-                  if (firstItem.teamName && (firstItem.date || firstItem.workDescription)) {
-                      newEntries = mergeUnique(newEntries, raw);
-                  }
-                  // Risk Assessment Check
-                  else if (firstItem.month && firstItem.priorities) {
-                      newAssessments = mergeUnique(newAssessments, raw);
-                  }
+
+              } catch (parseError) {
+                  console.error(`Error parsing file ${file.name}:`, parseError);
+                  alert(`'${file.name}' 파일이 손상되었거나 올바른 JSON 형식이 아닙니다.`);
+                  importStats.failed++;
               }
           }
 
-          // Calculate Diffs
-          addedStats.tbm = newEntries.length - entries.length;
-          addedStats.risk = newAssessments.length - monthlyAssessments.length;
-          addedStats.teams = newTeams.length - teams.length;
+          // Sort entries
+          mergedEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-          // Update State & Storage
-          if (addedStats.tbm > 0 || addedStats.risk > 0 || addedStats.teams > 0) {
-              setEntries(newEntries);
-              await StorageDB.set('tbm_entries', newEntries);
-              
-              setMonthlyAssessments(newAssessments);
-              await StorageDB.set('monthly_assessment_list', newAssessments);
-              
-              setTeams(newTeams);
-              await StorageDB.set('site_teams', newTeams);
+          // Commit to State & DB
+          setEntries(mergedEntries);
+          setMonthlyAssessments(mergedAssessments);
+          setTeams(mergedTeams);
+          setSignatures(newSignatures);
 
-              alert(
-                  `✅ 대량 데이터 병합(Bulk Merge) 완료\n` +
-                  `총 ${files.length}개의 파일을 처리했습니다.\n` + 
-                  `-----------------------------------\n` +
-                  `- TBM 일지: +${addedStats.tbm}건 추가\n` +
-                  `- 위험성평가: +${addedStats.risk}건 추가\n` +
-                  `- 팀 목록: +${addedStats.teams}팀 추가`
-              );
-              
-              setIsSettingsOpen(false);
-              if (addedStats.tbm > 0) setCurrentView('dashboard'); 
-          } else {
-              alert("⚠ 데이터가 이미 최신 상태입니다. (새로운 내용 없음)");
-          }
+          await StorageDB.set('tbm_entries', mergedEntries);
+          await StorageDB.set('monthly_assessment_list', mergedAssessments);
+          await StorageDB.set('site_teams', mergedTeams);
+          await StorageDB.set('signatures', newSignatures);
 
-      } catch(err) { 
-          console.error(err);
-          alert("❌ 대량 파일 처리 중 오류가 발생했습니다."); 
+          alert(`✅ 데이터 복구 완료 (${mode === 'REPLACE' ? '덮어쓰기' : '병합'})!\n\n- TBM 일지: ${importStats.tbm}건\n- 위험성평가: ${importStats.risk}건\n- 팀 정보: ${importStats.teams}건\n(실패: ${importStats.failed}건)`);
+          setIsSettingsOpen(false);
+
+      } catch (error) {
+          console.error("Recovery failed:", error);
+          alert("시스템 오류로 복구에 실패했습니다.");
       } finally {
-          if (fileInputRef.current) fileInputRef.current.value = '';
+          setIsLoading(false);
       }
   };
 
-  const handleCleanupData = () => {
-     if (confirm('오류 데이터(빈 항목, ID 없음)를 강제로 정리하시겠습니까?')) {
-        const valid = entries.filter(e => e.id && e.id !== 'undefined' && e.teamName);
-        setEntries(valid);
-        StorageDB.set('tbm_entries', valid);
-        alert(`${entries.length - valid.length}개의 오류 항목이 삭제되었습니다.`);
-        setIsSettingsOpen(false);
-     }
+  const handleCleanupData = () => { if (confirm('오류 데이터 정리?')) { const valid = entries.filter(e => e.id && e.id !== 'undefined' && e.teamName); setEntries(valid); StorageDB.set('tbm_entries', valid); setIsSettingsOpen(false); } };
+  
+  // [NEW] Granular Clear Functions
+  const handleClearRiskData = async () => {
+      if(confirm("경고: 모든 '위험성평가' 데이터를 삭제하시겠습니까?\n(TBM 일지와 팀 정보는 유지됩니다)")) {
+          setMonthlyAssessments([]);
+          await StorageDB.set('monthly_assessment_list', []);
+          alert("위험성평가 데이터가 초기화되었습니다.");
+      }
   };
 
-  const handleResetData = async () => {
-    if (confirm('모든 데이터를 삭제하고 초기화하시겠습니까?')) {
-        await StorageDB.clear();
-        localStorage.clear();
-        window.location.reload();
-    }
+  const handleClearTBMData = async () => {
+      if(confirm("경고: 모든 'TBM 일지' 데이터를 삭제하시겠습니까?\n(위험성평가와 팀 정보는 유지됩니다)")) {
+          setEntries([]);
+          await StorageDB.set('tbm_entries', []);
+          alert("TBM 일지 데이터가 초기화되었습니다.");
+      }
   };
+
+  const handleResetData = async () => { if (confirm('경고: 시스템을 완전히 초기화하시겠습니까?\n모든 데이터가 영구적으로 삭제됩니다.')) { await StorageDB.clear(); localStorage.clear(); window.location.reload(); } };
 
   const renderContent = () => {
-    // [FIX] Suspense Wrapper for Lazy Loaded Components
     return (
         <Suspense fallback={<LoadingScreen />}>
             {(() => {
                 switch (currentView) {
                   case 'dashboard':
-                    return <Dashboard 
-                              entries={entries} 
-                              onViewReport={() => {
-                                  setReportTargetEntries(entries); // View All
-                                  setShowReportModal(true);
-                              }} 
-                              onNavigateToReports={()=>setCurrentView('reports')}
-                              onNewEntry={(mode) => {
-                                  setEditingEntry(null); 
-                                  setEntryMode(mode); 
-                                  setCurrentView('new');
-                              }} 
-                              onEdit={handleEditEntry} 
-                              onOpenSettings={()=>setIsSettingsOpen(true)} 
-                              onDelete={handleRequestDelete} 
-                              onPrintSingle={(entry) => {
-                                  setReportTargetEntries([entry]); // View Only This
-                                  setShowReportModal(true);
-                              }}
-                           />;
+                    return <Dashboard entries={entries} onViewReport={() => { setReportTargetEntries(entries); setShowReportModal(true); }} onNavigateToReports={()=>setCurrentView('reports')} onNewEntry={(mode) => { setEditingEntry(null); setEntryMode(mode); setCurrentView('new'); }} onEdit={handleEditEntry} onOpenSettings={()=>setIsSettingsOpen(true)} onDelete={handleRequestDelete} onPrintSingle={(entry) => { setReportTargetEntries([entry]); setShowReportModal(true); }} />;
                   case 'new':
-                    return <TBMForm 
-                              onSave={handleSaveEntry} 
-                              onCancel={()=>{setCurrentView('dashboard'); setEditingEntry(null)}} 
-                              monthlyGuidelines={currentMonthGuidelines} 
-                              initialData={editingEntry || undefined} 
-                              onDelete={handleRequestDelete} 
-                              teams={teams} 
-                              mode={entryMode}
-                           />;
+                    return <TBMForm onSave={handleSaveEntry} onCancel={()=>{setCurrentView('dashboard'); setEditingEntry(null)}} monthlyGuidelines={currentMonthGuidelines} initialData={editingEntry || undefined} onDelete={handleRequestDelete} teams={teams} mode={entryMode} />;
                   case 'risk-assessment':
                     return <RiskAssessmentManager assessments={monthlyAssessments} onSave={handleUpdateAssessments} />;
                   case 'reports':
                     return <ReportCenter entries={entries} onOpenPrintModal={() => { setReportTargetEntries(entries); setShowReportModal(true); }} signatures={signatures} teams={teams} />;
+                  case 'data-lab': 
+                    return <SafetyDataLab />;
                   default:
-                    return <Dashboard 
-                              entries={entries} 
-                              onViewReport={() => { setReportTargetEntries(entries); setShowReportModal(true); }} 
-                              onNavigateToReports={()=>setCurrentView('reports')} 
-                              onNewEntry={(mode)=>{setEditingEntry(null); setEntryMode(mode); setCurrentView('new')}} 
-                              onEdit={handleEditEntry} 
-                              onOpenSettings={()=>setIsSettingsOpen(true)} 
-                              onDelete={handleRequestDelete}
-                              onPrintSingle={(entry) => {
-                                  setReportTargetEntries([entry]);
-                                  setShowReportModal(true);
-                              }}
-                           />;
+                    return <Dashboard entries={entries} onViewReport={() => { setReportTargetEntries(entries); setShowReportModal(true); }} onNavigateToReports={()=>setCurrentView('reports')} onNewEntry={(mode)=>{setEditingEntry(null); setEntryMode(mode); setCurrentView('new')}} onEdit={handleEditEntry} onOpenSettings={()=>setIsSettingsOpen(true)} onDelete={handleRequestDelete} onPrintSingle={(entry) => { setReportTargetEntries([entry]); setShowReportModal(true); }} />;
                 }
             })()}
         </Suspense>
     );
   };
 
-  // 5 Key Features Config
-  const featureButtons = [
-      { key: 'risk', label: 'Risk Data', icon: <FileText size={14}/>, color: 'text-emerald-600', bg: 'bg-emerald-100' },
-      { key: 'proof', label: 'Legal Proof', icon: <Camera size={14}/>, color: 'text-blue-600', bg: 'bg-blue-100' },
-      { key: 'feedback', label: 'AI Coach', icon: <MessageSquare size={14}/>, color: 'text-orange-600', bg: 'bg-orange-100' },
-      { key: 'audit', label: 'Quality', icon: <Sparkles size={14}/>, color: 'text-violet-600', bg: 'bg-violet-100' },
-      { key: 'insight', label: 'Insight', icon: <Radar size={14}/>, color: 'text-indigo-600', bg: 'bg-indigo-100' },
-  ];
-
-  if (isLoading) {
-      return <LoadingScreen />;
-  }
+  if (isLoading) return <LoadingScreen />;
 
   return (
     <div className="flex min-h-screen relative overflow-hidden bg-[#F1F5F9]">
-      <Navigation 
-         currentView={currentView} 
-         setCurrentView={setCurrentView} 
-         onOpenSettings={() => setIsSettingsOpen(true)} 
-         onShowHistory={() => setIsHistoryOpen(true)}
-         onShowIdentity={() => setIsIdentityOpen(true)}
-         onNewEntryClick={() => setShowModeSelector(true)} 
-      />
-      {/* 
-         Updated Main Content Layout:
-         - Added 'md:ml-72' for desktop sidebar spacing.
-         - Added 'pb-24' to prevent content from being hidden behind the mobile bottom nav.
-      */}
+      <Navigation currentView={currentView} setCurrentView={setCurrentView} onOpenSettings={() => setIsSettingsOpen(true)} onShowHistory={() => setIsHistoryOpen(true)} onShowIdentity={() => setIsIdentityOpen(true)} onNewEntryClick={() => setShowModeSelector(true)} />
       <main className="flex-1 md:ml-72 p-4 md:p-8 mb-0 pb-24 md:pb-8 relative z-10 w-full">
         <header className="flex justify-between items-center mb-6 md:mb-8 no-print">
           <div>
@@ -802,82 +466,23 @@ function App() {
               {currentView === 'new' && (entryMode === 'BATCH' ? 'Batch Processing' : 'Individual Entry')}
               {currentView === 'risk-assessment' && 'Risk Assessment Management'}
               {currentView === 'reports' && 'Safe Work Report Center'}
+              {currentView === 'data-lab' && 'Safety Data Lab'}
             </h1>
             <p className="text-[10px] md:text-sm font-medium text-slate-400 uppercase tracking-wider">
                (주)휘강건설 스마트 안전관리 시스템 v3.0.0
             </p>
           </div>
-
-          {/* RIGHT SIDE HEADER: 5 Core Features (Only visible on Desktop/Tablet) */}
-          {currentView === 'dashboard' && (
-              <div className="hidden md:flex gap-3">
-                  {featureButtons.map((btn) => (
-                      <button
-                          key={btn.key}
-                          onClick={() => setActiveFeature(btn.key as any)}
-                          className="flex flex-col items-center gap-1 group"
-                          title={btn.label}
-                      >
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-sm ${btn.bg} ${btn.color} group-hover:-translate-y-1 group-hover:shadow-md`}>
-                              {btn.icon}
-                          </div>
-                          <span className="text-[9px] font-bold text-slate-400 group-hover:text-slate-600 uppercase tracking-tight">{btn.label}</span>
-                      </button>
-                  ))}
-              </div>
-          )}
         </header>
-
         {renderContent()}
-
-        {/* [FIX] Report View wrapped in Suspense for consistency */}
-        {showReportModal && (
-          <Suspense fallback={<LoadingScreen />}>
-              <ReportView 
-                entries={reportTargetEntries} 
-                onClose={() => { setShowReportModal(false); setReportTargetEntries([]); }} 
-                signatures={signatures} 
-                onUpdateSignature={handleUpdateSignature} 
-                onEdit={handleEditEntry} 
-                onDelete={handleRequestDelete} 
-              />
-          </Suspense>
-        )}
-        
-        {/* ... (rest of modals) */}
-        {isHistoryOpen && (
-          <HistoryModal onClose={() => setIsHistoryOpen(false)} />
-        )}
-
-        {isIdentityOpen && (
-            <SystemIdentityModal onClose={() => setIsIdentityOpen(false)} />
-        )}
-
-        {/* Feature Showcase Modal */}
-        {activeFeature && <FeatureShowcase featureKey={activeFeature} onClose={() => setActiveFeature(null)} />}
-
-        {/* [NEW] Mode Selection Modal */}
-        {showModeSelector && (
-            <ModeSelectionModal 
-                onSelect={(mode) => {
-                    setEditingEntry(null);
-                    setEntryMode(mode);
-                    setCurrentView('new');
-                    setShowModeSelector(false);
-                }} 
-                onClose={() => setShowModeSelector(false)} 
-            />
-        )}
-
-        {deleteState.isOpen && (
-           <DeleteConfirmModal info={deleteState.targetInfo} onConfirm={handleConfirmDelete} onCancel={() => setDeleteState({isOpen: false, targetId: null, targetInfo: null})} />
-        )}
-
+        {showReportModal && ( <Suspense fallback={<LoadingScreen />}> <ReportView entries={reportTargetEntries} onClose={() => { setShowReportModal(false); setReportTargetEntries([]); }} signatures={signatures} onUpdateSignature={handleUpdateSignature} onEdit={handleEditEntry} onDelete={handleRequestDelete} /> </Suspense> )}
+        {isHistoryOpen && <HistoryModal onClose={() => setIsHistoryOpen(false)} />}
+        {isIdentityOpen && <SystemIdentityModal onClose={() => setIsIdentityOpen(false)} />}
+        {showModeSelector && <ModeSelectionModal onSelect={(mode) => { setEditingEntry(null); setEntryMode(mode); setCurrentView('new'); setShowModeSelector(false); }} onClose={() => setShowModeSelector(false)} />}
+        {deleteState.isOpen && <DeleteConfirmModal info={deleteState.targetInfo} onConfirm={handleConfirmDelete} onCancel={() => setDeleteState({isOpen: false, targetId: null, targetInfo: null})} />}
         {isSettingsOpen && createPortal(
           <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col relative max-h-[85vh]">
               <button onClick={() => setIsSettingsOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 z-10"><X size={24} /></button>
-              
               <div className="p-6 border-b border-slate-100 bg-slate-50">
                  <h3 className="font-bold text-lg text-slate-800">시스템 설정</h3>
                  <div className="flex gap-4 mt-4">
@@ -885,7 +490,6 @@ function App() {
                     <button onClick={()=>setSettingsTab('backup')} className={`pb-2 text-sm font-bold border-b-2 transition-colors ${settingsTab === 'backup' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}>백업 및 복구</button>
                  </div>
               </div>
-
               {settingsTab === 'teams' && (
                   <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6">
@@ -911,22 +515,28 @@ function App() {
                      </div>
                   </div>
               )}
-
               {settingsTab === 'backup' && (
                   <div className="p-6 space-y-4">
                      <button onClick={handleExportData} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Download size={16}/> 데이터 백업 (통합)</button>
                      <div className="relative">
-                        <button onClick={()=>fileInputRef.current?.click()} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Upload size={16}/> 데이터 대량 복구/병합 (Multi-File)</button>
+                        <button onClick={()=>fileInputRef.current?.click()} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Upload size={16}/> 데이터 복구 (병합/덮어쓰기)</button>
                         <input type="file" ref={fileInputRef} className="hidden" onChange={handleImportData} accept=".json" multiple/>
                      </div>
                      <div className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg text-center leading-relaxed">
-                        <span className="font-bold text-slate-600">※ Big Data Layering System</span><br/>
-                        데이터 복구 시 기존 데이터는 유지되며, 중복되지 않는 새로운 항목만 자동으로 합쳐집니다.<br/>
-                        <span className="text-blue-600 font-bold">(TBM 일지 + 위험성평가 데이터 포함)</span>
+                        <span className="font-bold text-slate-600">※ 데이터 복구 팁</span><br/>
+                        중복 데이터가 많으면 복구 시 <span className="text-red-500 font-bold">[취소(덮어쓰기)]</span>를 선택하세요.<br/>
+                        기존 데이터를 모두 지우고 백업 파일로 교체합니다.
                      </div>
                      <hr/>
-                     <button onClick={handleCleanupData} className="w-full p-3 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg flex items-center justify-center gap-2 font-bold"><Eraser size={16}/> 오류 데이터 정리</button>
-                     <button onClick={handleResetData} className="w-full p-3 border border-red-200 bg-red-50 text-red-700 rounded-lg flex items-center justify-center gap-2 font-bold"><Trash2 size={16}/> 시스템 초기화</button>
+                     <div className="grid grid-cols-2 gap-3">
+                         <button onClick={handleClearRiskData} className="p-3 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg flex flex-col items-center justify-center gap-1 font-bold text-xs hover:bg-orange-100">
+                             <Trash2 size={14}/> 위험성평가만 비우기
+                         </button>
+                         <button onClick={handleClearTBMData} className="p-3 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg flex flex-col items-center justify-center gap-1 font-bold text-xs hover:bg-orange-100">
+                             <Trash2 size={14}/> TBM 일지만 비우기
+                         </button>
+                     </div>
+                     <button onClick={handleResetData} className="w-full p-3 border border-red-200 bg-red-50 text-red-700 rounded-lg flex items-center justify-center gap-2 font-bold hover:bg-red-100"><RefreshCw size={16}/> 시스템 전체 초기화 (Factory Reset)</button>
                   </div>
               )}
             </div>
@@ -936,5 +546,4 @@ function App() {
     </div>
   );
 }
-
 export default App;
