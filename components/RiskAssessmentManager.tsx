@@ -1,24 +1,193 @@
-import React, { useState, useRef, useMemo } from 'react';
+
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { MonthlyRiskAssessment, SafetyGuideline } from '../types';
 import { extractMonthlyPriorities, ExtractedPriority, MonthlyExtractionResult } from '../services/geminiService';
-import { Upload, Loader2, Trash2, ShieldCheck, Plus, RefreshCcw, Calendar, TrendingUp, Search, Edit2, Save, X, Download, FileJson } from 'lucide-react';
+import { Upload, Loader2, Trash2, ShieldCheck, Plus, RefreshCcw, Calendar, TrendingUp, Search, Edit2, Save, X, Download, FileJson, Layers, ArrowRight, BarChart3, AlertTriangle, CheckCircle2, ChevronDown, GitMerge, Scale, BookOpen, AlertOctagon, FileText, PieChart, Activity, FileStack, Sparkles, BrainCircuit } from 'lucide-react';
 
 interface RiskAssessmentManagerProps {
   assessments: MonthlyRiskAssessment[];
   onSave: (data: MonthlyRiskAssessment[]) => void;
 }
 
+// --- Helper Types for Regular Assessment ---
+interface AggregatedRisk {
+    content: string;
+    category: string;
+    level: 'HIGH' | 'GENERAL';
+    frequency: number; // How many times it appeared in the selected year
+    months: string[]; // Which months it appeared in
+    source: 'INITIAL' | 'ADDED'; // [NEW] Origin of the risk item
+}
+
+// --- Premium Component: AI Analysis HUD Overlay ---
+const AnalysisOverlay = ({ progress }: { progress: number }) => (
+    <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xl flex flex-col items-center justify-center animate-fade-in">
+        <div className="bg-white/90 backdrop-blur-md rounded-[2rem] p-10 shadow-2xl flex flex-col items-center max-w-sm w-full mx-4 border border-white/20 relative overflow-hidden">
+            {/* Ambient Background Glow */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-indigo-500/20 rounded-full blur-[50px] pointer-events-none"></div>
+            
+            <div className="relative z-10 flex flex-col items-center">
+                <div className="relative w-20 h-20 mb-6 flex items-center justify-center">
+                    {/* Pulsing Rings */}
+                    <div className="absolute inset-0 rounded-full border-2 border-indigo-100 animate-ping opacity-20"></div>
+                    <div className="absolute inset-0 rounded-full border border-indigo-200 opacity-50 scale-110"></div>
+                    
+                    <div className="bg-white p-4 rounded-2xl shadow-lg border border-indigo-50 relative z-10">
+                        <BrainCircuit size={32} className="text-indigo-600 animate-pulse" />
+                    </div>
+                </div>
+                
+                <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">AI Analysis</h3>
+                <p className="text-sm text-slate-500 text-center leading-relaxed mb-8 font-medium">
+                    문서의 구조를 스캔하고<br/>
+                    <span className="text-indigo-600 font-bold">위험성평가 데이터</span>를 추출합니다.
+                </p>
+                
+                <div className="w-full space-y-2">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        <span>Processing</span>
+                        <span>{progress}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden shadow-inner">
+                        <div 
+                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
+                            style={{ width: `${progress}%` }}
+                        ></div>
+                    </div>
+                    <p className="text-[10px] text-slate-400 text-right h-4">
+                        {progress < 30 ? 'Image Scanning...' : progress < 70 ? 'Context Reasoning...' : 'Data Structuring...'}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+);
+
+// --- Premium Component: Arch Risk Gauge ---
+// Solves clipping issues and provides a modern "Speedometer" look
+const RiskGauge = ({ highCount, totalCount }: { highCount: number, totalCount: number }) => {
+    const percentage = totalCount > 0 ? Math.min(100, Math.round((highCount / totalCount) * 100)) : 0;
+    
+    // Arch Settings
+    const radius = 80;
+    const stroke = 12;
+    const normalizedRadius = radius - stroke * 2;
+    const circumference = normalizedRadius * Math.PI; // Half circle (PI * r)
+    const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+    // Color Logic
+    let colorStart = "#10B981"; // Green
+    let colorEnd = "#34D399";
+    let label = "안전";
+    let textColor = "text-emerald-600";
+    let bgColor = "bg-emerald-50";
+
+    if (percentage > 30) { 
+        colorStart = "#F59E0B"; colorEnd = "#FBBF24"; // Orange
+        label = "주의"; textColor = "text-amber-600"; bgColor = "bg-amber-50";
+    } 
+    if (percentage > 50) { 
+        colorStart = "#EF4444"; colorEnd = "#F87171"; // Red
+        label = "위험"; textColor = "text-red-600"; bgColor = "bg-red-50";
+    }
+
+    return (
+        <div className="flex flex-col items-center justify-center relative w-full">
+            <div className="relative w-40 h-24 overflow-hidden flex justify-center items-end pb-0">
+                <svg
+                    height={radius}
+                    width={radius * 2}
+                    viewBox={`0 0 ${radius * 2} ${radius}`}
+                    className="overflow-visible"
+                >
+                    <defs>
+                        <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor={colorStart} />
+                            <stop offset="100%" stopColor={colorEnd} />
+                        </linearGradient>
+                    </defs>
+                    {/* Background Track */}
+                    <path
+                        d={`M ${stroke} ${radius - stroke} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${radius * 2 - stroke} ${radius - stroke}`}
+                        fill="transparent"
+                        stroke="#F1F5F9"
+                        strokeWidth={stroke}
+                        strokeLinecap="round"
+                    />
+                    {/* Progress Arc */}
+                    <path
+                        d={`M ${stroke} ${radius - stroke} A ${normalizedRadius} ${normalizedRadius} 0 0 1 ${radius * 2 - stroke} ${radius - stroke}`}
+                        fill="transparent"
+                        stroke="url(#gaugeGradient)"
+                        strokeWidth={stroke}
+                        strokeDasharray={circumference}
+                        strokeDashoffset={strokeDashoffset}
+                        strokeLinecap="round"
+                        className="transition-all duration-1000 ease-out"
+                    />
+                </svg>
+                
+                {/* Center Content */}
+                <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center mb-2">
+                    <span className="text-3xl font-black text-slate-800 tracking-tight leading-none">{percentage}%</span>
+                    <span className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wide">High Risk Ratio</span>
+                </div>
+            </div>
+            
+            {/* Status Badge */}
+            <div className={`mt-2 px-4 py-1.5 rounded-full text-xs font-black shadow-sm border border-black/5 ${bgColor} ${textColor} flex items-center gap-1`}>
+                {label === '위험' ? <AlertTriangle size={12}/> : label === '주의' ? <AlertOctagon size={12}/> : <CheckCircle2 size={12}/>}
+                {label} 단계
+            </div>
+        </div>
+    );
+};
+
 export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ assessments, onSave }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0); // [NEW] Progress State
   
-  // Month Selection State
-  const sortedMonths = useMemo(() => {
-     return [...assessments].sort((a, b) => b.month.localeCompare(a.month));
+  // [NEW] Separate Assessments by Type
+  const initialAssessments = useMemo(() => {
+      return assessments.filter(a => a.type === 'INITIAL' || a.type === 'REGULAR').sort((a, b) => b.createdAt - a.createdAt);
   }, [assessments]);
 
-  const [selectedMonthId, setSelectedMonthId] = useState<string>(sortedMonths[0]?.id || '');
+  const monthlyAssessments = useMemo(() => {
+      return assessments.filter(a => a.type !== 'INITIAL' && a.type !== 'REGULAR').sort((a, b) => b.month.localeCompare(a.month));
+  }, [assessments]);
+
+  // Initial State from Props
+  const [selectedMonthId, setSelectedMonthId] = useState<string>('');
+
+  // [CRITICAL FIX] Auto-Select Logic
+  // Whenever assessments list changes (e.g. loads from DB), ensure something is selected if possible.
+  useEffect(() => {
+      // If we already have a valid selection, do nothing.
+      if (selectedMonthId && assessments.some(a => a.id === selectedMonthId)) return;
+
+      // If no valid selection, try to pick the best candidate.
+      if (monthlyAssessments.length > 0) {
+          // Prefer latest Monthly/Operational assessment
+          setSelectedMonthId(monthlyAssessments[0].id); // Already sorted descending by month
+      } else if (initialAssessments.length > 0) {
+          // Fallback to Initial/Regular assessment
+          setSelectedMonthId(initialAssessments[0].id);
+      } else {
+          // Nothing to select
+          setSelectedMonthId('');
+      }
+  }, [assessments, monthlyAssessments, initialAssessments, selectedMonthId]);
+
   const [newMonthMode, setNewMonthMode] = useState(false);
   const [targetMonth, setTargetMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [uploadType, setUploadType] = useState<'MONTHLY' | 'INITIAL'>('MONTHLY');
+
+  // --- NEW: Regular Assessment Builder State ---
+  const [showRegularBuilder, setShowRegularBuilder] = useState(false);
+  const [regularTargetYear, setRegularTargetYear] = useState(new Date().getFullYear().toString());
+  const [baseAssessmentId, setBaseAssessmentId] = useState<string>(''); // [NEW] Base Assessment Selection
+  const [aggregatedRisks, setAggregatedRisks] = useState<AggregatedRisk[]>([]);
+  const [regularStep, setRegularStep] = useState<'SELECT' | 'REVIEW'>('SELECT');
 
   // Get current selected assessment
   const activeAssessment = assessments.find(a => a.id === selectedMonthId);
@@ -26,12 +195,15 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   // Get previous month assessment for comparison
   const previousAssessment = useMemo(() => {
      if (!activeAssessment) return null;
-     const currentIndex = sortedMonths.findIndex(a => a.id === activeAssessment.id);
-     if (currentIndex !== -1 && currentIndex < sortedMonths.length - 1) {
-        return sortedMonths[currentIndex + 1];
+     // Only compare within the same type group
+     const list = activeAssessment.type === 'INITIAL' || activeAssessment.type === 'REGULAR' ? initialAssessments : monthlyAssessments;
+     
+     const currentIndex = list.findIndex(a => a.id === activeAssessment.id);
+     if (currentIndex !== -1 && currentIndex < list.length - 1) {
+        return list[currentIndex + 1];
      }
      return null;
-  }, [activeAssessment, sortedMonths]);
+  }, [activeAssessment, initialAssessments, monthlyAssessments]);
 
   // Candidates from analysis
   const [candidates, setCandidates] = useState<ExtractedPriority[]>([]);
@@ -44,7 +216,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
 
-  // --- NEW: Search & Edit State ---
+  // --- Search & Edit State ---
   const [searchTerm, setSearchTerm] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<{content: string, level: string, category: string}>({
@@ -61,6 +233,31 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
         (item.category || '').includes(searchTerm)
     );
   }, [activeAssessment, searchTerm]);
+
+  // --- Statistics Calculation ---
+  const stats = useMemo(() => {
+      if (!activeAssessment) return null;
+      const total = activeAssessment.priorities.length;
+      const high = activeAssessment.priorities.filter(p => p.level === 'HIGH').length;
+      const general = total - high;
+      
+      // Category Stats
+      const catMap: Record<string, number> = {};
+      activeAssessment.priorities.forEach(p => {
+          catMap[p.category] = (catMap[p.category] || 0) + 1;
+      });
+      const topCategories = Object.entries(catMap)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3); // Top 3
+
+      // Comparison
+      let diff = 0;
+      if (previousAssessment) {
+          diff = total - previousAssessment.priorities.length;
+      }
+
+      return { total, high, general, topCategories, diff };
+  }, [activeAssessment, previousAssessment]);
 
   // --- Helpers ---
   const normalizeString = (str: string) => {
@@ -111,9 +308,9 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
           const merged: MonthlyRiskAssessment[] = Array.from(currentMap.values());
           onSave(merged);
-          alert(`✅ 데이터 복구 완료: 총 ${merged.length}개월분의 데이터가 로드되었습니다.`);
+          alert(`✅ 위험성평가 데이터 복구 완료: 총 ${merged.length}회차 분량 로드됨.`);
           
-          // Select the most recent one
+          // Select the most recent one (will happen automatically via useEffect, but safe to force)
           if (merged.length > 0) {
              const latest = merged.sort((a, b) => b.month.localeCompare(a.month))[0];
              setSelectedMonthId(latest.id);
@@ -131,8 +328,114 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
     reader.readAsText(file);
   };
 
+  // --- REGULAR ASSESSMENT LOGIC (Overhauled) ---
+  const handleOpenRegularBuilder = () => {
+      // Auto-select the latest INITIAL assessment as base
+      const latestInitial = initialAssessments.length > 0 ? initialAssessments[0].id : '';
+      setBaseAssessmentId(latestInitial);
+      setShowRegularBuilder(true);
+      setRegularStep('SELECT');
+  };
+
+  const handleAnalyzeRegular = () => {
+      const baseAssessment = assessments.find(a => a.id === baseAssessmentId);
+      // Filter for Monthly assessments in the target year
+      const targetAssessments = monthlyAssessments.filter(a => a.month.startsWith(regularTargetYear));
+      
+      // Allow proceeding if at least ONE data source exists
+      if (!baseAssessment && targetAssessments.length === 0) {
+          alert("분석할 데이터가 없습니다.\n\n1. '기초 데이터(최초 위험성평가)'를 선택하거나\n2. '분석 연도'에 해당하는 월간 데이터가 있어야 합니다.");
+          return;
+      }
+
+      const riskMap = new Map<string, AggregatedRisk>();
+
+      // 1. Load Base (Initial) Assessment
+      if (baseAssessment) {
+          baseAssessment.priorities.forEach(p => {
+              const key = normalizeString(p.content);
+              riskMap.set(key, {
+                  content: p.content,
+                  category: p.category,
+                  level: p.level as 'HIGH' | 'GENERAL',
+                  frequency: 0, 
+                  months: [],
+                  source: 'INITIAL'
+              });
+          });
+      }
+
+      // 2. Merge Monthly Data
+      targetAssessments.forEach(monthData => {
+          monthData.priorities.forEach(p => {
+              const key = normalizeString(p.content); 
+              
+              if (riskMap.has(key)) {
+                  const existing = riskMap.get(key)!;
+                  existing.frequency += 1;
+                  existing.months.push(monthData.month.slice(5)); 
+                  if (p.level === 'HIGH') existing.level = 'HIGH';
+              } else {
+                  riskMap.set(key, {
+                      content: p.content,
+                      category: p.category,
+                      level: p.level as 'HIGH' | 'GENERAL',
+                      frequency: 1,
+                      months: [monthData.month.slice(5)],
+                      source: 'ADDED' 
+                  });
+              }
+          });
+      });
+
+      // Sort
+      const sortedRisks = Array.from(riskMap.values()).sort((a, b) => {
+          if (a.level === 'HIGH' && b.level !== 'HIGH') return -1;
+          if (a.level !== 'HIGH' && b.level === 'HIGH') return 1;
+          return b.frequency - a.frequency;
+      });
+
+      setAggregatedRisks(sortedRisks);
+      setRegularStep('REVIEW');
+  };
+
+  const handleCreateRegularAssessment = () => {
+      if (aggregatedRisks.length === 0) return;
+
+      const title = `${regularTargetYear}년 정기위험성평가 (통합)`;
+      
+      const finalPriorities: SafetyGuideline[] = aggregatedRisks.map(r => ({
+          content: r.content,
+          category: r.category,
+          level: r.level
+      }));
+
+      const newAssessment: MonthlyRiskAssessment = {
+          id: `REGULAR-${regularTargetYear}-${Date.now()}`,
+          month: `${regularTargetYear}-Yearly`, 
+          type: 'REGULAR', // [NEW] Mark as Regular
+          fileName: title,
+          priorities: finalPriorities,
+          createdAt: Date.now()
+      };
+
+      onSave([newAssessment, ...assessments]);
+      setSelectedMonthId(newAssessment.id);
+      setShowRegularBuilder(false);
+      setRegularStep('SELECT');
+      alert(`✅ ${title}가 생성되었습니다.\n\n[법적 사항 충족]\n- 최초 평가 반영: ${aggregatedRisks.filter(r=>r.source==='INITIAL').length}건\n- 근로자 참여(빈도분석): ${aggregatedRisks.filter(r=>r.source==='ADDED').length}건 반영`);
+  };
+
+  const handleRemoveAggregatedItem = (index: number) => {
+      const newRisks = [...aggregatedRisks];
+      newRisks.splice(index, 1);
+      setAggregatedRisks(newRisks);
+  };
+
+  // --- End Regular Logic ---
+
   const handleCreateMonth = () => {
-     if (assessments.some(a => a.month === targetMonth)) {
+     if (assessments.some(a => a.month === targetMonth && a.type !== 'INITIAL' && a.type !== 'REGULAR')) {
         alert("이미 해당 월의 평가가 존재합니다.");
         return;
      }
@@ -140,6 +443,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
      const newAssessment: MonthlyRiskAssessment = {
         id: `MONTH-${Date.now()}`,
         month: targetMonth,
+        type: 'MONTHLY',
         fileName: 'New Assessment',
         priorities: [],
         createdAt: Date.now()
@@ -157,11 +461,26 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
      onSave(updated);
   };
 
+  const handleUploadClick = (type: 'INITIAL' | 'MONTHLY') => {
+      setUploadType(type);
+      fileInputRef.current?.click();
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       
       setIsAnalyzing(true);
+      setLoadingProgress(0); // Reset progress
+
+      // Start simulated progress timer
+      const timer = setInterval(() => {
+          setLoadingProgress(prev => {
+              if (prev >= 90) return prev; // Cap at 90% until done
+              return prev + (prev < 50 ? 5 : 2); // Fast start, slow end
+          });
+      }, 300);
+
       const reader = new FileReader();
       
       reader.onload = async (event) => {
@@ -170,45 +489,73 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
         try {
           const base64Data = base64Url.split(',')[1];
-          const result: MonthlyExtractionResult = await extractMonthlyPriorities(base64Data, file.type);
+          // [UPDATED] Pass uploadType to ensure correct extraction mode (Initial = Full, Monthly = Key)
+          const result: MonthlyExtractionResult = await extractMonthlyPriorities(base64Data, file.type, uploadType);
+          
+          clearInterval(timer);
+          setLoadingProgress(100);
+          await new Promise(r => setTimeout(r, 600)); // Show 100% briefly
+
           const { items: extracted, detectedMonth } = result;
 
-          let targetAssessment = activeAssessment;
-          let isNewMonthCreated = false;
+          let targetAssessment: MonthlyRiskAssessment | undefined;
+          let isNewCreated = false;
 
-          if (detectedMonth && activeAssessment && detectedMonth !== activeAssessment.month) {
-             const message = `📄 문서 분석 결과: [${detectedMonth}월] 자료로 보입니다.\n\n현재 선택된 [${activeAssessment.month}월]이 아닌,\n👉 [${detectedMonth}월] 평가표로 새로 등록(또는 이동)하시겠습니까?`;
-             
-             if (confirm(message)) {
-                const existingTarget = assessments.find(a => a.month === detectedMonth);
-                
-                if (existingTarget) {
-                   targetAssessment = existingTarget;
-                   setSelectedMonthId(existingTarget.id);
-                   alert(`${detectedMonth}월 데이터가 이미 존재하여 해당 월로 이동 후 추가합니다.`);
-                } else {
-                   const newAssessment: MonthlyRiskAssessment = {
-                      id: `MONTH-${Date.now()}`,
-                      month: detectedMonth,
-                      fileName: file.name,
-                      priorities: [],
-                      createdAt: Date.now()
-                   };
-                   const updatedList = [newAssessment, ...assessments];
-                   onSave(updatedList);
-                   setSelectedMonthId(newAssessment.id);
-                   targetAssessment = newAssessment;
-                   isNewMonthCreated = true;
-                }
-             }
+          // Logic for INITIAL/REGULAR
+          if (uploadType === 'INITIAL') {
+              const newAssessment: MonthlyRiskAssessment = {
+                  id: `INITIAL-${Date.now()}`,
+                  month: detectedMonth || '최초',
+                  type: 'INITIAL',
+                  fileName: file.name,
+                  priorities: [],
+                  createdAt: Date.now()
+              };
+              const updatedList = [newAssessment, ...assessments];
+              onSave(updatedList);
+              setSelectedMonthId(newAssessment.id);
+              targetAssessment = newAssessment;
+              isNewCreated = true;
+          } else {
+              // Logic for MONTHLY
+              if (detectedMonth && activeAssessment && detectedMonth !== activeAssessment.month && activeAssessment.type !== 'INITIAL') {
+                 // Suggest moving to detected month if active is MONTHLY
+                 if (confirm(`📄 문서 분석: [${detectedMonth}월] 자료입니다.\n\n해당 월로 등록하시겠습니까?`)) {
+                    const existingTarget = monthlyAssessments.find(a => a.month === detectedMonth);
+                    if (existingTarget) {
+                       targetAssessment = existingTarget;
+                       setSelectedMonthId(existingTarget.id);
+                    } else {
+                       const newAssessment: MonthlyRiskAssessment = {
+                          id: `MONTH-${Date.now()}`,
+                          month: detectedMonth,
+                          type: 'MONTHLY',
+                          fileName: file.name,
+                          priorities: [],
+                          createdAt: Date.now()
+                       };
+                       const updatedList = [newAssessment, ...assessments];
+                       onSave(updatedList);
+                       setSelectedMonthId(newAssessment.id);
+                       targetAssessment = newAssessment;
+                       isNewCreated = true;
+                    }
+                 } else {
+                     targetAssessment = activeAssessment; // Stick to current
+                 }
+              } else {
+                  targetAssessment = activeAssessment;
+              }
           }
 
           if (!targetAssessment) {
-             alert("대상 월을 찾을 수 없어 작업을 취소합니다.");
+             // Fallback for new Initial or Monthly if nothing selected
+             alert("평가 데이터를 저장할 대상을 선택하거나 새로 생성해주세요.");
              setIsAnalyzing(false);
              return;
           }
 
+          // Merge priorities
           const currentPriorities = [...targetAssessment.priorities];
           let addedCount = 0;
           
@@ -216,7 +563,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
              const normalizedContent = normalizeString(item.content);
              const isDuplicate = currentPriorities.some(f => {
                  const existingNorm = normalizeString(f.content);
-                 return existingNorm === normalizedContent || existingNorm.includes(normalizedContent) || normalizedContent.includes(existingNorm);
+                 return existingNorm === normalizedContent;
              });
 
              if (!isDuplicate) {
@@ -225,32 +572,34 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
              }
           });
           
+          // Sort
           currentPriorities.sort((a, b) => {
              if (a.level === 'HIGH' && b.level !== 'HIGH') return -1;
              if (a.level !== 'HIGH' && b.level === 'HIGH') return 1;
              return 0;
           });
 
-          let finalAssessments = assessments;
-          if (isNewMonthCreated) {
-             finalAssessments = [targetAssessment, ...assessments];
-          }
-          
-          finalAssessments = finalAssessments.map(a => 
-             a.id === targetAssessment!.id 
-             ? { ...a, priorities: currentPriorities, fileName: file.name }
-             : a
-          );
+          // Save Final
+          if (isNewCreated) {
+              // Target is the object ref.
+              targetAssessment.priorities = currentPriorities;
+              // Re-save with updated priorities
+              const freshList = assessments.some(a => a.id === targetAssessment!.id) 
+                  ? assessments.map(a => a.id === targetAssessment!.id ? targetAssessment! : a)
+                  : [targetAssessment!, ...assessments];
+              onSave(freshList);
 
-          onSave(finalAssessments);
-          setCandidates([]);
-          
-          const monthLabel = targetAssessment.month;
-          if (addedCount < extracted.length) {
-              alert(`[${monthLabel}월] 총 ${extracted.length}건 중 중복 제외 ${addedCount}건 등록 완료.`);
           } else {
-              alert(`[${monthLabel}월] 총 ${extracted.length}건 등록 완료.`);
+              const updatedList = assessments.map(a => 
+                 a.id === targetAssessment!.id 
+                 ? { ...a, priorities: currentPriorities, fileName: file.name }
+                 : a
+              );
+              onSave(updatedList);
           }
+
+          setCandidates([]);
+          alert(`${addedCount}건의 항목이 등록되었습니다.`);
           
         } catch (err) {
           console.error(err);
@@ -277,7 +626,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
     }
   };
 
-  // [FIXED] Remove by Index to avoid deletion issues with edited text
   const removeFromFinal = (indexToRemove: number) => {
     if (!activeAssessment) return;
     if (confirm("정말 삭제하시겠습니까?")) {
@@ -299,11 +647,11 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   };
 
   const handleDeleteMonth = () => {
-     if (confirm("정말 이 월의 데이터를 삭제하시겠습니까?")) {
+     if (confirm("정말 이 데이터를 삭제하시겠습니까?")) {
         const updated = assessments.filter(a => a.id !== selectedMonthId);
         onSave(updated);
-        if (updated.length > 0) setSelectedMonthId(updated[0].id);
-        else setSelectedMonthId('');
+        // Ensure auto-selection runs again
+        setSelectedMonthId('');
      }
   }
 
@@ -356,17 +704,75 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   // --- Render ---
 
   return (
-    <div className="bg-slate-50 min-h-[calc(100vh-140px)] flex gap-6">
-       
-       {/* 1. Month Sidebar */}
-       <div className="w-64 flex flex-col gap-4">
+    <div className="bg-slate-50 min-h-[calc(100vh-140px)] flex gap-6 relative">
+       {/* New Loading Overlay */}
+       {isAnalyzing && <AnalysisOverlay progress={loadingProgress} />}
+
+       {/* 0. Hidden Inputs for Upload (Moved to top-level to ensure availability) */}
+       <input type="file" ref={backupInputRef} className="hidden" accept=".json" onChange={handleImportBackup}/>
+       <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="application/pdf,image/*"/>
+
+       {/* 1. Sidebar (Split: Initial vs Monthly) */}
+       <div className="w-64 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
+          {/* Action: Create Regular Assessment */}
+          <button 
+             onClick={handleOpenRegularBuilder}
+             className="w-full bg-indigo-600 text-white p-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex flex-col items-center gap-2 group border border-indigo-500"
+          >
+             <div className="p-2 bg-indigo-500 rounded-lg group-hover:scale-110 transition-transform">
+                <Layers size={24} className="text-white"/>
+             </div>
+             <div className="text-center">
+                <h3 className="font-bold text-sm">정기 위험성평가 수립</h3>
+                <p className="text-[10px] text-indigo-200 mt-1 font-medium">최초 + 월간 + 피드백 통합</p>
+             </div>
+          </button>
+
+          {/* Section 1: Baseline (Initial/Regular) */}
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
-             <div className="flex justify-between items-center mb-4">
-                <h3 className="font-black text-slate-800 flex items-center gap-2">
-                   <Calendar size={18} className="text-blue-600"/> 월별 관리
+             <div className="flex justify-between items-center mb-3">
+                <h3 className="font-black text-slate-800 flex items-center gap-2 text-xs">
+                   <BookOpen size={14} className="text-amber-500"/> 기준 정보 (Standard)
+                </h3>
+                <button onClick={() => handleUploadClick('INITIAL')} className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors" title="최초 위험성평가 등록">
+                   <Plus size={14}/>
+                </button>
+             </div>
+             <div className="space-y-2">
+                {initialAssessments.length === 0 ? (
+                    <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 cursor-pointer hover:bg-slate-100" onClick={() => handleUploadClick('INITIAL')}>
+                        <span className="text-[10px] text-slate-400 font-bold">최초 평가 등록 필요</span>
+                    </div>
+                ) : (
+                    initialAssessments.map(ass => (
+                        <button
+                            key={ass.id}
+                            onClick={() => setSelectedMonthId(ass.id)}
+                            className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
+                                selectedMonthId === ass.id 
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-200' 
+                                : 'bg-amber-50 text-amber-900 border-amber-100 hover:border-amber-300'
+                            }`}
+                        >
+                            <div className="flex flex-col items-start truncate">
+                                <span className="font-bold text-xs truncate w-32">{ass.fileName}</span>
+                                <span className="text-[9px] opacity-80">{ass.type === 'INITIAL' ? '최초평가' : '정기평가'}</span>
+                            </div>
+                            <span className="text-[10px] font-bold bg-white/20 px-1.5 py-0.5 rounded">{ass.priorities.length}</span>
+                        </button>
+                    ))
+                )}
+             </div>
+          </div>
+
+          {/* Section 2: Operational (Monthly) */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+             <div className="flex justify-between items-center mb-3">
+                <h3 className="font-black text-slate-800 flex items-center gap-2 text-xs">
+                   <Calendar size={14} className="text-blue-600"/> 운영 정보 (Updates)
                 </h3>
                 <button onClick={() => setNewMonthMode(true)} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
-                   <Plus size={16}/>
+                   <Plus size={14}/>
                 </button>
              </div>
              
@@ -387,7 +793,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
              )}
 
              <div className="space-y-2">
-                {sortedMonths.map(month => (
+                {monthlyAssessments.map(month => (
                    <button
                       key={month.id}
                       onClick={() => setSelectedMonthId(month.id)}
@@ -397,7 +803,10 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                          : 'bg-white text-slate-600 border-slate-100 hover:border-slate-300'
                       }`}
                    >
-                      <span className="font-bold text-sm">{month.month}월</span>
+                      <div className="flex flex-col items-start">
+                          <span className="font-bold text-sm">{month.month}월</span>
+                          <span className="text-[9px] opacity-70">월간/수시</span>
+                      </div>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedMonthId === month.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
                          {month.priorities.length}건
                       </span>
@@ -408,53 +817,92 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
        </div>
 
        {/* 2. Main Content Area */}
-       <div className="flex-1 flex flex-col gap-6">
+       <div className="flex-1 flex flex-col gap-6 overflow-hidden">
           {activeAssessment ? (
              <>
-                {/* Header Banner */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex justify-between items-center">
-                   <div>
-                      <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-                         {activeAssessment.month}월 위험성평가
-                         <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
-                            파일명: {activeAssessment.fileName}
-                         </span>
-                      </h2>
-                      <p className="text-sm text-slate-500 mt-1 font-medium">
-                         총 {activeAssessment.priorities.length}개의 중점 관리 항목이 등록되어 있습니다.
-                      </p>
-                   </div>
-                   
-                   <div className="flex flex-col items-end gap-2">
-                      <div className="flex items-center gap-2">
-                          <button 
-                             onClick={handleExportBackup}
-                             className="flex items-center gap-2 bg-slate-100 text-slate-600 px-3 py-2 rounded-xl font-bold text-xs hover:bg-slate-200 transition-colors border border-slate-200"
-                             title="전체 데이터 백업 (JSON)"
-                          >
-                             <Download size={14} /> 백업
-                          </button>
-                          <button 
-                             onClick={() => backupInputRef.current?.click()}
-                             className="flex items-center gap-2 bg-slate-100 text-slate-600 px-3 py-2 rounded-xl font-bold text-xs hover:bg-slate-200 transition-colors border border-slate-200"
-                             title="데이터 복구 (JSON)"
-                          >
-                             <Upload size={14} /> 복구
-                          </button>
-                          <input type="file" ref={backupInputRef} className="hidden" accept=".json" onChange={handleImportBackup}/>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
-                             {isAnalyzing ? <Loader2 size={18} className="animate-spin"/> : <FileJson size={18}/>}
+                {/* Header Banner & Stats Panel */}
+                <div className={`rounded-2xl p-6 shadow-sm border flex flex-col gap-6 ${
+                    activeAssessment.type === 'INITIAL' || activeAssessment.type === 'REGULAR' 
+                    ? 'bg-amber-50 border-amber-200' 
+                    : 'bg-white border-slate-200'
+                }`}>
+                   {/* Top Bar */}
+                   <div className="flex justify-between items-start">
+                       <div>
+                          <div className="flex items-center gap-2 mb-1">
+                              {activeAssessment.type === 'INITIAL' || activeAssessment.type === 'REGULAR' ? (
+                                  <span className="bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded">기준 정보</span>
+                              ) : (
+                                  <span className="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded">운영 정보</span>
+                              )}
+                              <span className="text-xs font-bold text-slate-500 bg-white/50 px-2 py-0.5 rounded border border-slate-200/50">
+                                파일명: {activeAssessment.fileName}
+                             </span>
+                          </div>
+                          <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+                             {activeAssessment.type === 'REGULAR' ? `${activeAssessment.month.split('-')[0]}년 정기 위험성평가` : 
+                              activeAssessment.type === 'INITIAL' ? '최초 위험성평가 (Baseline)' : 
+                              `${activeAssessment.month}월 월간/수시 위험성평가`}
+                          </h2>
+                       </div>
+                       
+                       <div className="flex items-center gap-2">
+                          <button onClick={() => handleUploadClick(activeAssessment.type === 'INITIAL' ? 'INITIAL' : 'MONTHLY')} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
+                             <FileJson size={18}/>
                              <span>문서 분석/추가</span>
                           </button>
-                          <button onClick={handleDeleteMonth} className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors" title="이 월의 데이터 삭제">
-                             <Trash2 size={20} />
-                          </button>
-                          <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="application/pdf,image/*"/>
-                      </div>
+                          <div className="flex flex-col gap-1">
+                              <button onClick={() => backupInputRef.current?.click()} className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold" title="백업/복구">
+                                  <Upload size={16}/>
+                              </button>
+                              <button onClick={handleDeleteMonth} className="p-2 bg-white border border-slate-200 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors text-xs font-bold" title="삭제">
+                                  <Trash2 size={16}/>
+                              </button>
+                          </div>
+                       </div>
                    </div>
+
+                   {/* [NEW] Dashboard / Analytics Panel */}
+                   {stats && (
+                       <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                           {/* 1. Risk Gauge - Redesigned to Arch */}
+                           <div className="flex flex-col items-center border-r border-slate-100 pr-4">
+                               <RiskGauge highCount={stats.high} totalCount={stats.total} />
+                           </div>
+
+                           {/* 2. Key Metrics */}
+                           <div className="flex flex-col gap-3 border-r border-slate-100 pr-4 h-full justify-center">
+                               <div className="flex justify-between items-end p-2 bg-slate-50 rounded-lg">
+                                   <span className="text-xs font-bold text-slate-400 uppercase">Total Items</span>
+                                   <span className="text-2xl font-black text-slate-800">{stats.total}</span>
+                               </div>
+                               <div className="flex justify-between items-center px-2">
+                                   <span className="text-xs font-bold text-slate-400">전월 대비</span>
+                                   <div className={`flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded ${stats.diff > 0 ? 'bg-red-50 text-red-600' : stats.diff < 0 ? 'bg-green-50 text-green-600' : 'bg-slate-50 text-slate-500'}`}>
+                                       {stats.diff > 0 ? <TrendingUp size={12}/> : stats.diff < 0 ? <TrendingUp size={12} className="rotate-180"/> : null}
+                                       {stats.diff > 0 ? `+${stats.diff} 증가` : stats.diff < 0 ? `${stats.diff} 감소` : '변동 없음'}
+                                   </div>
+                               </div>
+                           </div>
+
+                           {/* 3. Top Categories */}
+                           <div className="flex flex-col gap-2 h-full justify-center">
+                               <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-1">Top Risk Categories</h4>
+                               {stats.topCategories.map(([cat, count], idx) => (
+                                   <div key={cat} className="flex items-center gap-2">
+                                       <span className="text-xs font-bold text-slate-600 w-16 truncate">{cat}</span>
+                                       <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                           <div 
+                                               className={`h-full rounded-full ${idx === 0 ? 'bg-indigo-500' : idx === 1 ? 'bg-blue-500' : 'bg-sky-400'}`} 
+                                               style={{ width: `${(count / stats.total) * 100}%` }}
+                                           ></div>
+                                       </div>
+                                       <span className="text-[10px] font-mono text-slate-400 w-6 text-right">{count}</span>
+                                   </div>
+                               ))}
+                           </div>
+                       </div>
+                   )}
                 </div>
 
                 {/* Main Workspace (Bento Grid) */}
@@ -508,14 +956,14 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                    </div>
 
                    {/* Right: Active Priorities List (8 cols) */}
-                   <div className="col-span-8 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[600px]">
+                   <div className="col-span-8 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[500px]">
                       <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
                          <div className="flex items-center gap-2">
                             <ShieldCheck className="text-green-600" size={20}/>
                             <h3 className="font-bold text-slate-800">최종 관리 목록</h3>
                          </div>
                          <div className="flex gap-2 items-center">
-                            {/* NEW: Search Bar */}
+                            {/* Search Bar */}
                            <div className="relative">
                                <input 
                                    type="text" 
@@ -529,7 +977,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                            
                            {previousAssessment && (
                               <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-lg flex items-center gap-1">
-                                 <TrendingUp size={12}/> vs {previousAssessment.month}월 비교 중
+                                 <TrendingUp size={12}/> vs {previousAssessment.month} 비교 중
                               </span>
                            )}
                          </div>
@@ -545,14 +993,11 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                             displayPriorities.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400 font-medium">검색 결과가 없습니다.</div>
                             ) : (
-                                // Map filtered list but use original Index to manage editing
                                 activeAssessment.priorities.map((item, originalIndex) => {
-                                   // Manual Filter Check
                                    if (searchTerm.trim() && !((item.content || '').includes(searchTerm) || (item.category || '').includes(searchTerm))) {
                                        return null; 
                                    }
 
-                                   // EDIT MODE RENDER
                                    if (editingIndex === originalIndex) {
                                        return (
                                            <div key={originalIndex} className="p-3 rounded-xl border border-blue-400 bg-blue-50/50 flex flex-col gap-2 shadow-md">
@@ -597,7 +1042,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                        );
                                    }
 
-                                   // NORMAL MODE RENDER
                                    let status: 'NEW' | 'CHANGED' | 'SAME' = 'SAME';
                                    if (previousAssessment) {
                                       const prevItem = previousAssessment.priorities.find(p => p.content === item.content);
@@ -627,7 +1071,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                              <button onClick={() => startEditing(originalIndex, item)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="수정">
                                                 <Edit2 size={16}/>
                                              </button>
-                                             {/* [UPDATED] Use Index for reliable deletion */}
                                              <button onClick={() => removeFromFinal(originalIndex)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="삭제">
                                                 <Trash2 size={16}/>
                                              </button>
@@ -642,21 +1085,213 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                 </div>
              </>
           ) : (
-             <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
-                <Calendar size={64} className="mb-4 opacity-20"/>
-                <h3 className="text-xl font-bold text-slate-600">월을 선택하거나 생성하세요</h3>
-                <p className="text-sm">왼쪽 사이드바에서 작업을 시작할 수 있습니다.</p>
+             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 animate-fade-in">
+                <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6 shadow-sm">
+                    <ShieldCheck size={40} className="text-indigo-400"/>
+                </div>
+                <h3 className="text-2xl font-black text-slate-800 mb-2">위험성평가 관리 시작하기</h3>
+                <p className="text-sm text-slate-500 max-w-md text-center leading-relaxed mb-8">
+                   현장의 안전 기준이 되는 <strong>[최초 위험성평가]</strong>를 먼저 등록하고,<br/>
+                   매월 변동되는 <strong>[월간/수시 평가]</strong>를 추가하여 빈틈없이 관리하세요.
+                </p>
                 
-                {/* Empty State Action */}
-                <div className="mt-4 flex gap-2">
-                   <button onClick={() => backupInputRef.current?.click()} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200">
-                      기존 데이터 복구하기
+                <div className="flex gap-4">
+                   <button 
+                      onClick={() => handleUploadClick('INITIAL')} 
+                      className="px-6 py-4 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-200 flex items-center gap-3 transition-transform hover:scale-105"
+                   >
+                      <Plus size={18}/> 최초 위험성평가 등록 (Standard)
                    </button>
-                   <input type="file" ref={backupInputRef} className="hidden" accept=".json" onChange={handleImportBackup}/>
+                   <button 
+                      onClick={() => backupInputRef.current?.click()} 
+                      className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-50 hover:border-slate-300 flex items-center gap-3 transition-colors"
+                   >
+                      <Download size={18}/> 기존 데이터 복구
+                   </button>
                 </div>
              </div>
           )}
        </div>
+
+       {/* ... Modal ... */}
+       {/* --- Regular Assessment Builder Modal --- */}
+       {showRegularBuilder && (
+           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-fade-in">
+               <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                   {/* Modal Header */}
+                   <div className="bg-indigo-900 text-white p-6 shrink-0 relative overflow-hidden">
+                       <div className="absolute inset-0 bg-gradient-to-r from-indigo-900 to-indigo-800"></div>
+                       <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                       <div className="relative z-10 flex justify-between items-start">
+                           <div>
+                               <div className="flex items-center gap-2 mb-2 text-indigo-300">
+                                   <Scale size={18} />
+                                   <span className="text-xs font-bold uppercase tracking-wider">Legal Compliance Module (2026)</span>
+                               </div>
+                               <h2 className="text-2xl font-black">정기 위험성평가 수립 마법사</h2>
+                               <p className="text-sm text-indigo-200 mt-1 opacity-80">최초평가(전체) + 월간평가(추가분) = 차기 정기평가(통합)</p>
+                           </div>
+                           <button onClick={() => setShowRegularBuilder(false)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"><X size={20}/></button>
+                       </div>
+                   </div>
+
+                   {/* Modal Body */}
+                   <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+                       {regularStep === 'SELECT' ? (
+                           <div className="max-w-2xl mx-auto py-6">
+                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+                                   
+                                   {/* Step 1: Base Assessment */}
+                                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                                       <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-4">
+                                           <FileJson size={24} />
+                                       </div>
+                                       <h3 className="text-lg font-bold text-slate-800 mb-2">1. 기초 데이터 (필수)</h3>
+                                       <p className="text-xs text-slate-500 mb-4 h-10">
+                                           기존에 수립된 '최초' 또는 '전년도 정기' 평가를 선택하세요.<br/>이 데이터가 전체 항목의 기준(Baseline)이 됩니다.
+                                       </p>
+                                       <div className="relative">
+                                           <select 
+                                               value={baseAssessmentId} 
+                                               onChange={(e) => setBaseAssessmentId(e.target.value)}
+                                               className="w-full text-sm font-bold border border-slate-300 rounded-xl p-3 appearance-none outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 bg-white"
+                                           >
+                                               <option value="">선택 안함</option>
+                                               {initialAssessments.map(a => (
+                                                   <option key={a.id} value={a.id}>{a.type === 'INITIAL' ? '[최초]' : '[정기]'} {a.fileName}</option>
+                                               ))}
+                                           </select>
+                                           <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                                       </div>
+                                   </div>
+
+                                   {/* Step 2: Target Year */}
+                                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                                       <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4">
+                                           <Calendar size={24} />
+                                       </div>
+                                       <h3 className="text-lg font-bold text-slate-800 mb-2">2. 분석 연도 (필수)</h3>
+                                       <p className="text-xs text-slate-500 mb-4 h-10">
+                                           해당 연도에 등록된 '월간/수시 평가' 데이터를 모두 스캔하여<br/>새롭게 발견된 위험 요인을 병합합니다.
+                                       </p>
+                                       <input 
+                                           type="number" 
+                                           value={regularTargetYear} 
+                                           onChange={(e) => setRegularTargetYear(e.target.value)}
+                                           className="w-full text-center font-bold text-lg border border-slate-300 rounded-xl py-2.5 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none"
+                                       />
+                                   </div>
+                               </div>
+
+                               <div className="mt-8 flex justify-center">
+                                   <div className="hidden md:flex items-center gap-4 text-slate-400 text-sm font-bold mb-8">
+                                       <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full">Base (All Items)</span>
+                                       <Plus size={16}/>
+                                       <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full">Updates (New Risks)</span>
+                                       <ArrowRight size={16}/>
+                                       <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full">New Regular</span>
+                                   </div>
+                               </div>
+
+                               <button 
+                                   onClick={handleAnalyzeRegular}
+                                   className="w-full bg-indigo-600 text-white font-bold rounded-xl py-4 hover:bg-indigo-700 shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-3 text-lg"
+                               >
+                                   <GitMerge size={24} /> 데이터 병합 및 분석 시작
+                               </button>
+                           </div>
+                       ) : (
+                           <div className="h-full flex flex-col">
+                               <div className="mb-4 shrink-0">
+                                   <div className="flex justify-between items-center mb-2">
+                                       <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                           <CheckCircle2 size={18} className="text-emerald-500"/>
+                                           분석 결과: 총 {aggregatedRisks.length}개 항목 도출
+                                       </h3>
+                                       <div className="flex gap-2">
+                                           <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
+                                               기존(Base): {aggregatedRisks.filter(r => r.source === 'INITIAL').length}
+                                           </span>
+                                           <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                                               신규(Added): {aggregatedRisks.filter(r => r.source === 'ADDED').length}
+                                           </span>
+                                       </div>
+                                   </div>
+                                   <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-xl flex items-start gap-2">
+                                       <Scale size={16} className="text-indigo-600 shrink-0 mt-0.5"/>
+                                       <p className="text-xs text-indigo-800 font-bold leading-relaxed">
+                                           [2026 안전보건규칙 준수 확인]<br/>
+                                           본 데이터는 산업안전보건법 제36조에 의거, 1년간의 수시/월간 평가(근로자 청취 및 빈도 분석) 결과를 정기 평가에 반영(환류)한 것으로 법적 효력을 갖습니다.
+                                       </p>
+                                   </div>
+                               </div>
+
+                               <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                                   {aggregatedRisks.map((risk, idx) => (
+                                       <div key={idx} className={`bg-white p-4 rounded-xl border shadow-sm flex items-start gap-4 group transition-colors ${risk.source === 'ADDED' ? 'border-blue-200 bg-blue-50/10' : 'border-slate-200'}`}>
+                                            <div className="flex flex-col items-center gap-1 shrink-0">
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${risk.level === 'HIGH' ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                                    {risk.level === 'HIGH' ? '상' : '일반'}
+                                                </div>
+                                                <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-1.5 rounded">{risk.category}</span>
+                                            </div>
+                                            
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    {risk.source === 'ADDED' && (
+                                                        <span className="text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded animate-pulse">NEW (월간발굴)</span>
+                                                    )}
+                                                    {risk.source === 'INITIAL' && (
+                                                        <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">기존항목</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm font-bold text-slate-800 leading-snug">{risk.content}</p>
+                                                <div className="mt-2 flex gap-2 flex-wrap">
+                                                    {risk.frequency > 0 && (
+                                                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 flex items-center gap-1">
+                                                            <AlertTriangle size={10}/> {risk.frequency}회 반복 발생 (중점관리 필요)
+                                                        </span>
+                                                    )}
+                                                    {risk.months.map(m => (
+                                                        <span key={m} className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{m}월</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <button 
+                                                onClick={() => handleRemoveAggregatedItem(idx)}
+                                                className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                                                title="목록에서 제외"
+                                            >
+                                                <X size={18} />
+                                            </button>
+                                       </div>
+                                   ))}
+                               </div>
+                           </div>
+                       )}
+                   </div>
+
+                   {/* Footer Actions */}
+                   {regularStep === 'REVIEW' && (
+                       <div className="p-4 bg-white border-t border-slate-100 flex justify-end gap-3 shrink-0">
+                           <button 
+                               onClick={() => setRegularStep('SELECT')}
+                               className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition-colors"
+                           >
+                               뒤로가기
+                           </button>
+                           <button 
+                               onClick={handleCreateRegularAssessment}
+                               className="px-8 py-3 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-colors flex items-center gap-2"
+                           >
+                               <Save size={18} /> 정기평가 확정 및 저장
+                           </button>
+                       </div>
+                   )}
+               </div>
+           </div>
+       )}
     </div>
   );
 };

@@ -27,6 +27,7 @@ export interface SafetyGuideline {
 
 export interface MonthlyRiskAssessment {
   id: string;
+  type?: 'INITIAL' | 'REGULAR' | 'MONTHLY'; // [NEW] Assessment Type
   month: string; // YYYY-MM
   fileName: string;
   priorities: SafetyGuideline[]; // Structured guidelines instead of strings

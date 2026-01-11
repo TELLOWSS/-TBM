@@ -371,16 +371,55 @@ export const evaluateTBMVideo = async (
   }
 };
 
-// ... (Monthly extraction remains unchanged) ...
-export const extractMonthlyPriorities = async (base64Data: string, mimeType: string): Promise<MonthlyExtractionResult> => {
+// [UPDATED] Enhanced Extraction to handle "Initial" (All Items) vs "Monthly" (Key Items)
+export const extractMonthlyPriorities = async (
+    base64Data: string, 
+    mimeType: string, 
+    type: 'INITIAL' | 'MONTHLY' = 'MONTHLY'
+): Promise<MonthlyExtractionResult> => {
     try {
       const ai = getAiClient(); // Lazy load
-      const prompt = `월간 위험성평가표 분석. 날짜(detectedMonth)와 항목(items) 추출.`;
+      
+      let prompt = "";
+      
+      if (type === 'INITIAL') {
+          // [FULL EXTRACTION MODE] For Initial Assessment
+          prompt = `
+            [TASK: INITIAL RISK ASSESSMENT FULL DIGITIZATION]
+            This is an 'Initial Risk Assessment' document (최초 위험성평가).
+            Your goal is to extract **EVERY SINGLE RISK FACTOR ROW** from the table, regardless of its risk level.
+            
+            Strict Instructions:
+            1. Do NOT summarize. Do NOT filter for only 'High' risks. Extract ALL rows.
+            2. For each row, extract:
+               - content: The risk factor/hazardous situation description.
+               - level: If the document indicates high risk (상, High, 10+) set to 'HIGH', otherwise 'GENERAL'.
+               - category: Work type (e.g., Formwork, Rebar, Common, Excavation).
+            3. Detect the document date (Year-Month) if visible.
+            
+            Output strictly in JSON format matching the schema.
+          `;
+      } else {
+          // [UPDATE MODE] For Monthly Assessment
+          prompt = `
+            [TASK: MONTHLY RISK ASSESSMENT UPDATE]
+            This is a 'Monthly/Routine Risk Assessment' document (월간/수시 위험성평가).
+            Your goal is to extract **Key Management Items** and **New/Changed Risks**.
+            
+            Strict Instructions:
+            1. Focus on items marked as 'Priority', 'High Risk', 'Management Target', or 'Changed'.
+            2. Extract: content, level, category.
+            3. Detect the month (YYYY-MM).
+            
+            Output strictly in JSON format matching the schema.
+          `;
+      }
+
       const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ inlineData: { mimeType, data: base64Data } }, { text: prompt }] }],
         config: {
-          // [FIX] Temperature 0.0 for Document Extraction
+          // [FIX] Temperature 0.0 for Document Extraction (Deterministic)
           temperature: 0.0, 
           responseMimeType: "application/json",
           responseSchema: {
@@ -407,6 +446,7 @@ export const extractMonthlyPriorities = async (base64Data: string, mimeType: str
       if (response.text) return JSON.parse(cleanAndRepairJson(response.text));
       return { items: [] };
     } catch (error: any) {
+      console.error("Risk Extraction Error:", error);
       return { items: [] };
     }
 };

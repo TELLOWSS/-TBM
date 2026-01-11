@@ -895,14 +895,15 @@ function App() {
 
               {settingsTab === 'backup' && (
                   <div className="p-6 space-y-4">
-                     <button onClick={handleExportData} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Download size={16}/> 데이터 백업</button>
+                     <button onClick={handleExportData} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Download size={16}/> 데이터 백업 (통합)</button>
                      <div className="relative">
                         <button onClick={()=>fileInputRef.current?.click()} className="w-full p-3 border rounded-lg flex items-center justify-center gap-2 hover:bg-slate-50"><Upload size={16}/> 데이터 복구/병합</button>
                         <input type="file" ref={fileInputRef} className="hidden" onChange={handleImportData} accept=".json"/>
                      </div>
                      <div className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg text-center leading-relaxed">
                         <span className="font-bold text-slate-600">※ Big Data Layering System</span><br/>
-                        데이터 복구 시 기존 데이터는 유지되며, 중복되지 않는 새로운 항목만 자동으로 합쳐집니다.
+                        데이터 복구 시 기존 데이터는 유지되며, 중복되지 않는 새로운 항목만 자동으로 합쳐집니다.<br/>
+                        <span className="text-blue-600 font-bold">(TBM 일지 + 위험성평가 데이터 포함)</span>
                      </div>
                      <hr/>
                      <button onClick={handleCleanupData} className="w-full p-3 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg flex items-center justify-center gap-2 font-bold"><Eraser size={16}/> 오류 데이터 정리</button>
