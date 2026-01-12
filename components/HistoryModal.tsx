@@ -1,13 +1,37 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, Rocket, Shield, BrainCircuit, LayoutDashboard, FileText, Video, Sparkles, History, GitCommit, Zap, Minimize2, Edit2, ListOrdered, Save, FileVideo, Presentation, CalendarRange, FolderInput, GraduationCap, Lock, Database, Compass, TrendingUp } from 'lucide-react';
+import { X, Rocket, Shield, BrainCircuit, LayoutDashboard, FileText, Video, Sparkles, History, GitCommit, Zap, Minimize2, Edit2, ListOrdered, Save, FileVideo, Presentation, CalendarRange, FolderInput, GraduationCap, Lock, Database, Compass, TrendingUp, Grid, Layers, Monitor, HardDrive } from 'lucide-react';
 
 interface HistoryModalProps {
   onClose: () => void;
 }
 
 const milestones = [
+  {
+    version: 'v4.0.1',
+    date: '2026.01.13',
+    title: '레거시 데이터 복구 프로토콜 (Legacy Recovery)',
+    desc: '이전 버전에서 생성된 모든 형식의 JSON 백업 파일을 인식할 수 있도록 복구 엔진을 고도화했습니다. 데이터 구조를 심층 스캔하여 TBM 일지, 위험성평가, 팀 정보를 자동으로 분류하고 복원합니다.',
+    icon: <HardDrive size={18} />,
+    color: 'bg-emerald-600'
+  },
+  {
+    version: 'v4.0.0',
+    date: '2026.01.13',
+    title: '현장 통합 관제 센터 (Command Center) 런칭',
+    desc: '기존의 관리자 페이지를 건설 현장 실무에 최적화된 "통합 관제 센터"로 전면 개편했습니다. 실시간 현장 시계(KST)와 한국형 기상 관측 위젯을 탑재하고, 직관적인 대형 버튼과 KPI 지표를 통해 현장 상황을 한눈에 파악할 수 있도록 UX를 혁신했습니다.',
+    icon: <Monitor size={18} />,
+    color: 'bg-slate-900'
+  },
+  {
+    version: 'v3.2.0',
+    date: '2026.01.02',
+    title: '대시보드 3.0: 커맨드 센터 리디자인',
+    desc: '사용자 경험(UX)을 극대화하기 위해 최신 벤토 그리드(Bento Grid) 시스템 전면 도입. 황금비율 레이아웃과 Glassmorphism(유리 질감) 디자인을 적용하여 정보의 가독성과 심미성을 동시에 확보. 날씨 위젯을 대화형(Interactive)으로 고도화하여 현장 환경 대응력 강화.',
+    icon: <Grid size={18} />,
+    color: 'bg-violet-600'
+  },
   {
     version: 'v3.0.0',
     date: '2026.01.01',

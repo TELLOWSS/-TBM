@@ -273,7 +273,15 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       alert("백업할 데이터가 없습니다.");
       return;
     }
-    const dataStr = JSON.stringify(assessments, null, 2);
+    // [FIX] Standardized Backup Format: Wrap in an object to match App.tsx structure
+    const backupData = {
+        version: '3.1.0',
+        scope: 'RISK',
+        backupDate: new Date().toISOString(),
+        assessments: assessments
+    };
+
+    const dataStr = JSON.stringify(backupData, null, 2);
     const blob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -317,20 +325,39 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
             let loadedCount = 0;
 
             validContents.forEach(loadedData => {
+                // [FIX] Robust Restore Logic: Handle both Array (Legacy) and Object (Standard)
+                let itemsToProcess: any[] = [];
+                
                 if (Array.isArray(loadedData)) {
-                    (loadedData as any[]).forEach((item: any) => {
-                        if(item.id && item.month && Array.isArray(item.priorities)) {
-                            currentMap.set(item.id, item as MonthlyRiskAssessment);
-                            loadedCount++;
+                    // Legacy Format: direct array
+                    itemsToProcess = loadedData;
+                } else if (loadedData && Array.isArray(loadedData.assessments)) {
+                    // Standard Format: object with 'assessments' key
+                    itemsToProcess = loadedData.assessments;
+                } else if (typeof loadedData === 'object') {
+                    // Deep Scan fallback for other keys
+                    Object.keys(loadedData).forEach(key => {
+                        if (Array.isArray(loadedData[key])) {
+                            // Check if first item looks like assessment
+                            if (loadedData[key].length > 0 && loadedData[key][0].month && (loadedData[key][0].priorities || loadedData[key][0].type)) {
+                                itemsToProcess = [...itemsToProcess, ...loadedData[key]];
+                            }
                         }
                     });
                 }
+
+                itemsToProcess.forEach((item: any) => {
+                    if(item.id && item.month && (item.priorities || item.type)) {
+                        currentMap.set(item.id, item as MonthlyRiskAssessment);
+                        loadedCount++;
+                    }
+                });
             });
 
             if (loadedCount > 0) {
                 const merged: MonthlyRiskAssessment[] = Array.from(currentMap.values());
                 onSave(merged);
-                alert(`✅ 대량 복구 완료: 총 ${files.length}개 파일에서 데이터를 병합했습니다.`);
+                alert(`✅ 대량 복구 완료: 총 ${loadedCount}건의 위험성평가 데이터가 병합되었습니다.`);
                 
                 if (merged.length > 0) {
                     // Sort to find latest
@@ -338,7 +365,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                     setSelectedMonthId(latest.id);
                 }
             } else {
-                alert("올바르지 않은 백업 파일 형식이거나 새로운 데이터가 없습니다.");
+                alert("유효한 위험성평가 데이터를 찾을 수 없습니다.\n파일 형식을 확인해주세요.");
             }
         } catch (err) {
             console.error(err);

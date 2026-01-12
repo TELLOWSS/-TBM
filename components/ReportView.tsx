@@ -2,7 +2,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { TBMEntry } from '../types';
-import { Printer, X, Download, Loader2, Edit3, Trash2, Sparkles, UserCheck, AlertOctagon, Eye, Users, Video, FileVideo, ImageOff, CheckCircle2, XCircle, Image as ImageIcon, Package } from 'lucide-react';
+import { Printer, X, Download, Loader2, Edit3, Trash2, Sparkles, UserCheck, AlertOctagon, Eye, Users, Video, FileVideo, ImageOff, CheckCircle2, XCircle, Image as ImageIcon, Package, FileText, Mic, ShieldCheck, Lock } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
@@ -34,34 +34,40 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
       return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // [REFACTORED] Solid Image Converter for Icons
+  // [REFACTORED] Robust Solid Image Converter for Icons
+  // This ensures SVGs don't shift or disappear during html2canvas capture
   const convertSvgToImage = async (element: HTMLElement) => {
       const svgs = element.querySelectorAll('svg');
       for (const svg of Array.from(svgs)) {
           try {
               const style = window.getComputedStyle(svg);
-              const color = style.color; 
+              const rect = svg.getBoundingClientRect();
+              
+              // Determine exact dimensions
+              // Fallback to 24px if detection fails
+              const width = rect.width > 0 ? rect.width : (parseFloat(style.width) || 24);
+              const height = rect.height > 0 ? rect.height : (parseFloat(style.height) || 24);
+              
+              const color = style.color || '#000000';
               const fill = style.fill !== 'none' ? style.fill : 'none';
               
               let svgData = new XMLSerializer().serializeToString(svg);
               
+              // In-line styles to ensure render consistency
               if (color) {
                   svgData = svgData.replace(/currentColor/g, color);
+                  // Ensure stroke is applied if not overridden
                   if (!svgData.includes('stroke=')) svgData = svgData.replace(/<svg/, `<svg stroke="${color}"`);
-                  if (fill !== 'none') svgData = svgData.replace(/fill="none"/g, `fill="${fill}"`);
               }
 
               const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-              const img = new Image();
-              
-              const rect = svg.getBoundingClientRect();
-              const width = rect.width || parseFloat(style.width) || 24;
-              const height = rect.height || parseFloat(style.height) || 24;
-
-              const scaleFactor = 4; 
+              // High resolution canvas for sharp icons
+              const scaleFactor = 3; 
               canvas.width = width * scaleFactor; 
               canvas.height = height * scaleFactor;
+              
+              const ctx = canvas.getContext('2d');
+              const img = new Image();
               
               const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
               const url = URL.createObjectURL(svgBlob);
@@ -70,26 +76,35 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                   img.onload = () => {
                       if (ctx) {
                           ctx.clearRect(0, 0, canvas.width, canvas.height);
-                          ctx.imageSmoothingEnabled = false; 
+                          // Smooth scaling
+                          ctx.imageSmoothingEnabled = true;
+                          ctx.imageSmoothingQuality = 'high';
                           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                       }
                       URL.revokeObjectURL(url);
                       resolve(null);
                   };
-                  img.onerror = () => resolve(null);
+                  img.onerror = () => {
+                      console.warn("SVG Load Error", svg);
+                      resolve(null);
+                  };
                   img.src = url;
               });
 
               const replacementImg = document.createElement('img');
               replacementImg.src = canvas.toDataURL('image/png');
               
+              // Force exact dimensions on the replacement image
               replacementImg.style.width = `${width}px`;
               replacementImg.style.height = `${height}px`;
-              replacementImg.style.display = 'inline-block';
-              replacementImg.style.verticalAlign = 'middle';
-              replacementImg.style.margin = '0';
-              replacementImg.style.padding = '0';
+              replacementImg.style.minWidth = `${width}px`; // Critical for flex containers
+              replacementImg.style.minHeight = `${height}px`;
+              replacementImg.style.display = style.display === 'block' ? 'block' : 'inline-block';
+              replacementImg.style.verticalAlign = style.verticalAlign || 'middle';
+              replacementImg.style.margin = style.margin;
+              replacementImg.style.padding = style.padding;
               
+              // Replace in DOM
               if (svg.parentNode) {
                   svg.parentNode.replaceChild(replacementImg, svg);
               }
@@ -104,6 +119,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
     setGeneratingMode(mode);
     setStatusMessage(mode === 'PDF' ? "PDF 생성 중..." : "이미지 변환 중...");
     
+    // Allow UI update
     await new Promise(resolve => setTimeout(resolve, 100));
 
     const originalScrollPos = window.scrollY;
@@ -112,11 +128,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
     const ghostContainer = document.createElement('div');
     ghostContainer.id = 'pdf-ghost-container';
     
+    // Position off-screen but keep layout flow
     Object.assign(ghostContainer.style, {
         position: 'fixed',
         top: '0',
-        left: '-10000px',
-        width: '794px',
+        left: '-10000px', // Far off-screen
+        width: '794px',   // A4 Width
         zIndex: '-9999',
         background: '#ffffff',
     });
@@ -132,20 +149,24 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
 
       for (let i = 0; i < originalPages.length; i++) {
           const originalPage = originalPages[i] as HTMLElement;
+          // Deep clone
           const clone = originalPage.cloneNode(true) as HTMLElement;
 
+          // Reset styles that might interfere with A4 layout
           clone.style.margin = '0';
           clone.style.padding = '0';
           clone.style.boxShadow = 'none';
-          clone.style.transform = 'none';
+          clone.style.transform = 'none'; // Remove scaling
           clone.style.width = '794px';
           clone.style.height = '1123px';
           clone.style.position = 'relative';
           clone.style.backgroundColor = '#ffffff';
-          clone.style.border = '2px solid black';
+          clone.style.border = '2px solid black'; // Preserve outer border
           
+          // Remove UI controls
           clone.querySelectorAll('.edit-overlay, .no-print-ui').forEach(el => el.remove());
           
+          // Freeze animations
           clone.querySelectorAll('*').forEach((el) => {
              const htmlEl = el as HTMLElement;
              htmlEl.style.animation = 'none';
@@ -154,8 +175,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
 
           ghostContainer.appendChild(clone);
 
+          // 1. Convert SVGs to PNGs (Critical for icon alignment)
           await convertSvgToImage(clone);
 
+          // 2. Preload all images
           const images = Array.from(clone.querySelectorAll('img'));
           await Promise.all(images.map(img => {
               if (img.complete) return Promise.resolve();
@@ -165,10 +188,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
               });
           }));
           
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Brief pause for rendering stabilization
+          await new Promise(resolve => setTimeout(resolve, 300));
 
+          // 3. Capture with html2canvas
           const canvas = await html2canvas(clone, {
-            scale: 2,
+            scale: 2, // 2x Scale for crisp text
             useCORS: true,
             logging: false,
             width: 794,
@@ -176,6 +201,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
             x: 0,
             y: 0,
             backgroundColor: '#ffffff',
+            // Enforce font rendering to fix layout shifts
             onclone: (doc) => {
                const style = doc.createElement('style');
                style.innerHTML = `
@@ -183,35 +209,33 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                      -webkit-font-smoothing: antialiased !important; 
                      font-family: "Pretendard", "Malgun Gothic", sans-serif !important; 
                      box-sizing: border-box !important;
-                     letter-spacing: -0.5px !important;
+                     letter-spacing: -0.5px !important; /* Tighter tracking for lists */
                   }
-                  td { 
-                      vertical-align: middle !important; 
-                      padding-top: 2px !important;
-                      padding-bottom: 2px !important;
+                  /* Enforce vertical centering in table-like structures */
+                  td, .col, .row {
+                      border-color: black !important;
                   }
                   .badge-cell {
                       vertical-align: middle !important;
                       text-align: center !important;
                       padding: 2px !important;
                   }
-                  .badge-cell span {
-                      display: inline-block !important;
-                      margin-top: 0 !important;
-                  }
                   .text-cell {
                       vertical-align: middle !important;
                       padding-left: 4px !important;
-                      line-height: 1.2 !important;
+                      line-height: 1.3 !important; /* Fixed line height */
                   }
-                  .text-cell span {
-                      display: block !important;
-                      position: relative !important;
-                      top: 0 !important;
+                  .section-header {
+                      background-color: #f3f4f6 !important;
+                      -webkit-print-color-adjust: exact !important;
+                      print-color-adjust: exact !important;
                   }
-                  .row { display: flex !important; width: 100% !important; border-bottom: 1px solid black !important; }
-                  .col { border-right: 1px solid black !important; height: 100% !important; }
-                  img { max-width: 100% !important; height: auto !important; object-fit: contain !important; }
+                  img { 
+                      max-width: 100% !important; 
+                      height: auto !important; 
+                      object-fit: contain !important;
+                      display: inline-block !important; /* Prevents block-level margins */
+                  }
                `;
                doc.head.appendChild(style);
             }
@@ -220,8 +244,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
           const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
           if (mode === 'PDF' && pdf) {
-              const imgWidth = 210;
-              const imgHeight = 297;
+              const imgWidth = 210; // A4 Width in mm
+              const imgHeight = 297; // A4 Height in mm
               if (i > 0) pdf.addPage();
               pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
           } else if (mode === 'IMAGE') {
@@ -322,9 +346,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
         }
         
         /* Rigid Layout Grid */
-        .row { display: flex; width: 100%; border-bottom: 1px solid black; box-sizing: border-box; }
+        .row { display: flex; width: 100%; border-bottom: 1px solid black; box-sizing: border-box; flex-shrink: 0; }
         .row.last { border-bottom: none; }
-        .col { border-right: 1px solid black; height: 100%; box-sizing: border-box; position: relative; }
+        .col { border-right: 1px solid black; height: 100%; box-sizing: border-box; position: relative; flex-shrink: 0; overflow: hidden; }
         .col.last { border-right: none; }
         
         /* Fixed Heights */
@@ -344,10 +368,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
             font-weight: 800;
             height: 30px;
             color: black;
+            flex-shrink: 0;
         }
         
-        .body-row-images { height: 400px; border-bottom: 1px solid black; display: flex; width: 100%; }
-        .body-row-text { flex: 1; display: flex; width: 100%; }
+        .body-row-images { height: 400px; border-bottom: 1px solid black; display: flex; width: 100%; flex-shrink: 0; }
+        .body-row-text { flex: 1; display: flex; width: 100%; min-height: 0; }
         
         /* Text Handling */
         .text-wrap-fix {
@@ -357,11 +382,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
         }
         
         /* Helpers */
-        .flex-center { display: flex; align-items: center; justify-content: center; }
+        .flex-center { display: flex; align-items: center; justify-content: center; text-align: center; }
         
         /* Table Reset for Internal Grids (Risk/Feedback) */
         table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-        td { vertical-align: middle; padding: 2px; }
+        td { vertical-align: middle; padding: 2px; border-color: #cbd5e1; }
         
         @media print {
           @page { size: A4; margin: 0; }
@@ -434,9 +459,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                 logQuality: 0, focus: 0, voice: 0, ppe: 0, deductions: []
             };
 
-            // [CRITICAL UPDATE] Ensure "Video Evidence" is true if ANY video data exists (URL, FileName, or Analysis)
             const hasVideoEvidence = !!(entry.tbmVideoUrl || entry.tbmVideoFileName || entry.videoAnalysis);
-            // Fallback display text for filename
             const displayFileName = entry.tbmVideoFileName || (entry.videoAnalysis ? '분석된 동영상 데이터.mp4' : '파일명 없음');
 
             return (
@@ -445,6 +468,18 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                 className="report-page group"
                 style={{ transform: `scale(${scale})`, marginBottom: `${40 * scale}px` }} 
               >
+                {/* [NEW] Digital Integrity Seal (Legal Defense) */}
+                <div className="absolute top-24 right-8 z-20 pointer-events-none opacity-80 rotate-12 mix-blend-multiply">
+                    <div className="border-4 border-red-600 rounded-full w-24 h-24 flex items-center justify-center p-1">
+                        <div className="border border-red-600 rounded-full w-full h-full flex flex-col items-center justify-center text-red-600 text-center">
+                            <ShieldCheck size={20} strokeWidth={2.5}/>
+                            <span className="text-[8px] font-black uppercase mt-1 leading-none">Digital<br/>Integrity</span>
+                            <span className="text-[10px] font-black mt-1">VERIFIED</span>
+                            <span className="text-[6px] mt-1 font-mono tracking-tighter">HuiGang OS</span>
+                        </div>
+                    </div>
+                </div>
+
                 {/* 1. Header Row */}
                 <div className="row h-header">
                     <div className="col" style={{width: '65%'}}>
@@ -498,9 +533,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                         </div>
                         <div className="col last" style={{width: '50%'}}>
                             <div className="section-header">2. TBM 실시 사진 및 동영상</div>
-                            {/* [MODIFIED] Flex layout for image and video bar */}
                             <div className="h-[calc(100%-30px)] p-2 flex flex-col bg-white">
-                                 {/* Photo Area - Takes available space */}
                                  <div className="flex-1 w-full flex items-center justify-center overflow-hidden border border-slate-200 bg-slate-50 relative rounded-sm mb-1">
                                      {entry.tbmPhotoUrl ? (
                                         <SafeImage src={entry.tbmPhotoUrl} className="max-w-full max-h-full object-contain" />
@@ -509,13 +542,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                                      )}
                                  </div>
 
-                                 {/* [NEW] Video Info Bar (Explicitly Rendered at Bottom) */}
-                                 {/* Explicit check for video evidence to show bar */}
                                  {hasVideoEvidence ? (
                                      <div className="w-full bg-white border border-red-500 rounded p-1.5 flex items-center justify-between shrink-0 h-8 shadow-[0_0_0_1px_rgba(239,68,68,0.2)]">
                                          <div className="flex items-center gap-1.5">
                                              <div className="relative flex h-3 w-3 shrink-0 items-center justify-center">
-                                               {/* Static circle for print, animated for screen */}
                                                <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping no-print"></span>
                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600"></span>
                                              </div>
@@ -529,7 +559,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                                          </div>
                                      </div>
                                  ) : (
-                                     // Placeholder for consistent layout (Optional, currently hidden)
                                      <div className="w-full h-8 flex items-center justify-center border border-dashed border-slate-200 rounded bg-slate-50 text-[9px] text-slate-300">
                                          동영상 기록 없음
                                      </div>
@@ -552,7 +581,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                                 <div className="flex-1 border border-orange-300 rounded flex flex-col min-h-0 bg-white">
                                     <div className="bg-orange-50 p-1.5 text-center text-[10px] font-bold text-orange-700 border-b border-orange-200 shrink-0">⚠ 중점 위험 관리 사항</div>
                                     <div className="p-2 overflow-hidden flex flex-col">
-                                        {/* STRICT TABLE STRUCTURE for Risk Factors */}
                                         <table className="w-full border-collapse">
                                             <tbody>
                                                 {(entry.riskFactors || []).slice(0,5).map((risk, i) => (
@@ -592,9 +620,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                              <div className="flex-1 flex flex-col overflow-hidden">
                                 <div className="p-3 border-b border-black bg-slate-50/50">
                                     {entry.videoAnalysis ? (
-                                        <div className="flex flex-col gap-3">
+                                        <div className="flex flex-col gap-2">
                                             {/* Top Score */}
-                                            <div className="flex justify-between items-center">
+                                            <div className="flex justify-between items-center mb-1">
                                                 <div className="flex items-center gap-1.5">
                                                     <Sparkles size={14} className="text-violet-600 shrink-0"/>
                                                     <span className="text-[11px] font-black text-black">AI 종합 감사 점수</span>
@@ -604,51 +632,41 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                                                 </span>
                                             </div>
 
-                                            {/* Transparency Matrix */}
-                                            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                            {/* Detailed Evaluation Bars (Gauges) */}
+                                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-1">
                                                 {[
-                                                    { label: '일지 충실도', score: rubric.logQuality, max: 30, color: 'bg-emerald-500' },
-                                                    { label: '팀원 집중도', score: rubric.focus, max: 30, color: 'bg-blue-500' },
-                                                    { label: '음성 전달력', score: rubric.voice, max: 20, color: 'bg-violet-500' },
-                                                    { label: '보호구 상태', score: rubric.ppe, max: 20, color: 'bg-orange-500' }
-                                                ].map((item, i) => (
-                                                    <div key={i} className="flex flex-col">
-                                                        <div className="flex justify-between text-[9px] font-bold text-slate-600 mb-0.5">
-                                                            <span>{item.label}</span>
-                                                            <span>{item.score}/{item.max}</span>
+                                                    { label: '일지 충실도', score: rubric.logQuality || 0, max: 30, color: 'bg-indigo-500', bg: 'bg-indigo-50' },
+                                                    { label: '작업자 집중도', score: rubric.focus || 0, max: 30, color: 'bg-emerald-500', bg: 'bg-emerald-50' },
+                                                    { label: '전파 명확성', score: rubric.voice || 0, max: 20, color: 'bg-amber-500', bg: 'bg-amber-50' },
+                                                    { label: '보호구 상태', score: rubric.ppe || 0, max: 20, color: 'bg-rose-500', bg: 'bg-rose-50' },
+                                                ].map((metric, midx) => (
+                                                    <div key={midx} className="flex items-center text-[9px]">
+                                                        <span className="w-14 font-bold text-slate-500 truncate">{metric.label}</span>
+                                                        <div className={`flex-1 h-1.5 rounded-full mx-1 overflow-hidden ${metric.bg}`}>
+                                                            <div 
+                                                                className={`h-full rounded-full ${metric.color}`} 
+                                                                style={{ width: `${(metric.score / metric.max) * 100}%` }}
+                                                            ></div>
                                                         </div>
-                                                        <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                                            <div className={`h-full ${item.color}`} style={{ width: `${(item.score / item.max) * 100}%` }}></div>
-                                                        </div>
+                                                        <span className="w-6 text-right font-mono font-bold text-black">{metric.score}</span>
                                                     </div>
                                                 ))}
                                             </div>
 
-                                            {/* Deductions List - STRICT TABLE */}
-                                            {rubric.deductions && rubric.deductions.length > 0 && (
-                                                <div className="bg-red-50 border border-red-100 rounded p-2">
-                                                    <div className="flex items-center gap-1 mb-1">
-                                                        <XCircle size={10} className="text-red-500 shrink-0"/>
-                                                        <span className="text-[9px] font-bold text-red-700">주요 감점 사유</span>
+                                            {/* [NEW] Leader Coaching (Reading to Leading) */}
+                                            {entry.videoAnalysis.leaderCoaching && (
+                                                <div className="bg-indigo-50 border border-indigo-200 rounded p-2 mb-1">
+                                                    <div className="flex items-center gap-1 mb-0.5">
+                                                        <span className="text-[9px] font-black text-indigo-700 uppercase">Leader's Action</span>
                                                     </div>
-                                                    <table className="w-full border-collapse">
-                                                        <tbody>
-                                                            {rubric.deductions.slice(0,3).map((reason, idx) => (
-                                                                <tr key={idx}>
-                                                                    <td className="w-4 align-top pt-0.5 badge-cell">
-                                                                        <span className="text-red-400 text-[9px]">•</span>
-                                                                    </td>
-                                                                    <td className="align-top text-cell">
-                                                                        <span className="text-[9px] text-red-600 leading-tight break-keep block">{reason}</span>
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                                    <p className="text-[10px] font-bold text-slate-800 leading-snug">
+                                                        "{entry.videoAnalysis.leaderCoaching.actionItem}"
+                                                    </p>
                                                 </div>
                                             )}
 
-                                            <div className="text-[10px] text-slate-700 font-medium leading-relaxed bg-white p-2 rounded border border-slate-200 text-wrap-fix italic border-l-2 border-l-violet-400">
+                                            <div className="text-[10px] text-slate-700 font-medium leading-relaxed bg-white p-2 rounded border border-slate-200 text-wrap-fix italic border-l-2 border-l-violet-400 mt-1">
+                                                <span className="block text-[9px] font-bold text-violet-600 mb-0.5">종합 의견</span>
                                                 "{entry.videoAnalysis.evaluation}"
                                             </div>
                                         </div>
@@ -661,7 +679,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                                         <UserCheck size={12}/> 안전관리자 코멘트
                                     </div>
                                     <div className="space-y-1">
-                                        {/* STRICT TABLE for Feedback */}
                                         <table className="w-full border-collapse">
                                             <tbody>
                                             {(entry.safetyFeedback || []).slice(0,3).map((fb, i) => (

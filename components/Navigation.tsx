@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, PlusCircle, FileText, ShieldCheck, ChevronRight, Settings, Shield, Sparkles, History, Hexagon, User } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, FileText, ShieldCheck, ChevronRight, Settings, Shield, Sparkles, History, Hexagon, User, Microscope } from 'lucide-react';
 
 interface NavigationProps {
   currentView: string;
@@ -13,22 +13,23 @@ interface NavigationProps {
 
 // Updated Logo: Geometric Monogram (Architectural)
 const BrandLogo = () => (
-  <div className="relative w-10 h-10 flex items-center justify-center">
-     <div className="absolute inset-0 bg-blue-600 rounded-xl rotate-3 opacity-20"></div>
-     <div className="absolute inset-0 bg-indigo-600 rounded-xl -rotate-3 opacity-20"></div>
+  <div className="relative w-10 h-10 flex items-center justify-center group">
+     <div className="absolute inset-0 bg-blue-600 rounded-xl rotate-3 opacity-20 group-hover:rotate-6 transition-transform duration-500"></div>
+     <div className="absolute inset-0 bg-indigo-600 rounded-xl -rotate-3 opacity-20 group-hover:-rotate-6 transition-transform duration-500"></div>
      <div className="relative w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl flex items-center justify-center text-white shadow-lg border border-slate-700">
         <Hexagon size={24} strokeWidth={2.5} className="text-white"/>
-        <div className="absolute w-2 h-2 bg-red-500 rounded-full top-2 right-2 border-2 border-slate-800"></div>
+        <div className="absolute w-2 h-2 bg-emerald-500 rounded-full top-2 right-2 border-2 border-slate-800 animate-pulse"></div>
      </div>
   </div>
 );
 
 export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentView, onOpenSettings, onShowHistory, onShowIdentity, onNewEntryClick }) => {
   const navItems = [
-    { id: 'dashboard', label: '통합 대시보드', sub: 'Overview', icon: <LayoutDashboard size={20} /> },
-    { id: 'new', label: '스마트 TBM 등록', sub: 'Registration', icon: <PlusCircle size={20} /> },
+    { id: 'dashboard', label: '통합 관제 대시보드', sub: 'Control Center', icon: <LayoutDashboard size={20} /> },
+    { id: 'new', label: '스마트 TBM 지휘', sub: 'Operation', icon: <PlusCircle size={20} /> },
     { id: 'risk-assessment', label: '위험성평가 관리', sub: 'Risk Management', icon: <ShieldCheck size={20} /> },
-    { id: 'reports', label: '보고서 센터', sub: 'Archive', icon: <FileText size={20} /> },
+    { id: 'reports', label: '디지털 문서 보관소', sub: 'Secure Archive', icon: <FileText size={20} /> },
+    { id: 'data-lab', label: '안전데이터 심층연구', sub: 'Deep Analytics', icon: <Microscope size={20} /> },
   ];
 
   const handleNavClick = (id: string) => {
@@ -73,18 +74,22 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
         
         {/* 1. Header */}
         <div className="p-8 relative z-10">
-          <div className="flex items-center gap-4 mb-2">
+          <div className="flex items-center gap-4 mb-2 cursor-pointer" onClick={onShowIdentity}>
              <BrandLogo />
              <div>
                <h1 className="font-black text-xl leading-none text-white tracking-tight mb-1 font-sans">HUIGANG</h1>
-               <span className="text-[9px] font-bold text-slate-500 tracking-[0.2em] uppercase block">Construction OS</span>
+               <span className="text-[9px] font-bold text-slate-500 tracking-[0.2em] uppercase block">Safety OS v4.0</span>
              </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wide">System Online</span>
           </div>
         </div>
         
         {/* 2. Navigation List */}
         <div className="flex-1 px-4 py-2 relative z-10 overflow-y-auto custom-scrollbar space-y-1">
-          <p className="text-[10px] font-extrabold text-slate-600 px-4 mb-3 uppercase tracking-widest">Main Module</p>
+          <p className="text-[10px] font-extrabold text-slate-600 px-4 mb-3 uppercase tracking-widest">Main Modules</p>
           
           {navItems.map((item) => {
             const isActive = currentView === item.id;
@@ -151,7 +156,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
           
           <div className="flex justify-between items-center px-1">
               <button onClick={onShowHistory} className="text-[10px] text-slate-600 font-bold hover:text-slate-400 transition-colors flex items-center gap-1">
-                 <History size={10}/> v3.0.0
+                 <History size={10}/> Update Log
               </button>
               <button onClick={onShowIdentity} className="text-[10px] text-slate-600 font-bold hover:text-blue-400 transition-colors tracking-widest uppercase">
                  System Identity

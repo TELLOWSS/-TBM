@@ -4,14 +4,17 @@ export enum TeamCategory {
   REBAR = '철근',
   SYSTEM = '시스템',
   CONCRETE_SCAFFOLD = '콘크리트비계',
-  FINISHING = '할석/미장/견출', // New Category
+  FINISHING = '할석/미장/견출', 
   DIRECT = '직영',
+  GANGFORM = '갱폼',
+  ALFORM = '알폼',
+  DISMANTLE = '해체정리'
 }
 
 export interface TeamOption {
   id: string;
   name: string;
-  category: TeamCategory;
+  category: string; 
 }
 
 export interface RiskAssessmentItem {
@@ -46,13 +49,25 @@ export interface ScoreRubric {
 // [UPDATED] Deep Insight Analysis Result
 export interface TBMAnalysisResult {
   score: number; // 0 to 100
-  evaluation: string; // One line summary
+  evaluation: string; // Overall Summary
   
+  // [NEW] 4-Point Specific Evaluations (Editable)
+  evalLog: string;        // 일지 작성 평가
+  evalAttendance: string; // 참석 및 호응도 평가
+  evalFocus: string;      // 집중도 평가
+  evalLeader: string;     // 주관자(팀장) 리딩 평가
+
   // [NEW] Analysis Source Indicator
   analysisSource: 'DOCUMENT' | 'VIDEO'; 
 
   // [NEW] Detailed Rubric for Transparency
   rubric: ScoreRubric;
+
+  // [NEW] Feature: Smart Coaching (From PDF 'Reading to Leading')
+  leaderCoaching: {
+    actionItem: string; // Specific action to take (e.g., "Raise voice volume")
+    rationale: string; // Why this matters
+  };
 
   // Basic Metrics
   details: {
@@ -123,6 +138,9 @@ export interface TBMEntry {
   originalLogImageUrl?: string; // URL for the paper log photo or PDF preview
   originalLogMimeType?: string; // To distinguish PDF vs Image
   createdAt: number;
+  
+  // [NEW] Digital Integrity Seal
+  integrityHash?: string; // Simulated hash for legal defense
 }
 
 export interface WeatherData {
