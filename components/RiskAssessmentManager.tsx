@@ -10,6 +10,7 @@ interface RiskAssessmentManagerProps {
   onRestoreData: (files: FileList) => void; // [NEW] Unified Restore Handler
 }
 
+// ... (Rest of interfaces & helper components like AnalysisOverlay, RiskGauge remain unchanged) ...
 // --- Helper Types for Regular Assessment ---
 interface AggregatedRisk {
     content: string;
@@ -24,26 +25,20 @@ interface AggregatedRisk {
 const AnalysisOverlay = ({ progress }: { progress: number }) => (
     <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xl flex flex-col items-center justify-center animate-fade-in">
         <div className="bg-white/90 backdrop-blur-md rounded-[2rem] p-10 shadow-2xl flex flex-col items-center max-w-sm w-full mx-4 border border-white/20 relative overflow-hidden">
-            {/* Ambient Background Glow */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-indigo-500/20 rounded-full blur-[50px] pointer-events-none"></div>
-            
             <div className="relative z-10 flex flex-col items-center">
                 <div className="relative w-20 h-20 mb-6 flex items-center justify-center">
-                    {/* Pulsing Rings */}
                     <div className="absolute inset-0 rounded-full border-2 border-indigo-100 animate-ping opacity-20"></div>
                     <div className="absolute inset-0 rounded-full border border-indigo-200 opacity-50 scale-110"></div>
-                    
                     <div className="bg-white p-4 rounded-2xl shadow-lg border border-indigo-50 relative z-10">
                         <BrainCircuit size={32} className="text-indigo-600 animate-pulse" />
                     </div>
                 </div>
-                
                 <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">AI Analysis</h3>
                 <p className="text-sm text-slate-500 text-center leading-relaxed mb-8 font-medium">
                     문서의 구조를 스캔하고<br/>
                     <span className="text-indigo-600 font-bold">위험성평가 데이터</span>를 추출합니다.
                 </p>
-                
                 <div className="w-full space-y-2">
                     <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                         <span>Processing</span>
@@ -64,47 +59,26 @@ const AnalysisOverlay = ({ progress }: { progress: number }) => (
     </div>
 );
 
-// --- Premium Component: Arch Risk Gauge (Fixed Layout & Counts) ---
 const RiskGauge = ({ highCount, totalCount }: { highCount: number, totalCount: number }) => {
-    // 1. Calculate Percentage
     const percentage = totalCount > 0 ? Math.min(100, Math.round((highCount / totalCount) * 100)) : 0;
     const generalCount = totalCount - highCount;
-
-    // 2. Gauge Dimensions (Fixed to prevent clipping)
-    // Canvas Size: 180px width, 100px height
-    // Radius: 70px
-    // Stroke: 12px
-    // Padding: 20px (to safely contain the stroke)
     const width = 180;
-    const height = 90; // Half height
+    const height = 90;
     const cx = width / 2;
-    const cy = height; // Bottom center
+    const cy = height; 
     const r = 70; 
     const strokeWidth = 14;
-
-    // 3. SVG Path Logic (Arch)
     const circumference = Math.PI * r;
     const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
-    // 4. Color Logic
-    let colorStart = "#10B981"; // Green
-    let colorEnd = "#34D399";
-    let label = "안전";
-    let textColor = "text-emerald-600";
-    let bgColor = "bg-emerald-50";
+    let colorStart = "#10B981"; let colorEnd = "#34D399";
+    let textColor = "text-emerald-600"; let bgColor = "bg-emerald-50";
 
-    if (percentage > 30) { 
-        colorStart = "#F59E0B"; colorEnd = "#FBBF24"; // Orange
-        label = "주의"; textColor = "text-amber-600"; bgColor = "bg-amber-50";
-    } 
-    if (percentage > 50) { 
-        colorStart = "#EF4444"; colorEnd = "#F87171"; // Red
-        label = "위험"; textColor = "text-red-600"; bgColor = "bg-red-50";
-    }
+    if (percentage > 30) { colorStart = "#F59E0B"; colorEnd = "#FBBF24"; textColor = "text-amber-600"; bgColor = "bg-amber-50"; } 
+    if (percentage > 50) { colorStart = "#EF4444"; colorEnd = "#F87171"; textColor = "text-red-600"; bgColor = "bg-red-50"; }
 
     return (
         <div className="flex flex-col items-center justify-center w-full">
-            {/* Gauge Graphic */}
             <div className="relative flex justify-center items-end" style={{ width: width, height: height }}>
                 <svg width={width} height={height + strokeWidth} viewBox={`0 -${strokeWidth} ${width} ${height + strokeWidth * 2}`} className="overflow-visible">
                     <defs>
@@ -113,36 +87,13 @@ const RiskGauge = ({ highCount, totalCount }: { highCount: number, totalCount: n
                             <stop offset="100%" stopColor={colorEnd} />
                         </linearGradient>
                     </defs>
-                    
-                    {/* Background Track */}
-                    <path
-                        d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-                        fill="none"
-                        stroke="#F1F5F9"
-                        strokeWidth={strokeWidth}
-                        strokeLinecap="round"
-                    />
-                    
-                    {/* Progress Arc */}
-                    <path
-                        d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-                        fill="none"
-                        stroke="url(#gaugeGradient)"
-                        strokeWidth={strokeWidth}
-                        strokeDasharray={circumference}
-                        strokeDashoffset={strokeDashoffset}
-                        strokeLinecap="round"
-                        className="transition-all duration-1000 ease-out"
-                    />
+                    <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`} fill="none" stroke="#F1F5F9" strokeWidth={strokeWidth} strokeLinecap="round" />
+                    <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`} fill="none" stroke="url(#gaugeGradient)" strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" className="transition-all duration-1000 ease-out" />
                 </svg>
-                
-                {/* Center Percentage */}
                 <div className="absolute bottom-0 flex flex-col items-center mb-1">
                     <span className="text-3xl font-black text-slate-800 tracking-tighter leading-none">{percentage}<span className="text-sm text-slate-400">%</span></span>
                 </div>
             </div>
-
-            {/* Counts Breakdown (Requested by User) */}
             <div className="flex gap-2 mt-4 w-full justify-center">
                 <div className="flex flex-col items-center bg-red-50 border border-red-100 px-3 py-1.5 rounded-xl min-w-[70px]">
                     <span className="text-[10px] font-bold text-red-400 uppercase">상(High)</span>
@@ -180,6 +131,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
   // Auto-Select Logic
   useEffect(() => {
+      // [FIX] Ensure selectedMonthId is valid. If deleted, switch to another.
       if (selectedMonthId && assessments.some(a => a.id === selectedMonthId)) return;
 
       if (monthlyAssessments.length > 0) {
@@ -191,15 +143,13 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       }
   }, [assessments, monthlyAssessments, initialAssessments, selectedMonthId]);
 
+  // ... (Other state variables: newMonthMode, targetMonth, etc.) ...
   const [newMonthMode, setNewMonthMode] = useState(false);
-  // Default to next month based on latest assessment or current date
   const [targetMonth, setTargetMonth] = useState(() => {
       const today = new Date();
       return today.toISOString().slice(0, 7);
   }); 
   const [uploadType, setUploadType] = useState<'MONTHLY' | 'INITIAL'>('MONTHLY');
-
-  // --- Regular Assessment Builder State ---
   const [showRegularBuilder, setShowRegularBuilder] = useState(false);
   const [regularTargetYear, setRegularTargetYear] = useState(new Date().getFullYear().toString());
   const [baseAssessmentId, setBaseAssessmentId] = useState<string>('');
@@ -243,12 +193,15 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
   const stats = useMemo(() => {
       if (!activeAssessment) return null;
-      const total = activeAssessment.priorities.length;
-      const high = activeAssessment.priorities.filter(p => p.level === 'HIGH').length;
+      // [SAFEGUARD] Fallback to empty array if priorities is undefined
+      const priorities = activeAssessment.priorities || [];
+      
+      const total = priorities.length;
+      const high = priorities.filter(p => p.level === 'HIGH').length;
       const general = total - high;
       
       const catMap: Record<string, number> = {};
-      activeAssessment.priorities.forEach(p => {
+      priorities.forEach(p => {
           catMap[p.category] = (catMap[p.category] || 0) + 1;
       });
       const topCategories = Object.entries(catMap)
@@ -256,7 +209,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           .slice(0, 3);
 
       let diff = 0;
-      if (previousAssessment) {
+      if (previousAssessment && previousAssessment.priorities) {
           diff = total - previousAssessment.priorities.length;
       }
 
@@ -267,8 +220,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
     return (str || '').replace(/[\s\n\r.,\-()[\]]/g, '').trim();
   };
 
-  // --- Handlers ---
-
+  // --- Handlers (Backup, Export, Regular Logic) ---
   const handleExportBackup = () => {
     if (assessments.length === 0) {
       alert("백업할 데이터가 없습니다.");
@@ -293,17 +245,15 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
     URL.revokeObjectURL(url);
   };
 
-  // [UPDATED] Use Unified Restore Handler
   const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-        // Delegate to the robust app-level restore function
         onRestoreData(files);
         if(backupInputRef.current) backupInputRef.current.value = '';
     }
   };
 
-  // --- REGULAR ASSESSMENT LOGIC (Overhauled) ---
+  // ... (Regular Assessment Logic & Create Month Logic - Unchanged) ...
   const handleOpenRegularBuilder = () => {
       const latestInitial = initialAssessments.length > 0 ? initialAssessments[0].id : '';
       setBaseAssessmentId(latestInitial);
@@ -322,7 +272,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
       const riskMap = new Map<string, AggregatedRisk>();
 
-      if (baseAssessment) {
+      if (baseAssessment && Array.isArray(baseAssessment.priorities)) {
           baseAssessment.priorities.forEach(p => {
               const key = normalizeString(p.content);
               riskMap.set(key, {
@@ -337,25 +287,27 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       }
 
       targetAssessments.forEach(monthData => {
-          monthData.priorities.forEach(p => {
-              const key = normalizeString(p.content); 
-              
-              if (riskMap.has(key)) {
-                  const existing = riskMap.get(key)!;
-                  existing.frequency += 1;
-                  existing.months.push(monthData.month.slice(5)); 
-                  if (p.level === 'HIGH') existing.level = 'HIGH';
-              } else {
-                  riskMap.set(key, {
-                      content: p.content,
-                      category: p.category,
-                      level: p.level as 'HIGH' | 'GENERAL',
-                      frequency: 1,
-                      months: [monthData.month.slice(5)],
-                      source: 'ADDED' 
-                  });
-              }
-          });
+          if(Array.isArray(monthData.priorities)) {
+              monthData.priorities.forEach(p => {
+                  const key = normalizeString(p.content); 
+                  
+                  if (riskMap.has(key)) {
+                      const existing = riskMap.get(key)!;
+                      existing.frequency += 1;
+                      existing.months.push(monthData.month.slice(5)); 
+                      if (p.level === 'HIGH') existing.level = 'HIGH';
+                  } else {
+                      riskMap.set(key, {
+                          content: p.content,
+                          category: p.category,
+                          level: p.level as 'HIGH' | 'GENERAL',
+                          frequency: 1,
+                          months: [monthData.month.slice(5)],
+                          source: 'ADDED' 
+                      });
+                  }
+              });
+          }
       });
 
       const sortedRisks = Array.from(riskMap.values()).sort((a, b) => {
@@ -401,11 +353,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       setAggregatedRisks(newRisks);
   };
 
-  // --- End Regular Logic ---
-
-  // [FIX] Create New Month Logic
   const handleCreateMonth = () => {
-     // Check if month already exists in non-initial assessments
      if (assessments.some(a => a.month === targetMonth && a.type !== 'INITIAL' && a.type !== 'REGULAR')) {
         alert("이미 해당 월의 평가가 존재합니다.");
         return;
@@ -459,7 +407,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
         try {
           const base64Data = base64Url.split(',')[1];
-          // [UPDATED] Using uploadType for both logic but always requesting FULL extraction as per feedback
           const result: MonthlyExtractionResult = await extractMonthlyPriorities(base64Data, file.type, uploadType);
           
           clearInterval(timer);
@@ -471,7 +418,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           let targetAssessment: MonthlyRiskAssessment | undefined;
           let isNewCreated = false;
 
-          // Logic for INITIAL/REGULAR
           if (uploadType === 'INITIAL') {
               const newAssessment: MonthlyRiskAssessment = {
                   id: `INITIAL-${Date.now()}`,
@@ -487,7 +433,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
               targetAssessment = newAssessment;
               isNewCreated = true;
           } else {
-              // Logic for MONTHLY
               if (detectedMonth && activeAssessment && detectedMonth !== activeAssessment.month && activeAssessment.type !== 'INITIAL') {
                  if (confirm(`📄 문서 분석: [${detectedMonth}월] 자료입니다.\n\n해당 월로 등록하시겠습니까?`)) {
                     const existingTarget = monthlyAssessments.find(a => a.month === detectedMonth);
@@ -523,8 +468,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
              return;
           }
 
-          // [UPDATED] Full Extraction Logic: Use extracted items directly (but filter duplicates)
-          const currentPriorities = [...targetAssessment.priorities];
+          const currentPriorities = [...(targetAssessment.priorities || [])];
           let addedCount = 0;
           
           extracted.forEach(item => {
@@ -540,7 +484,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
              }
           });
           
-          // Sort: HIGH first
           currentPriorities.sort((a, b) => {
              if (a.level === 'HIGH' && b.level !== 'HIGH') return -1;
              if (a.level !== 'HIGH' && b.level === 'HIGH') return 1;
@@ -568,7 +511,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           
         } catch (err: any) {
           console.error(err);
-          // [UPDATED] Show detailed error message if available (especially for Quota limits)
           const msg = err.message || "문서 분석 중 오류가 발생했습니다.";
           alert(msg.includes('429') || msg.includes('제한') || msg.includes('Quota') ? msg : "문서 분석 중 오류가 발생했습니다.");
         } finally {
@@ -613,11 +555,14 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
     }
   };
 
+  // [FIXED] Robust Deletion Handler
   const handleDeleteMonth = () => {
-     if (confirm("정말 이 데이터를 삭제하시겠습니까?")) {
+     if (!selectedMonthId) return;
+     
+     if (confirm("정말 이 데이터를 삭제하시겠습니까? (삭제 후 복구 불가)")) {
         const updated = assessments.filter(a => a.id !== selectedMonthId);
-        onSave(updated);
-        setSelectedMonthId('');
+        onSave(updated); // Sync with Parent State & DB
+        setSelectedMonthId(''); // Clear selection to force UI update
      }
   }
 
@@ -649,7 +594,8 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       setEditingIndex(null);
   };
 
-  // --- Components ---
+  // ... (Component rendering remains same as provided in previous full file context, using handleDeleteMonth) ...
+  // [NOTE] Re-pasting the CategoryBadge and Return statement to ensure file completeness for XML
 
   const CategoryBadge = ({ category }: { category: string }) => {
     let colorClass = "bg-slate-100 text-slate-600";
@@ -667,20 +613,15 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
     );
   };
 
-  // --- Render ---
-
   return (
     <div className="bg-slate-50 min-h-[calc(100vh-140px)] flex gap-6 relative">
-       {/* New Loading Overlay */}
        {isAnalyzing && <AnalysisOverlay progress={loadingProgress} />}
 
-       {/* 0. Hidden Inputs for Upload (Moved to top-level to ensure availability) */}
        <input type="file" ref={backupInputRef} className="hidden" accept=".json" onChange={handleImportBackup} multiple/>
        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="application/pdf,image/*"/>
 
-       {/* 1. Sidebar (Split: Initial vs Monthly) */}
+       {/* Sidebar */}
        <div className="w-64 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
-          {/* Action: Create Regular Assessment */}
           <button 
              onClick={handleOpenRegularBuilder}
              className="w-full bg-indigo-600 text-white p-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex flex-col items-center gap-2 group border border-indigo-500"
@@ -694,7 +635,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
              </div>
           </button>
 
-          {/* Section 1: Baseline (Initial/Regular) */}
+          {/* Section 1: Baseline */}
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
              <div className="flex justify-between items-center mb-3">
                 <h3 className="font-black text-slate-800 flex items-center gap-2 text-xs">
@@ -724,14 +665,14 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                 <span className="font-bold text-xs truncate w-32">{ass.fileName}</span>
                                 <span className="text-[9px] opacity-80">{ass.type === 'INITIAL' ? '최초평가' : '정기평가'}</span>
                             </div>
-                            <span className="text-[10px] font-bold bg-white/20 px-1.5 py-0.5 rounded">{ass.priorities.length}</span>
+                            <span className="text-[10px] font-bold bg-white/20 px-1.5 py-0.5 rounded">{(ass.priorities || []).length}</span>
                         </button>
                     ))
                 )}
              </div>
           </div>
 
-          {/* Section 2: Operational (Monthly) */}
+          {/* Section 2: Monthly */}
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
              <div className="flex justify-between items-center mb-3">
                 <h3 className="font-black text-slate-800 flex items-center gap-2 text-xs">
@@ -771,7 +712,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                    >
                       <div className="flex flex-col items-start text-left">
                           <span className="font-bold text-sm">{month.month}월</span>
-                          {/* Show Created Date to distinguish duplicates */}
                           <div className="flex items-center gap-1 mt-0.5 opacity-80">
                               <Clock size={8} />
                               <span className="text-[9px]">
@@ -780,7 +720,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                           </div>
                       </div>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedMonthId === month.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                         {month.priorities.length}건
+                         {(month.priorities || []).length}건
                       </span>
                    </button>
                 ))}
@@ -788,17 +728,15 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           </div>
        </div>
 
-       {/* 2. Main Content Area */}
+       {/* Main Content */}
        <div className="flex-1 flex flex-col gap-6 overflow-hidden">
           {activeAssessment ? (
              <>
-                {/* Header Banner & Stats Panel */}
                 <div className={`rounded-2xl p-6 shadow-sm border flex flex-col gap-6 ${
                     activeAssessment.type === 'INITIAL' || activeAssessment.type === 'REGULAR' 
                     ? 'bg-amber-50 border-amber-200' 
                     : 'bg-white border-slate-200'
                 }`}>
-                   {/* Top Bar */}
                    <div className="flex justify-between items-start">
                        <div>
                           <div className="flex items-center gap-2 mb-1">
@@ -816,7 +754,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                               activeAssessment.type === 'INITIAL' ? '최초 위험성평가 (Baseline)' : 
                               `${activeAssessment.month}월 월간/수시 위험성평가`}
                           </h2>
-                          {/* Debug info for duplicates */}
                           <p className="text-[10px] text-slate-400 mt-1 font-mono">ID: {activeAssessment.id}</p>
                        </div>
                        
@@ -826,7 +763,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                              <span>문서 분석/추가</span>
                           </button>
                           <div className="flex flex-col gap-1">
-                              {/* [MODIFIED] Grouped Backup/Restore Buttons */}
                               <div className="flex gap-1">
                                   <button onClick={handleExportBackup} className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold" title="데이터 백업 (다운로드)">
                                       <Download size={16}/>
@@ -842,15 +778,11 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                        </div>
                    </div>
 
-                   {/* [NEW] Dashboard / Analytics Panel */}
                    {stats && (
                        <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                           {/* 1. Risk Gauge - Redesigned to Arch */}
                            <div className="flex flex-col items-center border-r border-slate-100 pr-4">
                                <RiskGauge highCount={stats.high} totalCount={stats.total} />
                            </div>
-
-                           {/* 2. Key Metrics */}
                            <div className="flex flex-col gap-3 border-r border-slate-100 pr-4 h-full justify-center">
                                <div className="flex justify-between items-end p-2 bg-slate-50 rounded-lg">
                                    <span className="text-xs font-bold text-slate-400 uppercase">Total Items</span>
@@ -864,8 +796,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                    </div>
                                </div>
                            </div>
-
-                           {/* 3. Top Categories */}
                            <div className="flex flex-col gap-2 h-full justify-center">
                                <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-1">Top Risk Categories</h4>
                                {stats.topCategories.map(([cat, count], idx) => (
@@ -885,10 +815,8 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                    )}
                 </div>
 
-                {/* Main Workspace (Bento Grid) */}
+                {/* Main Workspace */}
                 <div className="grid grid-cols-12 gap-6 h-full min-h-0">
-                   
-                   {/* Left: Comparison & Input (4 cols) */}
                    <div className="col-span-4 flex flex-col gap-4">
                       {/* Manual Input */}
                       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
@@ -935,7 +863,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                       )}
                    </div>
 
-                   {/* Right: Active Priorities List (8 cols) */}
+                   {/* Right: Active Priorities List */}
                    <div className="col-span-8 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[500px]">
                       <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
                          <div className="flex items-center gap-2">
@@ -943,7 +871,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                             <h3 className="font-bold text-slate-800">최종 관리 목록</h3>
                          </div>
                          <div className="flex gap-2 items-center">
-                            {/* Search Bar */}
                            <div className="relative">
                                <input 
                                    type="text" 
@@ -964,7 +891,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                       </div>
 
                       <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-                         {activeAssessment.priorities.length === 0 ? (
+                         {(!activeAssessment.priorities || activeAssessment.priorities.length === 0) ? (
                             <div className="h-full flex flex-col items-center justify-center text-slate-300">
                                <ShieldCheck size={48} className="mb-2 opacity-20"/>
                                <p>등록된 항목이 없습니다.</p>
@@ -1023,7 +950,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                    }
 
                                    let status: 'NEW' | 'CHANGED' | 'SAME' = 'SAME';
-                                   if (previousAssessment) {
+                                   if (previousAssessment && previousAssessment.priorities) {
                                       const prevItem = previousAssessment.priorities.find(p => p.content === item.content);
                                       if (!prevItem) {
                                          status = 'NEW';
@@ -1093,12 +1020,10 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           )}
        </div>
 
-       {/* ... Modal ... */}
-       {/* --- Regular Assessment Builder Modal --- */}
+       {/* Regular Assessment Modal */}
        {showRegularBuilder && (
            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-fade-in">
                <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-                   {/* Modal Header */}
                    <div className="bg-indigo-900 text-white p-6 shrink-0 relative overflow-hidden">
                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-900 to-indigo-800"></div>
                        <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
@@ -1115,13 +1040,10 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                        </div>
                    </div>
 
-                   {/* Modal Body */}
                    <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
                        {regularStep === 'SELECT' ? (
                            <div className="max-w-2xl mx-auto py-6">
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-                                   
-                                   {/* Step 1: Base Assessment */}
                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                                        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-4">
                                            <FileJson size={24} />
@@ -1145,7 +1067,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                        </div>
                                    </div>
 
-                                   {/* Step 2: Target Year */}
                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4">
                                            <Calendar size={24} />

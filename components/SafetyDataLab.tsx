@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo, useRef } from 'react';
 import { TBMEntry, TeamCategory, TeamOption, TBMAnalysisResult } from '../types';
-import { BarChart2, PieChart, Users, TrendingUp, BrainCircuit, Activity, Layers, Target, Download, Share2, FileText, Sparkles, Microscope, Database, Info, FileBox, Hexagon, Radar, ShieldCheck, Upload, HardDrive } from 'lucide-react';
+import { BarChart2, PieChart, Users, TrendingUp, BrainCircuit, Activity, Layers, Target, Download, Share2, FileText, Sparkles, Microscope, Database, Info, FileBox, Hexagon, Radar, ShieldCheck, Upload, HardDrive, Search } from 'lucide-react';
 import { generateGeneralInsight } from '../services/geminiService';
 
 interface SafetyDataLabProps {
@@ -13,20 +12,17 @@ interface SafetyDataLabProps {
 
 type Tab = 'OVERALL' | 'CATEGORY' | 'TEAM';
 
-// --- SVG Chart Components ---
-
-// 1. Radar Chart (Spider Web) for 5 Metrics - [UPDATED] Expanded ViewBox & Layout
-const RadarChart = ({ data }: { data: number[] }) => {
-    // Metrics: Log, Focus, Voice, PPE, Participation
-    const size = 320; // Increased canvas size to prevent label clipping
+// --- [Premium Component] High-Fidelity Radar Chart ---
+const PremiumRadarChart = ({ data }: { data: number[] }) => {
+    // 5 Metrics
+    const size = 320;
     const center = size / 2;
-    const radius = 90; // Adjusted radius relative to size
-    const labels = ["일지", "집중도", "음성", "보호구", "참여도"];
+    const radius = 90;
+    const labels = ["일지 품질", "작업 집중도", "전파 명확성", "보호구 착용", "참여 적극성"];
     
-    // Helper to get coordinates
+    // Helper
     const getCoords = (value: number, index: number, total: number, offset = 0) => {
         const angle = (Math.PI * 2 * index) / total - Math.PI / 2;
-        // Normalize value (assuming max is 100) -> scale to radius
         const r = ((value / 100) * radius) + offset;
         return {
             x: center + r * Math.cos(angle),
@@ -34,32 +30,40 @@ const RadarChart = ({ data }: { data: number[] }) => {
         };
     };
 
-    // Background polygons (webs)
-    const webs = [0.2, 0.4, 0.6, 0.8, 1.0].map((scale, i) => {
-        const points = labels.map((_, idx) => {
-            const { x, y } = getCoords(100 * scale, idx, labels.length);
-            return `${x},${y}`;
-        }).join(" ");
-        return <polygon key={i} points={points} fill="none" stroke="#E2E8F0" strokeWidth="1" />;
+    // Concentric Circles (Webs) instead of polygons for modern look
+    const circles = [0.2, 0.4, 0.6, 0.8, 1.0].map((scale, i) => (
+        <circle 
+            key={i} 
+            cx={center} 
+            cy={center} 
+            r={radius * scale} 
+            fill="none" 
+            stroke="#E2E8F0" 
+            strokeWidth={i === 4 ? 1.5 : 1}
+            strokeDasharray={i < 4 ? "4 4" : "0"} 
+        />
+    ));
+
+    const axes = labels.map((_, idx) => {
+        const { x, y } = getCoords(100, idx, labels.length);
+        return (
+            <React.Fragment key={idx}>
+                <line x1={center} y1={center} x2={x} y2={y} stroke="#E2E8F0" strokeWidth="1" />
+                {/* Axis Dots */}
+                <circle cx={x} cy={y} r="2" fill="#94A3B8" />
+            </React.Fragment>
+        );
     });
 
-    // Data polygon
     const dataPoints = data.map((val, idx) => {
         const { x, y } = getCoords(val, idx, labels.length);
         return `${x},${y}`;
     }).join(" ");
 
-    // Axis lines
-    const axes = labels.map((_, idx) => {
-        const { x, y } = getCoords(100, idx, labels.length);
-        return <line key={idx} x1={center} y1={center} x2={x} y2={y} stroke="#E2E8F0" strokeWidth="1" />;
-    });
-
-    // Labels - [UPDATED] Pushed further out
     const labelEls = labels.map((label, idx) => {
-        const { x, y } = getCoords(100, idx, labels.length, 35); // 35px offset for text
+        const { x, y } = getCoords(100, idx, labels.length, 30);
         return (
-            <text key={idx} x={x} y={y} fontSize="12" fontWeight="bold" textAnchor="middle" dominantBaseline="middle" fill="#475569">
+            <text key={idx} x={x} y={y} fontSize="11" fontWeight="bold" textAnchor="middle" dominantBaseline="middle" fill="#475569" className="uppercase tracking-tight">
                 {label}
             </text>
         );
@@ -67,15 +71,31 @@ const RadarChart = ({ data }: { data: number[] }) => {
 
     return (
         <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
-            {webs}
+            <defs>
+                <linearGradient id="radarGradient" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#6366F1" stopOpacity="0.4"/>
+                    <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0.1"/>
+                </linearGradient>
+                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+            </defs>
+            {circles}
             {axes}
-            <polygon points={dataPoints} fill="rgba(99, 102, 241, 0.2)" stroke="#6366F1" strokeWidth="2" />
+            
+            {/* Data Area with Glow */}
+            <polygon points={dataPoints} fill="url(#radarGradient)" stroke="#6366F1" strokeWidth="2.5" filter="url(#glow)" />
+            
+            {/* Data Points */}
             {data.map((val, idx) => {
                 const { x, y } = getCoords(val, idx, labels.length);
                 return (
                     <g key={idx} className="group">
-                        <circle cx={x} cy={y} r="4" fill="#6366F1" stroke="white" strokeWidth="2" className="cursor-pointer hover:scale-150 transition-transform"/>
-                        <title>{labels[idx]}: {val}점</title>
+                        <circle cx={x} cy={y} r="5" fill="#ffffff" stroke="#6366F1" strokeWidth="2.5" className="cursor-pointer transition-all duration-300 group-hover:r-7"/>
+                        <text x={x} y={y - 12} textAnchor="middle" fontSize="10" fill="#6366F1" fontWeight="bold" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            {val}
+                        </text>
                     </g>
                 );
             })}
@@ -84,10 +104,10 @@ const RadarChart = ({ data }: { data: number[] }) => {
     );
 };
 
-// 2. Simple Trend Line Chart - [UPDATED] Better Visualization
-const TrendChart = ({ data }: { data: number[] }) => {
+// --- [Premium Component] Smooth Bézier Trend Chart ---
+const PremiumTrendChart = ({ data }: { data: number[] }) => {
     const width = 300;
-    const height = 100; // Increased height
+    const height = 120;
     const padding = 10;
     
     if (data.length < 2) return (
@@ -96,33 +116,58 @@ const TrendChart = ({ data }: { data: number[] }) => {
         </div>
     );
 
-    const max = Math.max(...data, 100);
-    const min = Math.min(...data, 0);
+    const max = 100;
+    const min = 0;
     
+    // Map points
     const points = data.map((val, idx) => {
         const x = (idx / (data.length - 1)) * (width - padding * 2) + padding;
-        const y = height - ((val - min) / (max - min || 1)) * (height - padding * 2) - padding;
-        return `${x},${y}`;
-    }).join(" ");
+        const y = height - ((val - min) / (max - min)) * (height - padding * 2) - padding;
+        return {x, y};
+    });
 
-    const lastPoint = points.split(' ').pop()?.split(',');
+    // Generate Bezier Path
+    const pathD = points.reduce((acc, point, i, arr) => {
+        if (i === 0) return `M ${point.x},${point.y}`;
+        
+        // Control points for simple smoothing (Catmull-Rom logic simplified)
+        const prev = arr[i - 1];
+        const cp1x = prev.x + (point.x - prev.x) * 0.5;
+        const cp1y = prev.y;
+        const cp2x = prev.x + (point.x - prev.x) * 0.5;
+        const cp2y = point.y;
+        
+        return `${acc} C ${cp1x},${cp1y} ${cp2x},${cp2y} ${point.x},${point.y}`;
+    }, "");
+
+    const lastPoint = points[points.length - 1];
+    const fillPath = `${pathD} L ${width - padding},${height} L ${padding},${height} Z`;
 
     return (
         <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="overflow-visible">
-            {/* Gradient Area */}
             <defs>
                 <linearGradient id="trendGradient" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#10B981" stopOpacity="0.2"/>
+                    <stop offset="0%" stopColor="#10B981" stopOpacity="0.3"/>
                     <stop offset="100%" stopColor="#10B981" stopOpacity="0"/>
                 </linearGradient>
+                <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+                    <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#f1f5f9" strokeWidth="1"/>
+                </pattern>
             </defs>
-            <path d={`M ${points.split(' ')[0].split(',')[0]},${height} L ${points} L ${points.split(' ').pop()?.split(',')[0]},${height} Z`} fill="url(#trendGradient)" stroke="none" />
-            <path d={`M ${points}`} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             
-            {/* Last Point Indicator */}
-            {lastPoint && (
-                <circle cx={lastPoint[0]} cy={lastPoint[1]} r="4" fill="#10B981" stroke="white" strokeWidth="2" className="animate-pulse"/>
-            )}
+            {/* Background Grid */}
+            <rect width="100%" height="100%" fill="url(#grid)" opacity="0.6"/>
+
+            {/* Area Fill */}
+            <path d={fillPath} fill="url(#trendGradient)" stroke="none" />
+            
+            {/* Curve Line */}
+            <path d={pathD} fill="none" stroke="#10B981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+            
+            {/* Points */}
+            {points.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={i === points.length - 1 ? 4 : 2} fill="#ffffff" stroke="#10B981" strokeWidth="2" className={i === points.length - 1 ? "animate-pulse" : ""} />
+            ))}
         </svg>
     );
 };
@@ -192,10 +237,45 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
             avgScore: Math.round(d.scoreSum / d.count)
         })).sort((a,b) => b.avgScore - a.avgScore);
 
+        // --- Team Specific Deep Dive Data ---
+        const teamSpecificStats = teams.map(team => {
+            const teamEntries = entries.filter(e => e.teamId === team.id);
+            if (teamEntries.length === 0) return null;
+
+            let tSumLog=0, tSumFocus=0, tSumVoice=0, tSumPPE=0, tScoreSum=0;
+            let tCount = 0;
+
+            teamEntries.forEach(e => {
+                if(e.videoAnalysis?.rubric) {
+                    tSumLog += (e.videoAnalysis.rubric.logQuality || 0) / 30 * 100;
+                    tSumFocus += (e.videoAnalysis.rubric.focus || 0) / 30 * 100;
+                    tSumVoice += (e.videoAnalysis.rubric.voice || 0) / 20 * 100;
+                    tSumPPE += (e.videoAnalysis.rubric.ppe || 0) / 20 * 100;
+                    tScoreSum += e.videoAnalysis.score;
+                    tCount++;
+                }
+            });
+
+            const tAvgScore = tCount > 0 ? Math.round(tScoreSum / tCount) : 0;
+            const tRadarData = tCount > 0 
+                ? [Math.round(tSumLog/tCount), Math.round(tSumFocus/tCount), Math.round(tSumVoice/tCount), Math.round(tSumPPE/tCount), 85]
+                : [0,0,0,0,0];
+
+            return {
+                id: team.id,
+                name: team.name,
+                category: team.category,
+                count: tCount,
+                avgScore: tAvgScore,
+                radarData: tRadarData
+            };
+        }).filter(Boolean); // Filter out teams with no data
+
         return { 
             totalEntries, totalRisks, avgScore, 
             grade, gradeColor, gradeBg,
-            radarData, trendData, categoryData
+            radarData, trendData, categoryData,
+            teamSpecificStats
         };
     }, [entries, teams]);
 
@@ -296,7 +376,8 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                         </h3>
                     </div>
                     <div className="flex-1 flex items-center justify-center h-full">
-                        <RadarChart data={stats.radarData} />
+                        {/* [REPLACED] Premium Chart */}
+                        <PremiumRadarChart data={stats.radarData} />
                     </div>
                     <p className="text-center text-[10px] text-slate-400 font-bold mt-2 shrink-0">
                         5대 핵심 안전 지표 균형도
@@ -314,7 +395,8 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                             <p className="text-xs text-slate-400">최근 15회 활동 점수 추이</p>
                         </div>
                         <div className="mt-4 flex-1 flex items-end">
-                            <TrendChart data={stats.trendData} />
+                            {/* [REPLACED] Premium Chart */}
+                            <PremiumTrendChart data={stats.trendData} />
                         </div>
                     </div>
                     
@@ -334,6 +416,54 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                 <p className="text-[10px] text-slate-400 font-bold uppercase">Risks Found</p>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                {/* [NEW] Team Deep Dive Section */}
+                <div className="col-span-12">
+                    <div className="flex items-center gap-2 mb-4 mt-2 px-2">
+                        <Search size={20} className="text-indigo-600"/>
+                        <h3 className="text-xl font-black text-slate-800">팀별 심층 분석 (Deep Dive)</h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {(stats.teamSpecificStats as any[]).map((team: any, idx: number) => (
+                            <div key={team.id} className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:border-indigo-300 transition-all flex flex-col group relative overflow-hidden h-[340px]">
+                                {/* Header */}
+                                <div className="flex justify-between items-start mb-4 relative z-10">
+                                    <div>
+                                        <h4 className="font-bold text-slate-800 text-sm truncate w-32" title={team.name}>{team.name}</h4>
+                                        <p className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded inline-block mt-1">{team.category}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="block text-2xl font-black text-indigo-600">{team.avgScore}</span>
+                                        <span className="text-[10px] text-slate-400 font-bold">AVG Score</span>
+                                    </div>
+                                </div>
+
+                                {/* Radar Chart Mini */}
+                                <div className="flex-1 flex items-center justify-center relative z-10">
+                                    <div className="w-48 h-48">
+                                        <PremiumRadarChart data={team.radarData} />
+                                    </div>
+                                </div>
+
+                                {/* Footer */}
+                                <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center relative z-10">
+                                    <span className="text-[10px] font-bold text-slate-400">Total Activity</span>
+                                    <span className="text-xs font-black text-slate-700 bg-slate-50 px-2 py-1 rounded">{team.count}회</span>
+                                </div>
+
+                                {/* Background Decoration */}
+                                <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-indigo-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity blur-2xl"></div>
+                            </div>
+                        ))}
+                        {(stats.teamSpecificStats as any[]).length === 0 && (
+                            <div className="col-span-full h-40 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-3xl">
+                                <Database size={32} className="opacity-20 mb-2"/>
+                                <span className="text-xs font-bold">분석할 팀 데이터가 충분하지 않습니다.</span>
+                            </div>
+                        )}
                     </div>
                 </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, UserCheck, Users, Database, Save, Upload, Download, Plus, Trash2, Settings, AlertTriangle, CheckCircle2, FileText, ShieldCheck, Layers, Loader2, FileSearch, Stethoscope } from 'lucide-react';
+import { X, UserCheck, Users, Database, Save, Upload, Download, Plus, Trash2, Settings, AlertTriangle, CheckCircle2, FileText, ShieldCheck, Layers, Loader2, FileSearch, Stethoscope, Sparkles, Eraser } from 'lucide-react';
 import { TeamOption, TeamCategory } from '../types';
 
 interface SettingsModalProps {
@@ -12,18 +12,20 @@ interface SettingsModalProps {
   onAddTeam: (name: string, category: string) => void;
   onDeleteTeam: (id: string) => void;
   onBackupData: (scope: 'ALL' | 'TBM' | 'RISK') => void; 
-  onRestoreData: (files: FileList) => void; 
+  onRestoreData: (files: FileList) => void;
+  onOptimizeData: () => void; // [NEW] Optimization Handler
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ 
     isOpen, onClose, signatures, onUpdateSignature, 
-    teams, onAddTeam, onDeleteTeam, onBackupData, onRestoreData 
+    teams, onAddTeam, onDeleteTeam, onBackupData, onRestoreData, onOptimizeData
 }) => {
     if (!isOpen) return null;
 
     const [activeTab, setActiveTab] = useState<'BASIC' | 'TEAMS' | 'DATA'>('BASIC');
     const [isBackingUp, setIsBackingUp] = useState(false);
     const [isVerifying, setIsVerifying] = useState(false);
+    const [isOptimizing, setIsOptimizing] = useState(false); // [NEW]
     
     const [newTeamName, setNewTeamName] = useState('');
     const [newTeamCategory, setNewTeamCategory] = useState<string>(TeamCategory.FORMWORK);
@@ -60,6 +62,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         const files = e.target.files;
         if (files && files.length > 0) {
             onRestoreData(files);
+        }
+    };
+
+    // [NEW] Optimize Handler with UX Feedback
+    const handleOptimizeClick = () => {
+        if (confirm("데이터 최적화를 진행하시겠습니까?\n\n내용이 완벽히 동일한 중복 일지를 찾아 제거하고, 데이터 품질이 가장 높은 항목만 남깁니다.\n(주의: 삭제된 데이터는 복구할 수 없습니다.)")) {
+            setIsOptimizing(true);
+            setTimeout(() => {
+                onOptimizeData();
+                setIsOptimizing(false);
+            }, 800);
         }
     };
 
@@ -454,6 +467,28 @@ ${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 �
                                             />
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* [NEW] Data Optimization Section */}
+                                <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 shadow-inner group">
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center gap-2">
+                                            <Sparkles size={18} className="text-violet-600"/>
+                                            <h3 className="font-bold text-slate-800">데이터베이스 최적화</h3>
+                                        </div>
+                                        <button 
+                                            onClick={handleOptimizeClick}
+                                            disabled={isOptimizing}
+                                            className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-xs font-bold hover:bg-violet-50 hover:text-violet-700 hover:border-violet-300 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                                        >
+                                            {isOptimizing ? <Loader2 size={14} className="animate-spin"/> : <Eraser size={14}/>}
+                                            중복 제거 및 정리
+                                        </button>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                                        여러 번의 복구로 인해 생성된 <strong>동일한 내용의 중복 데이터</strong>를 자동으로 검색하여 제거합니다.<br/>
+                                        날짜, 시간, 팀명이 동일한 경우 품질이 높은(사진/AI분석 포함) 항목 1개만 남깁니다.
+                                    </p>
                                 </div>
                             </div>
                         </div>

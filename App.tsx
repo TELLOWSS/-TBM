@@ -216,6 +216,11 @@ const App = () => {
                       }
                       if (Array.isArray(json.assessments)) {
                           const validAss = json.assessments.filter((a: any) => a && a.month);
+                          // [SANITIZE] Ensure ID exists for legacy data
+                          validAss.forEach((a: any) => {
+                              if (!a.id) a.id = `LEGACY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                              if (!Array.isArray(a.priorities)) a.priorities = [];
+                          });
                           mergedAssessments = [...validAss, ...mergedAssessments];
                           totalFound += validAss.length;
                           fileFound = true;
@@ -244,6 +249,11 @@ const App = () => {
                                       mergedEntries = [...arr, ...mergedEntries];
                                       totalFound += arr.length;
                                   } else if (first.month && first.priorities) {
+                                      // [SANITIZE]
+                                      arr.forEach((a: any) => {
+                                          if (!a.id) a.id = `LEGACY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                                          if (!Array.isArray(a.priorities)) a.priorities = [];
+                                      });
                                       mergedAssessments = [...arr, ...mergedAssessments];
                                       totalFound += arr.length;
                                   }
@@ -258,6 +268,11 @@ const App = () => {
                           mergedEntries = [...json, ...mergedEntries];
                           totalFound += json.length;
                       } else if (first.month && first.priorities) {
+                          // [SANITIZE]
+                          json.forEach((a: any) => {
+                              if (!a.id) a.id = `LEGACY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                              if (!Array.isArray(a.priorities)) a.priorities = [];
+                          });
                           mergedAssessments = [...json, ...mergedAssessments];
                           totalFound += json.length;
                       }
@@ -318,6 +333,89 @@ const App = () => {
           alert(`복구 중 치명적 오류 발생: ${err.message}`);
           setIsRestoring(false);
       }
+  };
+
+  // [NEW] Data Optimization: Robust Deduplication for TBM and Risk Assessments
+  const handleOptimizeData = async () => {
+      // 1. Optimize TBM Entries (Comparison: Date + Team + Time)
+      const uniqueEntryMap = new Map<string, TBMEntry>();
+      let duplicatesCount = 0;
+
+      // Sort by Quality then Recency
+      // Prioritize: Video > Photo > Recency
+      const sortedEntries = [...entries].sort((a, b) => {
+          const scoreA = (a.videoAnalysis ? 10 : 0) + (a.tbmPhotoUrl ? 5 : 0);
+          const scoreB = (b.videoAnalysis ? 10 : 0) + (b.tbmPhotoUrl ? 5 : 0);
+          if (scoreB !== scoreA) return scoreB - scoreA;
+          return (b.createdAt || 0) - (a.createdAt || 0); // Newer wins
+      });
+
+      sortedEntries.forEach(entry => {
+          // Normalize key to prevent whitespace mismatches
+          const d = (entry.date || '').trim();
+          const t = (entry.teamName || '').trim();
+          const tm = (entry.time || '').trim();
+          
+          if (!d) return; // Skip invalid data
+
+          const key = `${d}|${t}|${tm}`;
+          if (uniqueEntryMap.has(key)) {
+              duplicatesCount++;
+          } else {
+              uniqueEntryMap.set(key, entry);
+          }
+      });
+      const optimizedEntries = Array.from(uniqueEntryMap.values());
+
+      // 2. Optimize Risk Assessments (Comparison: Month + Type)
+      const uniqueAssMap = new Map<string, MonthlyRiskAssessment>();
+      let duplicatesAss = 0;
+      
+      // Filter out totally invalid ones (missing month)
+      const validAssessments = assessments.filter(a => a && a.month);
+      
+      // Sort: Content Length > Newer
+      // Keep the one with the most content (priorities)
+      validAssessments.sort((a, b) => {
+          const lenA = Array.isArray(a.priorities) ? a.priorities.length : 0;
+          const lenB = Array.isArray(b.priorities) ? b.priorities.length : 0;
+          if (lenB !== lenA) return lenB - lenA; // Keep one with more data
+          return (b.createdAt || 0) - (a.createdAt || 0);
+      });
+
+      validAssessments.forEach(ass => {
+          // Normalize Key: e.g., "2024-01|MONTHLY"
+          const m = (ass.month || '').trim();
+          const type = (ass.type || 'MONTHLY').trim();
+          
+          const key = `${m}|${type}`;
+          
+          if (uniqueAssMap.has(key)) {
+              duplicatesAss++;
+          } else {
+              // Sanitize while we are here: Ensure ID and Priorities array exist
+              const safeAss = { ...ass };
+              if (!Array.isArray(safeAss.priorities)) safeAss.priorities = [];
+              if (!safeAss.id) safeAss.id = `FIXED-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              uniqueAssMap.set(key, safeAss);
+          }
+      });
+      const optimizedAssessments = Array.from(uniqueAssMap.values());
+
+      if (duplicatesCount === 0 && duplicatesAss === 0) {
+          alert("삭제할 중복 데이터가 없습니다. 이미 최적화된 상태입니다.");
+          return;
+      }
+      
+      // Commit Changes
+      await StorageDB.set('entries', optimizedEntries);
+      await StorageDB.set('assessments', optimizedAssessments);
+      
+      // Update State Immediately
+      setEntries(optimizedEntries);
+      setAssessments(optimizedAssessments);
+      
+      alert(`✅ 최적화 완료!\n\n- TBM 일지 중복 제거: ${duplicatesCount}건\n- 위험성평가 중복 제거: ${duplicatesAss}건\n\n데이터베이스가 정리되었습니다.`);
   };
 
   const handleEditEntry = (entry: TBMEntry) => {
@@ -418,6 +516,7 @@ const App = () => {
          onDeleteTeam={handleDeleteTeam}
          onBackupData={handleBackupData}
          onRestoreData={handleRestoreData}
+         onOptimizeData={handleOptimizeData}
       />
     </div>
   );

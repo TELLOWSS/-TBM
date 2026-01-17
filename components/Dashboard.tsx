@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { TBMEntry } from '../types';
-import { Calendar, Users, AlertCircle, FileText, BarChart2, TrendingUp, ShieldAlert, Trash2, Radio, CloudRain, Sun, CloudSnow, MapPin, ArrowRight, ShieldCheck, Zap, Activity, Microscope, Clock, Siren, Megaphone, CheckCircle2, AlertTriangle, Wind, Droplets, HardHat, RefreshCw, CloudLightning, Cloud, Medal } from 'lucide-react';
+import { Calendar, Users, AlertCircle, FileText, BarChart2, TrendingUp, ShieldAlert, Trash2, Radio, CloudRain, Sun, CloudSnow, MapPin, ArrowRight, ShieldCheck, Zap, Activity, Microscope, Clock, Siren, Megaphone, CheckCircle2, AlertTriangle, Wind, Droplets, HardHat, RefreshCw, CloudLightning, Cloud, Medal, Eye, Mic, Shield, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface DashboardProps {
   entries: TBMEntry[];
@@ -14,71 +14,52 @@ interface DashboardProps {
   onPrintSingle: (entry: TBMEntry) => void; 
 }
 
-// --- [Component 0] Enhanced Sparkline Chart ---
-const Sparkline = ({ 
+// --- [Component 0] Detailed Daily Bar Chart (Replacement for Sparkline) ---
+const DailyBarChart = ({ 
     data, 
     color = "#6366f1", 
-    height = 30, 
-    width = 80, 
-    type = 'area' 
+    height = 50, 
+    labels = [] 
 }: { 
     data: number[], 
     color?: string, 
-    height?: number, 
-    width?: number, 
-    type?: 'area' | 'line' 
+    height?: number,
+    labels?: string[]
 }) => {
-    if (!data || data.length < 2) {
-        return (
-            <div style={{ width, height }} className="bg-slate-50 rounded flex items-center justify-center">
-                <span className="text-[9px] text-slate-300">-</span>
-            </div>
-        );
-    }
-
-    const max = Math.max(...data, 1);
-    const min = 0;
-    const range = max - min;
-    
-    // Calculate points
-    const points = data.map((val, i) => {
-        const x = (i / (data.length - 1)) * width;
-        const valAdjusted = isNaN(val) ? 0 : val;
-        const y = height - ((valAdjusted - min) / range) * (height - 4) - 2; // Padding 2px
-        return `${x},${y}`;
-    }).join(" ");
-
-    // For Area Fill
-    const fillPath = `M 0,${height} L ${points} L ${width},${height} Z`;
+    // Fill empty data if needed to ensure 7 days
+    const chartData = data.length < 7 ? [...Array(7 - data.length).fill(0), ...data] : data.slice(-7);
+    const maxVal = 100; // Fixed scale for safety scores
 
     return (
-        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
-            <defs>
-                <linearGradient id={`grad-${color.replace('#','')}`} x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor={color} stopOpacity="0.3"/>
-                    <stop offset="100%" stopColor={color} stopOpacity="0"/>
-                </linearGradient>
-            </defs>
-            {type === 'area' && <path d={fillPath} fill={`url(#grad-${color.replace('#','')})`} stroke="none" />}
-            <polyline 
-                points={points} 
-                fill="none" 
-                stroke={color} 
-                strokeWidth={type === 'line' ? 2 : 1.5} 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeDasharray={type === 'line' ? "0" : "0"} // Solid line
-            />
-            {/* End Dot */}
-            {data.length > 0 && (
-                <circle 
-                    cx={width} 
-                    cy={height - (( (isNaN(data[data.length-1])?0:data[data.length-1]) - min) / range) * (height - 4) - 2} 
-                    r={type === 'line' ? 2.5 : 2} 
-                    fill={color}
-                />
-            )}
-        </svg>
+        <div className="flex flex-col w-full">
+            <div className="flex items-end justify-between gap-1" style={{ height }}>
+                {chartData.map((val, i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center group relative">
+                        {/* Tooltip */}
+                        <div className="absolute -top-6 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded transition-opacity whitespace-nowrap z-10 font-bold">
+                            {val > 0 ? `${val}점` : '기록없음'}
+                        </div>
+                        
+                        {/* Bar */}
+                        <div 
+                            className={`w-full rounded-t-sm transition-all duration-500 relative ${val > 0 ? '' : 'bg-slate-100'}`}
+                            style={{ 
+                                height: val > 0 ? `${(val / maxVal) * 100}%` : '4px',
+                                backgroundColor: val > 0 ? color : undefined
+                            }}
+                        >
+                            {val === 0 && <div className="w-full h-full bg-slate-100"></div>}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {/* X-Axis Labels */}
+            <div className="flex justify-between mt-1 border-t border-slate-200 pt-1">
+                {labels.map((lbl, i) => (
+                    <span key={i} className="text-[8px] text-slate-400 font-bold text-center flex-1">{lbl}</span>
+                ))}
+            </div>
+        </div>
     );
 };
 
@@ -95,7 +76,6 @@ const LiveClock = () => {
         return () => clearInterval(timer);
     }, []);
 
-    // Format: 202X.XX.XX (Tue) 14:30:05
     const dateStr = time.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' });
     const timeStr = time.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -155,13 +135,10 @@ const SafetyCampaignBanner = () => {
 
 // --- [Component 2] Site Weather Station ---
 const WeatherStation = () => {
-    // Initial fallback data
     const [weather, setWeather] = useState({ temp: 0, condition: 'Sun', wind: 0, humidity: 0 });
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isLoaded, setIsLoaded] = useState(false);
 
-    // Fetch real weather from Open-Meteo API (Free, No Key required)
-    // Coordinates for Yongin, South Korea: 37.241, 127.178
     const fetchRealWeather = async () => {
         setIsRefreshing(true);
         try {
@@ -171,16 +148,12 @@ const WeatherStation = () => {
             const data = await response.json();
             const current = data.current;
             
-            // Map WMO Weather Codes
             let condition = 'Sun';
             const code = current.weather_code;
             
-            // 0: Clear, 1,2,3: Cloudy
             if (code === 0 || code === 1) condition = 'Sun';
             else if (code === 2 || code === 3 || code === 45 || code === 48) condition = 'Cloud';
-            // 51-67: Drizzle/Rain, 80-82: Showers, 95-99: Thunderstorm
             else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82) || (code >= 95 && code <= 99)) condition = 'Rain';
-            // 71-77: Snow, 85-86: Snow showers
             else if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) condition = 'Snow';
 
             setWeather({
@@ -192,7 +165,6 @@ const WeatherStation = () => {
             setIsLoaded(true);
         } catch (error) {
             console.error("Failed to fetch weather:", error);
-            // Minimal fallback if API fails
             setWeather(prev => ({ ...prev, temp: 20, condition: 'Sun' }));
         } finally {
             setIsRefreshing(false);
@@ -201,12 +173,10 @@ const WeatherStation = () => {
 
     useEffect(() => {
         fetchRealWeather();
-        // Refresh every 15 minutes
         const interval = setInterval(fetchRealWeather, 15 * 60 * 1000);
         return () => clearInterval(interval);
     }, []);
     
-    // Derived Risk Level based on weather
     const riskLevel = useMemo(() => {
         if (weather.temp <= -10) return { level: 'CRITICAL', msg: '작업 중지 검토 (한파)' };
         if (weather.temp >= 33) return { level: 'WARNING', msg: '온열 질환 주의 (휴식)' };
@@ -223,7 +193,6 @@ const WeatherStation = () => {
 
     return (
         <div className="bg-white rounded-[24px] p-5 border border-slate-200 shadow-sm h-full flex flex-col justify-between relative overflow-hidden group">
-            {/* Dynamic Status Bar */}
             <div className={`absolute top-0 left-0 right-0 h-1.5 ${riskLevel.level === 'CRITICAL' ? 'bg-red-500' : riskLevel.level === 'WARNING' ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
 
             <div className="flex justify-between items-start z-10">
@@ -283,7 +252,6 @@ const WeatherStation = () => {
                 </div>
             </div>
 
-            {/* Risk Message */}
             <div className={`mt-3 p-3 rounded-xl flex items-start gap-2 ${riskLevel.level === 'NORMAL' ? 'bg-emerald-50 text-emerald-700' : riskLevel.level === 'WARNING' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
                 {riskLevel.level === 'NORMAL' ? <CheckCircle2 size={16} className="mt-0.5 shrink-0"/> : <AlertTriangle size={16} className="mt-0.5 shrink-0 animate-pulse"/>}
                 <div className="flex-1">
@@ -295,13 +263,11 @@ const WeatherStation = () => {
     );
 };
 
-// --- [Component 3] Big Action Button ---
 const CommandActionCard = ({ onClick }: { onClick: () => void }) => (
     <button 
         onClick={onClick}
         className="w-full h-full bg-slate-900 rounded-[24px] p-6 text-left relative overflow-hidden group hover:scale-[1.01] transition-transform duration-300 shadow-xl shadow-slate-200 flex flex-col justify-between border-2 border-slate-900"
     >
-        {/* Background Effects */}
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600 rounded-full blur-[80px] opacity-20 group-hover:opacity-30 transition-opacity"></div>
         
@@ -333,7 +299,6 @@ const CommandActionCard = ({ onClick }: { onClick: () => void }) => (
     </button>
 );
 
-// --- [Component 4] KPI Metrics ---
 const KpiCard = ({ icon, label, value, unit, trend, colorClass }: any) => (
     <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
         <div>
@@ -350,34 +315,42 @@ const KpiCard = ({ icon, label, value, unit, trend, colorClass }: any) => (
 );
 
 export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onNavigateToReports, onNavigateToDataLab, onNewEntry, onEdit, onDelete }) => {
-    
-    // [UPDATED] Use real system date for filtering
+    const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     
-    // Stats (Today)
     const todaysEntries = entries.filter(e => e.date === today);
     const riskCount = todaysEntries.reduce((acc, curr) => acc + (curr.riskFactors?.length || 0), 0);
     const workerCount = todaysEntries.reduce((acc, curr) => acc + (curr.attendeesCount || 0), 0);
     
-    // [FIXED] Sparkline Chart Data Preparation (Detailed Metrics)
     const teamActivityData = useMemo(() => {
-        // 1. Generate dates for last 7 days
+        // Generate last 7 days keys (D-6 to D-Day)
         const last7Days = Array.from({length: 7}, (_, i) => {
             const d = new Date();
             d.setDate(d.getDate() - (6 - i));
             return d.toISOString().slice(0, 10);
         });
+        
+        // Short labels for graph (e.g. "Mon", "Tue" or "10/01")
+        const dateLabels = last7Days.map(dateStr => {
+            const d = new Date(dateStr);
+            return `${d.getMonth()+1}/${d.getDate()}`;
+        });
 
-        // 2. Aggregate data by Team and Date
         const teamMap: Record<string, { 
             totalActivity: number, 
-            totalRisks: number,
             scoreSum: number,
             scoreCount: number,
-            dailyActivity: number[], 
-            dailyRisks: number[],
-            lastActive: string 
+            dailyScores: number[], // Use overall score for summary sparkline
+            
+            // Detailed Metrics (Max score per day to show best effort)
+            detailed: {
+                log: number[],
+                focus: number[],
+                voice: number[],
+                ppe: number[]
+            }
         }> = {};
 
         entries.forEach(e => {
@@ -385,35 +358,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
                 const teamName = e.teamName || '미지정';
                 if (!teamMap[teamName]) {
                     teamMap[teamName] = { 
-                        totalActivity: 0, totalRisks: 0, scoreSum: 0, scoreCount: 0,
-                        dailyActivity: Array(7).fill(0), 
-                        dailyRisks: Array(7).fill(0),
-                        lastActive: '' 
+                        totalActivity: 0, scoreSum: 0, scoreCount: 0,
+                        dailyScores: Array(7).fill(0),
+                        detailed: {
+                            log: Array(7).fill(0),
+                            focus: Array(7).fill(0),
+                            voice: Array(7).fill(0),
+                            ppe: Array(7).fill(0)
+                        }
                     };
                 }
                 
                 const dateIndex = last7Days.indexOf(e.date);
                 if (dateIndex !== -1) {
-                    teamMap[teamName].dailyActivity[dateIndex] += 1;
-                    teamMap[teamName].totalActivity += 1;
+                    const data = teamMap[teamName];
+                    data.totalActivity += 1;
                     
-                    const riskC = e.riskFactors?.length || 0;
-                    teamMap[teamName].dailyRisks[dateIndex] += riskC;
-                    teamMap[teamName].totalRisks += riskC;
-
-                    // Safety Score Aggregation
-                    if (e.videoAnalysis?.score) {
-                        teamMap[teamName].scoreSum += e.videoAnalysis.score;
-                        teamMap[teamName].scoreCount += 1;
+                    const score = e.videoAnalysis?.score || 0;
+                    if (score > 0) {
+                        data.scoreSum += score;
+                        data.scoreCount += 1;
+                        // For display, prioritize the highest score if multiple entries exist per day
+                        data.dailyScores[dateIndex] = Math.max(data.dailyScores[dateIndex], score);
                     }
 
-                    // Keep track of latest activity
-                    if (e.date > teamMap[teamName].lastActive) teamMap[teamName].lastActive = e.date;
+                    const r = e.videoAnalysis?.rubric;
+                    if (r) {
+                        // Normalize to 100 scale for consistency
+                        data.detailed.log[dateIndex] = Math.max(data.detailed.log[dateIndex], (r.logQuality || 0) / 30 * 100);
+                        data.detailed.focus[dateIndex] = Math.max(data.detailed.focus[dateIndex], (r.focus || 0) / 30 * 100);
+                        data.detailed.voice[dateIndex] = Math.max(data.detailed.voice[dateIndex], (r.voice || 0) / 20 * 100);
+                        data.detailed.ppe[dateIndex] = Math.max(data.detailed.ppe[dateIndex], (r.ppe || 0) / 20 * 100);
+                    }
                 }
             }
         });
 
-        // 3. Convert to Array and Sort by Total Activity
         const sortedTeams = Object.entries(teamMap)
             .map(([name, data]) => {
                 const avgScore = data.scoreCount > 0 ? Math.round(data.scoreSum / data.scoreCount) : 0;
@@ -425,16 +405,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
 
                 return { name, ...data, avgScore, grade };
             })
-            .sort((a, b) => b.totalActivity - a.totalActivity)
-            .slice(0, 5); // Top 5
+            .sort((a, b) => b.totalActivity - a.totalActivity);
 
-        return sortedTeams;
+        return { teams: sortedTeams, labels: dateLabels };
     }, [entries]);
     
     return (
         <div className="space-y-6 pb-20 animate-fade-in font-sans text-slate-800">
-            
-            {/* 1. Top Header (Status Bar) */}
             <div className="flex flex-col md:flex-row justify-between items-end border-b border-slate-200 pb-4 gap-4">
                 <div>
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
@@ -448,25 +425,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
                 <LiveClock />
             </div>
 
-            {/* [NEW] Safety Campaign Banner */}
             <SafetyCampaignBanner />
 
-            {/* 2. Main Grid Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-auto">
-                
-                {/* Left: Weather Station (4 cols) */}
                 <div className="lg:col-span-4 h-[320px] lg:h-auto">
                     <WeatherStation />
                 </div>
-
-                {/* Center: Main Command (4 cols) */}
                 <div className="lg:col-span-4 h-[320px] lg:h-auto">
                     <CommandActionCard onClick={onNewEntry} />
                 </div>
-
-                {/* Right: Quick Stats & Shortcuts (4 cols) */}
                 <div className="lg:col-span-4 flex flex-col gap-4 h-full">
-                    {/* KPI Row */}
                     <div className="grid grid-cols-2 gap-3">
                         <KpiCard 
                             icon={<Users size={18} className="text-blue-600"/>}
@@ -484,7 +452,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
                         />
                     </div>
                     
-                    {/* Shortcut Buttons */}
                     <div className="flex-1 grid grid-cols-1 gap-3">
                         <button onClick={onNavigateToReports} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all flex items-center justify-between group">
                             <div className="flex items-center gap-3">
@@ -515,99 +482,102 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
                 </div>
             </div>
 
-            {/* 3. Live Feed Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Chart Section (Now with Detailed Sparklines) */}
-                <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
-                    <div className="flex justify-between items-center mb-6">
+                {/* REFACTORED CHART SECTION */}
+                <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                    <div className="flex justify-between items-center mb-6 shrink-0">
                         <h3 className="font-bold text-slate-800 flex items-center gap-2">
                             <BarChart2 size={18} className="text-indigo-500"/>
-                            주간 팀별 활동 추이 (Trend)
+                            주간 팀별 세부 평가 추이
                         </h3>
                         <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">Last 7 Days</span>
                     </div>
                     
-                    {/* [FIXED] Table Header */}
-                    <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-400 border-b border-slate-100 pb-2 mb-2 px-2 uppercase tracking-wide">
-                        <div className="col-span-4">Team / Rank</div>
-                        <div className="col-span-3 text-center">Activity Trend</div>
-                        <div className="col-span-3 text-center">Risk Discovery</div>
-                        <div className="col-span-2 text-right">Overall Score</div>
-                    </div>
-
-                    {/* [FIXED] Sparkline List Visualization */}
-                    <div className="flex flex-col gap-2">
-                        {teamActivityData.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-                                <Activity size={24} className="mb-2 opacity-20"/>
-                                <span className="text-xs">최근 7일간 데이터가 없습니다.</span>
-                            </div>
-                        ) : (
-                            teamActivityData.map((team, idx) => (
-                                <div key={idx} className="grid grid-cols-12 gap-2 items-center p-3 hover:bg-slate-50 rounded-xl transition-colors group border border-transparent hover:border-slate-100">
-                                    {/* Team Info */}
-                                    <div className="col-span-4 flex items-center gap-3">
-                                        <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black shrink-0 ${idx < 3 ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
-                                            {idx + 1}
-                                        </div>
-                                        <div className="flex flex-col min-w-0">
-                                            <span className="text-xs font-bold text-slate-700 truncate">{team.name}</span>
-                                            <span className="text-[9px] text-slate-400">Total {team.totalActivity}회</span>
-                                        </div>
+                    <div className="flex-1 overflow-x-auto custom-scrollbar pb-2">
+                        {/* Improved Table Layout with Sticky Column */}
+                        <div className="min-w-[500px]">
+                            <div className="flex flex-col gap-2">
+                                {teamActivityData.teams.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+                                        <Activity size={24} className="mb-2 opacity-20"/>
+                                        <span className="text-xs">최근 7일간 데이터가 없습니다.</span>
                                     </div>
+                                ) : (
+                                    teamActivityData.teams.map((team, idx) => {
+                                        const isExpanded = expandedTeamId === team.name;
+                                        return (
+                                            <div key={idx} className={`rounded-xl border transition-all duration-300 ${isExpanded ? 'bg-indigo-50/30 border-indigo-200 shadow-md' : 'bg-white border-transparent hover:border-slate-200 hover:bg-slate-50'}`}>
+                                                {/* Main Row (Summary) */}
+                                                <div 
+                                                    className="flex items-center p-3 cursor-pointer gap-4"
+                                                    onClick={() => setExpandedTeamId(isExpanded ? null : team.name)}
+                                                >
+                                                    {/* Sticky Identifier */}
+                                                    <div className="flex items-center gap-3 min-w-[140px]">
+                                                        <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black shrink-0 ${idx < 3 ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                            {idx + 1}
+                                                        </div>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-sm font-bold text-slate-700 truncate">{team.name}</span>
+                                                            <span className="text-[10px] text-slate-400">활동 {team.totalActivity}건</span>
+                                                        </div>
+                                                    </div>
 
-                                    {/* Sparkline 1: Activity (Blue Area) */}
-                                    <div className="col-span-3 h-8 flex justify-center">
-                                        <Sparkline 
-                                            data={team.dailyActivity} 
-                                            color="#4f46e5" 
-                                            height={32}
-                                            width={100}
-                                            type="area"
-                                        />
-                                    </div>
+                                                    {/* Trend Line (Summary) */}
+                                                    <div className="flex-1 h-8 px-2 hidden sm:block">
+                                                        <DailyBarChart data={team.dailyScores} color={team.avgScore >= 80 ? '#10b981' : '#6366f1'} height={32} />
+                                                    </div>
 
-                                    {/* Sparkline 2: Risks (Red Line) */}
-                                    <div className="col-span-3 h-8 flex justify-center">
-                                        <Sparkline 
-                                            data={team.dailyRisks} 
-                                            color="#ef4444" 
-                                            height={32}
-                                            width={100}
-                                            type="line"
-                                        />
-                                    </div>
-
-                                    {/* Overall Score Badge */}
-                                    <div className="col-span-2 text-right flex justify-end">
-                                        {team.avgScore > 0 ? (
-                                            <div className="flex flex-col items-end">
-                                                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-black ${
-                                                    team.grade === 'S' ? 'bg-violet-50 text-violet-600 border-violet-100' :
-                                                    team.grade === 'A' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                                                    team.grade === 'B' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                    'bg-amber-50 text-amber-600 border-amber-100'
-                                                }`}>
-                                                    {team.grade === 'S' && <Medal size={10}/>}
-                                                    <span>{team.avgScore}점</span>
+                                                    {/* Score & Toggle */}
+                                                    <div className="flex items-center gap-3 ml-auto">
+                                                        <div className={`flex flex-col items-center justify-center w-12 h-10 rounded-lg ${
+                                                            team.grade === 'S' ? 'bg-violet-100 text-violet-700' :
+                                                            team.grade === 'A' ? 'bg-indigo-100 text-indigo-700' :
+                                                            team.grade === 'B' ? 'bg-emerald-100 text-emerald-700' :
+                                                            'bg-slate-100 text-slate-600'
+                                                        }`}>
+                                                            <span className="text-sm font-black">{team.grade}</span>
+                                                            <span className="text-[8px] font-bold opacity-70">{team.avgScore}</span>
+                                                        </div>
+                                                        <div className={`p-1 rounded-full transition-transform ${isExpanded ? 'rotate-180 bg-slate-200' : 'text-slate-400'}`}>
+                                                            <ChevronDown size={16}/>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <span className={`text-[9px] font-bold mt-0.5 ${
-                                                    team.grade === 'S' || team.grade === 'A' ? 'text-slate-400' : 'text-red-400'
-                                                }`}>
-                                                    Grade {team.grade}
-                                                </span>
+
+                                                {/* Expanded Detail View */}
+                                                {isExpanded && (
+                                                    <div className="p-4 pt-0 border-t border-indigo-100/50 mt-2 grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
+                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                                            <p className="text-[10px] font-bold text-indigo-500 mb-2 flex items-center gap-1"><FileText size={10}/> 일지 품질</p>
+                                                            <DailyBarChart data={team.detailed.log} labels={teamActivityData.labels} color="#6366f1" height={40}/>
+                                                        </div>
+                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                                            <p className="text-[10px] font-bold text-emerald-600 mb-2 flex items-center gap-1"><Eye size={10}/> 작업 집중도</p>
+                                                            <DailyBarChart data={team.detailed.focus} labels={teamActivityData.labels} color="#10b981" height={40}/>
+                                                        </div>
+                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                                            <p className="text-[10px] font-bold text-amber-500 mb-2 flex items-center gap-1"><Mic size={10}/> 전파 명확성</p>
+                                                            <DailyBarChart data={team.detailed.voice} labels={teamActivityData.labels} color="#f59e0b" height={40}/>
+                                                        </div>
+                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                                            <p className="text-[10px] font-bold text-rose-500 mb-2 flex items-center gap-1"><Shield size={10}/> 보호구 상태</p>
+                                                            <DailyBarChart data={team.detailed.ppe} labels={teamActivityData.labels} color="#f43f5e" height={40}/>
+                                                        </div>
+                                                        <div className="col-span-full text-center">
+                                                            <p className="text-[10px] text-slate-400">※ 각 막대는 해당 일자의 평가 점수(100점 만점)를 나타냅니다.</p>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                        ) : (
-                                            <span className="text-[10px] font-bold text-slate-300">N/A</span>
-                                        )}
-                                    </div>
-                                </div>
-                            ))
-                        )}
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* Recent Activity List */}
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col h-[300px] lg:h-auto overflow-hidden">
                     <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                         <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
