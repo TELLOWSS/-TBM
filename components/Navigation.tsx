@@ -78,7 +78,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
              <BrandLogo />
              <div>
                <h1 className="font-black text-xl leading-none text-white tracking-tight mb-1 font-sans">HUIGANG</h1>
-               <span className="text-[9px] font-bold text-slate-500 tracking-[0.2em] uppercase block">Safety OS v4.0</span>
+               <span className="text-[9px] font-bold text-slate-500 tracking-[0.2em] uppercase block">Partner Safety OS</span>
              </div>
           </div>
           <div className="mt-4 flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">

@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, Suspense } from 'react';
-import { createPortal } from 'react-dom'; // [UPDATED] Import createPortal
+import { createPortal } from 'react-dom';
 import { Navigation } from './components/Navigation';
 import { Dashboard } from './components/Dashboard';
 import { TBMForm } from './components/TBMForm';
@@ -16,7 +15,7 @@ import { StorageDB } from './utils/storageDB';
 import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline } from './types';
 import { Database, Loader2 } from 'lucide-react';
 
-// [UPDATED] Restore Progress Overlay Component -> Now using Portal
+// [UPDATED] Restore Progress Overlay Component
 const RestoreOverlay = ({ progress }: { progress: number }) => {
     return createPortal(
         <div className="fixed inset-0 z-[999999] bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in text-white">
@@ -29,7 +28,7 @@ const RestoreOverlay = ({ progress }: { progress: number }) => {
                         <Database size={48} className="text-emerald-400 animate-pulse" />
                     </div>
                     <h3 className="text-xl font-black mb-2">System Restoring...</h3>
-                    <p className="text-sm text-slate-400 mb-6 text-center">데이터 무결성 검증 및 병합 중입니다.<br/>잠시만 기다려주세요.</p>
+                    <p className="text-sm text-slate-400 mb-6 text-center">데이터베이스 트랜잭션 기록 중...<br/>안전한 저장을 위해 브라우저를 닫지 마세요.</p>
                     
                     <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
                         <div 
@@ -38,7 +37,7 @@ const RestoreOverlay = ({ progress }: { progress: number }) => {
                         ></div>
                     </div>
                     <span className="text-xs font-mono text-emerald-400 font-bold flex justify-between w-full">
-                        <span>Verifying...</span>
+                        <span>Serializing & Saving...</span>
                         <span>{progress}% Complete</span>
                     </span>
                 </div>
@@ -178,149 +177,145 @@ const App = () => {
       URL.revokeObjectURL(url);
   };
 
-  // [UPDATED] Robust Restore with Visual Progress and Legacy Support
+  // [FIXED] Soft-Refresh Restore Logic (No Page Reload)
   const handleRestoreData = async (files: FileList) => {
       setIsRestoring(true);
       setRestoreProgress(0);
 
-      const readFile = (file: File): Promise<any> => {
-          return new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                  try {
-                      resolve(JSON.parse(e.target?.result as string));
-                  } catch (err) {
-                      console.warn(`Skipping invalid JSON: ${file.name}`);
-                      resolve(null);
-                  }
-              };
-              reader.onerror = reject;
-              reader.readAsText(file);
-          });
-      };
+      // Temporary storage for merge
+      let mergedEntries = [...entries];
+      let mergedAssessments = [...assessments];
+      let mergedTeams = [...teams];
+      let mergedSignatures = { ...signatures };
+      
+      let totalFound = 0;
 
       try {
           const fileArray = Array.from(files);
-          let processedCount = 0;
           
-          // Step 1: Read Files (10-30%)
-          const fileContents = [];
-          for (const file of fileArray) {
-              const content = await readFile(file);
-              if (content) fileContents.push(content);
-              processedCount++;
-              setRestoreProgress(Math.min(30, Math.round((processedCount / fileArray.length) * 30)));
+          for (let i = 0; i < fileArray.length; i++) {
+              const file = fileArray[i];
+              const text = await new Promise<string>((resolve) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(reader.result as string);
+                  reader.onerror = () => resolve("{}");
+                  reader.readAsText(file);
+              });
+
+              try {
+                  const json = JSON.parse(text);
+                  
+                  // Strategy 1: Standard Backup Format (Object with keys)
+                  if (!Array.isArray(json)) {
+                      let fileFound = false;
+                      if (Array.isArray(json.entries)) {
+                          const validEntries = json.entries.filter((e: any) => e && (e.date || e.id));
+                          mergedEntries = [...validEntries, ...mergedEntries]; 
+                          totalFound += validEntries.length;
+                          fileFound = true;
+                      }
+                      if (Array.isArray(json.assessments)) {
+                          const validAss = json.assessments.filter((a: any) => a && a.month);
+                          mergedAssessments = [...validAss, ...mergedAssessments];
+                          totalFound += validAss.length;
+                          fileFound = true;
+                      }
+                      if (Array.isArray(json.teams)) {
+                          const existingIds = new Set(mergedTeams.map(t => t.id));
+                          json.teams.forEach((t: any) => {
+                              if (!existingIds.has(t.id)) {
+                                  mergedTeams.push(t);
+                                  totalFound++;
+                              }
+                          });
+                          fileFound = true;
+                      }
+                      if (json.signatures) {
+                          mergedSignatures = { ...mergedSignatures, ...json.signatures };
+                      }
+                      
+                      // Fallback: If no standard keys, search recursively for arrays
+                      if (!fileFound) {
+                          Object.keys(json).forEach(key => {
+                              if (Array.isArray(json[key]) && json[key].length > 0) {
+                                  const arr = json[key];
+                                  const first = arr[0];
+                                  if (first.workDescription || first.teamName) {
+                                      mergedEntries = [...arr, ...mergedEntries];
+                                      totalFound += arr.length;
+                                  } else if (first.month && first.priorities) {
+                                      mergedAssessments = [...arr, ...mergedAssessments];
+                                      totalFound += arr.length;
+                                  }
+                              }
+                          });
+                      }
+                  } 
+                  // Strategy 2: Raw Array (Legacy TBM Array)
+                  else if (Array.isArray(json) && json.length > 0) {
+                      const first = json[0];
+                      if (first.workDescription || first.teamName) {
+                          mergedEntries = [...json, ...mergedEntries];
+                          totalFound += json.length;
+                      } else if (first.month && first.priorities) {
+                          mergedAssessments = [...json, ...mergedAssessments];
+                          totalFound += json.length;
+                      }
+                  }
+              } catch (e) {
+                  console.warn("Skipping invalid file:", file.name);
+              }
+              
+              setRestoreProgress(Math.round(((i + 1) / fileArray.length) * 50));
           }
 
-          if (fileContents.length === 0) {
-              alert("유효한 백업 파일이 없습니다.");
+          if (totalFound === 0) {
+              alert("⚠️ 복구할 유효한 데이터가 파일에 없습니다.");
               setIsRestoring(false);
               return;
           }
 
-          setRestoreProgress(40);
-
-          // Step 2: Merge Data (40-80%)
-          const newEntriesMap = new Map<string, TBMEntry>();
-          entries.forEach(e => newEntriesMap.set(e.id, e));
-
-          const newAssMap = new Map<string, MonthlyRiskAssessment>();
-          assessments.forEach(a => newAssMap.set(a.id, a));
-
-          const newTeamMap = new Map<string, TeamOption>();
-          teams.forEach(t => newTeamMap.set(t.id, t));
-
-          let newSignatures = { ...signatures };
-
-          // Helper to process any item array found regardless of structure
-          const processItems = (items: any[]) => {
-              items.forEach((item: any) => {
-                  if (!item || typeof item !== 'object') return;
-
-                  // 1. Risk Assessment Detection (Has Month & Priorities)
-                  if (item.month && (item.priorities || item.type)) {
-                       // Ensure ID exists
-                       const id = item.id || `RESTORED-ASS-${Date.now()}-${Math.random()}`;
-                       newAssMap.set(id, {
-                           ...item,
-                           id: id,
-                           priorities: Array.isArray(item.priorities) ? item.priorities : []
-                       });
-                  }
-                  // 2. Team Detection (Has Name & Category, No Date)
-                  else if (item.name && item.category && !item.date) {
-                       const id = item.id || `RESTORED-TEAM-${Date.now()}-${Math.random()}`;
-                       newTeamMap.set(id, item);
-                  }
-                  // 3. TBM Entry Detection (Has Date & TeamName/WorkDescription) - Fallback
-                  else if (item.date && (item.teamName || item.workDescription || item.teamId)) {
-                       const id = item.id || `RESTORED-ENTRY-${Date.now()}-${Math.random()}`;
-                       newEntriesMap.set(id, {
-                          ...item,
-                          id: id,
-                          riskFactors: Array.isArray(item.riskFactors) ? item.riskFactors : [],
-                          safetyFeedback: Array.isArray(item.safetyFeedback) ? item.safetyFeedback : [],
-                          teamId: item.teamId || 'unknown',
-                          teamName: item.teamName || 'Unknown Team'
-                       });
-                  }
-              });
-          };
-
-          fileContents.forEach((rawData, idx) => {
-              // Handle Raw Array inputs (Legacy backups)
-              if (Array.isArray(rawData)) {
-                  processItems(rawData);
-              } else if (typeof rawData === 'object' && rawData !== null) {
-                  // Handle Standard Object inputs
-                  if (Array.isArray(rawData.entries)) processItems(rawData.entries);
-                  if (Array.isArray(rawData.assessments)) processItems(rawData.assessments);
-                  if (Array.isArray(rawData.teams)) processItems(rawData.teams);
-                  
-                  // Handle Unknown/Legacy Keys: Deep scan all array properties
-                  Object.keys(rawData).forEach(key => {
-                      if (['entries', 'assessments', 'teams', 'signatures', 'version', 'scope', 'backupDate'].includes(key)) return;
-                      if (Array.isArray(rawData[key])) {
-                          console.log(`Found legacy data array in key: ${key}`);
-                          processItems(rawData[key]);
-                      }
-                  });
-
-                  if (rawData.signatures) {
-                      newSignatures = { ...newSignatures, ...rawData.signatures };
-                  }
-              }
-              
-              setRestoreProgress(40 + Math.round(((idx + 1) / fileContents.length) * 40));
+          // De-duplicate Entries based on ID
+          const uniqueEntryMap = new Map();
+          mergedEntries.forEach(e => {
+              // Ensure critical arrays are present (Data Sanitization)
+              if (!Array.isArray(e.riskFactors)) e.riskFactors = [];
+              if (!Array.isArray(e.safetyFeedback)) e.safetyFeedback = [];
+              uniqueEntryMap.set(e.id, e);
           });
+          const finalEntries = Array.from(uniqueEntryMap.values());
 
-          setRestoreProgress(85);
+          // De-duplicate Assessments based on ID
+          const uniqueAssMap = new Map();
+          mergedAssessments.forEach(a => uniqueAssMap.set(a.id, a));
+          const finalAssessments = Array.from(uniqueAssMap.values());
 
-          // Step 3: Commit to State & Storage (90-100%)
-          const finalEntries = Array.from(newEntriesMap.values());
-          const finalAssessments = Array.from(newAssMap.values());
-          const finalTeams = Array.from(newTeamMap.values());
+          setRestoreProgress(70);
 
-          setEntries(finalEntries);
-          setAssessments(finalAssessments);
-          setTeams(finalTeams);
-          setSignatures(newSignatures);
-
+          // Save to DB
           await StorageDB.set('entries', finalEntries);
           await StorageDB.set('assessments', finalAssessments);
-          await StorageDB.set('teams', finalTeams);
-          await StorageDB.set('signatures', newSignatures);
+          await StorageDB.set('teams', mergedTeams);
+          await StorageDB.set('signatures', mergedSignatures);
 
           setRestoreProgress(100);
-          
-          await new Promise(r => setTimeout(r, 800)); 
-          alert(`✅ 총 ${files.length}개 파일 복구 완료!\n\n- TBM 일지: ${finalEntries.length}건\n- 위험성평가: ${finalAssessments.length}건\n- 팀 정보: ${finalTeams.length}건`);
-          window.location.reload(); 
+          await new Promise(r => setTimeout(r, 800));
 
-      } catch (err) {
-          console.error("Bulk Restore Error:", err);
-          alert("데이터 병합 중 오류가 발생했습니다.");
-      } finally {
+          // Soft Update (No Reload)
+          setEntries(finalEntries);
+          setAssessments(finalAssessments);
+          setTeams(mergedTeams);
+          setSignatures(mergedSignatures);
+          
+          setIsRestoring(false);
+          setIsSettingsOpen(false); // Close modal
+          
+          alert(`✅ 데이터 복구 완료!\n총 ${totalFound}건의 데이터가 처리되었습니다.`);
+          setCurrentView('dashboard'); // Navigate to home
+
+      } catch (err: any) {
+          console.error("Critical Restore Error:", err);
+          alert(`복구 중 치명적 오류 발생: ${err.message}`);
           setIsRestoring(false);
       }
   };
@@ -363,7 +358,8 @@ const App = () => {
                   case 'risk-assessment':
                     return <RiskAssessmentManager 
                         assessments={assessments} 
-                        onSave={handleSaveAssessment} 
+                        onSave={handleSaveAssessment}
+                        onRestoreData={handleRestoreData} 
                     />;
                   case 'reports':
                     return <ReportCenter 
@@ -377,8 +373,8 @@ const App = () => {
                     return <SafetyDataLab 
                         entries={entries} 
                         teams={teams} 
-                        onBackupData={handleBackupData} // [NEW] Pass Backup handler
-                        onRestoreData={handleRestoreData} // [NEW] Pass Restore handler
+                        onBackupData={handleBackupData} 
+                        onRestoreData={handleRestoreData} 
                     />;
                   default:
                     return <Dashboard 

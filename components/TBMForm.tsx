@@ -42,8 +42,11 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   
-  // [SYSTEM DATE OVERRIDE] Default date set to 2026-01-13
-  const [entryDate, setEntryDate] = useState('2026-01-13');
+  // [UPDATED] Default date set to current system date
+  const [entryDate, setEntryDate] = useState(() => {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
   const [entryTime, setEntryTime] = useState('07:30');
   const [teamId, setTeamId] = useState(teams[0]?.id || '');
   const [leaderName, setLeaderName] = useState('');
@@ -95,7 +98,10 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   useEffect(() => {
       const activeItem = queue.find(q => q.tempId === activeId);
       if (activeItem) {
-          setEntryDate(activeItem.date || '2026-01-13');
+          const now = new Date();
+          const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+          
+          setEntryDate(activeItem.date || todayStr);
           setEntryTime(activeItem.time || '07:30');
           setTeamId(activeItem.teamId || teams[0]?.id || '');
           setLeaderName(activeItem.leaderName || '');
@@ -291,9 +297,10 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
         } else {
             alert("⚠️ 텍스트를 인식하지 못했습니다. 사진을 확인해주세요.");
         }
-    } catch (e) {
+    } catch (e: any) {
         console.error(e);
-        alert("분석 중 오류가 발생했습니다.");
+        const msg = e.message || '';
+        alert(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : "분석 중 오류가 발생했습니다.");
     } finally {
         setIsDocAnalyzing(false);
     }
@@ -316,9 +323,10 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
         } else {
             alert("⚠️ 생성된 코멘트가 없습니다. 작업 내용을 더 자세히 입력해보세요.");
         }
-    } catch (e) {
+    } catch (e: any) {
         console.error(e);
-        alert("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+        const msg = e.message || '';
+        alert(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : "AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
         setIsFeedbackGenerating(false);
     }
@@ -352,9 +360,10 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
             updateActiveItem({ safetyFeedback: currentFeedback });
         }
         alert("AI 분석이 완료되었습니다. 내용을 확인하고 수정해주세요.");
-    } catch (e) {
+    } catch (e: any) {
         console.error(e);
-        alert("AI 분석에 실패했습니다.");
+        const msg = e.message || '';
+        alert(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : "AI 분석에 실패했습니다.");
     } finally {
         setIsVideoAnalyzing(false);
         setVideoStatusMessage("");

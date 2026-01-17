@@ -1,7 +1,6 @@
-
 import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, UserCheck, Users, Database, Save, Upload, Download, Plus, Trash2, Settings, AlertTriangle, CheckCircle2, FileText, ShieldCheck, Layers, Loader2 } from 'lucide-react';
+import { X, UserCheck, Users, Database, Save, Upload, Download, Plus, Trash2, Settings, AlertTriangle, CheckCircle2, FileText, ShieldCheck, Layers, Loader2, FileSearch, Stethoscope } from 'lucide-react';
 import { TeamOption, TeamCategory } from '../types';
 
 interface SettingsModalProps {
@@ -23,19 +22,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (!isOpen) return null;
 
     const [activeTab, setActiveTab] = useState<'BASIC' | 'TEAMS' | 'DATA'>('BASIC');
-    const [isBackingUp, setIsBackingUp] = useState(false); // [NEW] Loading state
+    const [isBackingUp, setIsBackingUp] = useState(false);
+    const [isVerifying, setIsVerifying] = useState(false);
     
-    // Team Form State
     const [newTeamName, setNewTeamName] = useState('');
     const [newTeamCategory, setNewTeamCategory] = useState<string>(TeamCategory.FORMWORK);
     const restoreInputRef = useRef<HTMLInputElement>(null);
+    const verifyInputRef = useRef<HTMLInputElement>(null);
 
     const handleAddTeamSubmit = () => {
         if (!newTeamName.trim()) {
             alert('팀 이름을 입력해주세요.');
             return;
         }
-        // [NEW] Duplicate Check
         if (teams.some(t => t.name.trim() === newTeamName.trim())) {
             alert('이미 존재하는 팀 이름입니다. 다른 이름을 사용해주세요.');
             return;
@@ -44,22 +43,125 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         setNewTeamName('');
     };
 
-    // [NEW] Wrapper for Backup to show loading state
     const handleBackupClick = (scope: 'ALL' | 'TBM' | 'RISK') => {
         setIsBackingUp(true);
         setTimeout(() => {
             onBackupData(scope);
             setIsBackingUp(false);
-        }, 300); // Simulate processing time for UX
+        }, 500); 
+    };
+
+    // [CRITICAL FIX] Reset value on click to allow re-selecting same file
+    const onInputClick = (e: React.MouseEvent<HTMLInputElement>) => {
+        (e.target as HTMLInputElement).value = '';
     };
 
     const handleRestoreClick = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
-            if (confirm(`총 ${e.target.files.length}개의 파일에서 데이터를 복구하시겠습니까?\n\n[주의] 기존 데이터와 ID가 중복될 경우 백업 파일의 내용으로 덮어씌워집니다.`)) {
-                onRestoreData(e.target.files);
-            }
-            e.target.value = ''; // Reset input
+        const files = e.target.files;
+        if (files && files.length > 0) {
+            onRestoreData(files);
         }
+    };
+
+    const handleVerifyClick = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        
+        setIsVerifying(true);
+
+        setTimeout(async () => {
+            try {
+                let totalTbm = 0;
+                let totalRisk = 0;
+                let totalTeam = 0;
+                let validFiles = 0;
+                let errorCount = 0;
+
+                const fileArray = Array.from(files) as File[];
+
+                await Promise.all(fileArray.map(async (file) => {
+                    try {
+                        const text = await new Promise<string>((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result as string);
+                            reader.onerror = () => reject(new Error("File read error"));
+                            reader.readAsText(file);
+                        });
+
+                        if (!text) throw new Error("Empty file");
+                        
+                        let json;
+                        try {
+                            json = JSON.parse(text);
+                        } catch {
+                            throw new Error("Invalid JSON format");
+                        }
+                        
+                        const countItems = (items: any) => Array.isArray(items) ? items.length : 0;
+
+                        // Flexible Detection Logic
+                        if (Array.isArray(json)) {
+                            // Legacy Array Format Detection
+                            const tbmCount = json.filter((i:any) => i.workDescription || i.date || i.teamName).length;
+                            const riskCount = json.filter((i:any) => i.month && i.priorities).length;
+                            
+                            totalTbm += tbmCount;
+                            totalRisk += riskCount;
+                            if (tbmCount > 0 || riskCount > 0) validFiles++;
+                        } else {
+                            // Object Format Detection
+                            let hasData = false;
+                            
+                            // Check known keys
+                            if (json.entries) { totalTbm += countItems(json.entries); hasData = true; }
+                            if (json.assessments) { totalRisk += countItems(json.assessments); hasData = true; }
+                            if (json.teams) { totalTeam += countItems(json.teams); hasData = true; }
+                            
+                            // Deep Search for any array in unknown keys
+                            if (!hasData) {
+                                Object.keys(json).forEach(key => {
+                                    if (Array.isArray(json[key])) {
+                                        const arr = json[key];
+                                        if (arr.length > 0) {
+                                            const first = arr[0];
+                                            if (first.workDescription || first.date) { totalTbm += arr.length; hasData = true; }
+                                            else if (first.month && first.priorities) { totalRisk += arr.length; hasData = true; }
+                                            else if (first.category && first.name) { totalTeam += arr.length; hasData = true; }
+                                        }
+                                    }
+                                });
+                            }
+                            if (hasData || totalTbm > 0 || totalRisk > 0) validFiles++;
+                        }
+                    } catch (err: any) {
+                        console.error(`File ${file.name} failed:`, err);
+                        errorCount++;
+                    }
+                }));
+
+                const report = `
+✅ 파일 무결성 검사 결과
+------------------------
+• 검사 파일: ${fileArray.length}개
+• 유효 파일: ${validFiles}개
+• 오류 파일: ${errorCount}개
+
+[발견된 데이터]
+📋 TBM 일지: ${totalTbm}건
+🛡️ 위험성평가: ${totalRisk}건
+👷 팀 정보: ${totalTeam}건
+
+${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 눌러 진행하세요." : "⚠️ 유효한 데이터 구조를 찾지 못했습니다."}
+                `;
+                alert(report);
+
+            } catch (err: any) {
+                console.error(err);
+                alert(`❌ 검사 중 시스템 오류: ${err.message}`);
+            } finally {
+                setIsVerifying(false);
+            }
+        }, 300);
     };
 
     return createPortal(
@@ -132,7 +234,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                         ) : (
                                             <span className="text-xs text-slate-400 font-medium">이미지 없음</span>
                                         )}
-                                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" onChange={(e) => {
+                                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" onClick={onInputClick} onChange={(e) => {
                                             if (e.target.files?.[0]) {
                                                 const reader = new FileReader();
                                                 reader.onload = (ev) => onUpdateSignature('safety', ev.target?.result as string);
@@ -156,7 +258,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                         ) : (
                                             <span className="text-xs text-slate-400 font-medium">이미지 없음</span>
                                         )}
-                                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" onChange={(e) => {
+                                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" onClick={onInputClick} onChange={(e) => {
                                             if (e.target.files?.[0]) {
                                                 const reader = new FileReader();
                                                 reader.onload = (ev) => onUpdateSignature('site', ev.target?.result as string);
@@ -294,31 +396,63 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     {isBackingUp && <p className="text-[10px] text-slate-400 text-center mt-2 animate-pulse">데이터 패키징 중입니다...</p>}
                                 </div>
 
-                                {/* Import Section */}
+                                {/* Import & Verify Section */}
                                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                                     <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                        <Upload size={18} className="text-emerald-600"/> 데이터 복구 (Import)
+                                        <Database size={18} className="text-emerald-600"/> 데이터 복구 및 검증
                                     </h3>
-                                    <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 gap-3 hover:border-emerald-300 transition-colors">
-                                        <Database size={32} className="text-emerald-200"/>
-                                        <div className="text-center">
-                                            <p className="text-sm font-bold text-slate-600">백업 파일(.json)을 업로드하세요</p>
-                                            <p className="text-xs text-slate-400 mt-1">통합 백업, 개별 백업 파일 모두 지원합니다. (다중 선택 가능)</p>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* Verify Button */}
+                                        <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 gap-3 hover:border-blue-300 hover:bg-blue-50 transition-colors group">
+                                            <Stethoscope size={32} className="text-slate-300 group-hover:text-blue-500"/>
+                                            <div className="text-center">
+                                                <p className="text-sm font-bold text-slate-600 group-hover:text-blue-700">백업 파일 무결성 검사</p>
+                                                <p className="text-[10px] text-slate-400 mt-1">복구 전 파일 정상 여부 확인 (다중 선택 가능)</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => verifyInputRef.current?.click()}
+                                                disabled={isVerifying}
+                                                className="mt-1 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold hover:border-blue-300 hover:text-blue-600 shadow-sm flex items-center gap-2"
+                                            >
+                                                {isVerifying ? <Loader2 size={12} className="animate-spin"/> : <FileSearch size={12}/>} 
+                                                파일 검사 실행
+                                            </button>
+                                            <input 
+                                                type="file" 
+                                                ref={verifyInputRef} 
+                                                className="hidden" 
+                                                accept=".json"
+                                                multiple
+                                                onClick={onInputClick}
+                                                onChange={handleVerifyClick}
+                                            />
                                         </div>
-                                        <button 
-                                            onClick={() => restoreInputRef.current?.click()}
-                                            className="mt-2 px-6 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all"
-                                        >
-                                            파일 선택 및 복구
-                                        </button>
-                                        <input 
-                                            type="file" 
-                                            ref={restoreInputRef} 
-                                            className="hidden" 
-                                            accept=".json"
-                                            multiple
-                                            onChange={handleRestoreClick}
-                                        />
+
+                                        {/* Restore Button */}
+                                        <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 gap-3 hover:border-emerald-300 hover:bg-emerald-50 transition-colors group">
+                                            <Upload size={32} className="text-slate-300 group-hover:text-emerald-500"/>
+                                            <div className="text-center">
+                                                <p className="text-sm font-bold text-slate-600 group-hover:text-emerald-700">데이터 복구 (Restore)</p>
+                                                <p className="text-[10px] text-slate-400 mt-1">기존 데이터를 덮어쓰거나 병합합니다.</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => restoreInputRef.current?.click()}
+                                                className="mt-1 px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all flex items-center gap-2"
+                                            >
+                                                <Database size={12}/> 
+                                                복구 시작
+                                            </button>
+                                            <input 
+                                                type="file" 
+                                                ref={restoreInputRef} 
+                                                className="hidden" 
+                                                accept=".json"
+                                                multiple
+                                                onClick={onInputClick}
+                                                onChange={handleRestoreClick}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>

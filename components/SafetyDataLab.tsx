@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { TBMEntry, TeamCategory, TeamOption, TBMAnalysisResult } from '../types';
 import { BarChart2, PieChart, Users, TrendingUp, BrainCircuit, Activity, Layers, Target, Download, Share2, FileText, Sparkles, Microscope, Database, Info, FileBox, Hexagon, Radar, ShieldCheck, Upload, HardDrive } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { generateGeneralInsight } from '../services/geminiService';
 
 interface SafetyDataLabProps {
     entries: TBMEntry[];
@@ -203,9 +203,6 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     const generateDeepInsight = async () => {
         setIsAnalyzing(true);
         try {
-            const apiKey = process.env.API_KEY || '';
-            const ai = new GoogleGenAI({ apiKey });
-            
             const prompt = `
                 Role: Construction Safety Data Scientist.
                 Analyze this site data:
@@ -221,15 +218,12 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                 3. 🚀 **Strategic Recommendations**: Actionable steps to reach 'S' Grade.
             `;
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: [{ role: 'user', parts: [{ text: prompt }] }]
-            });
-
-            setAiReport(response.text || "분석 결과가 없습니다.");
-        } catch (error) {
+            const resultText = await generateGeneralInsight(prompt);
+            setAiReport(resultText);
+        } catch (error: any) {
             console.error(error);
-            alert("AI 분석 중 오류가 발생했습니다.");
+            const msg = error.message || '';
+            alert(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : "AI 분석 중 오류가 발생했습니다.");
         } finally {
             setIsAnalyzing(false);
         }
@@ -237,9 +231,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
 
     const handleRestoreClick = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            if (confirm(`선택한 ${e.target.files.length}개의 파일을 통해 데이터베이스를 복구하시겠습니까?`)) {
-                onRestoreData(e.target.files);
-            }
+            onRestoreData(e.target.files);
             e.target.value = ''; // Reset input
         }
     };

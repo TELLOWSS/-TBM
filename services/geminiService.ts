@@ -53,7 +53,7 @@ const promiseWithTimeout = <T>(promise: Promise<T>, ms: number, errorMessage: st
     ]);
 };
 
-// Helper: Retry Logic for 500/503 Errors
+// Helper: Retry Logic for 500/503 Errors AND 429 Rate Limits
 const withRetry = async <T>(fn: () => Promise<T>, retries = 3, baseDelay = 2000): Promise<T> => {
   let lastError: any;
   for (let i = 0; i < retries; i++) {
@@ -61,16 +61,35 @@ const withRetry = async <T>(fn: () => Promise<T>, retries = 3, baseDelay = 2000)
       return await fn();
     } catch (error: any) {
       lastError = error;
-      const isRetryable = error.status === 500 || error.status === 503 || 
-                          (error.message && (error.message.includes('Internal error') || error.message.includes('Overloaded')));
+      
+      // Deep parsing for error codes (handle both Error objects and plain JSON responses)
+      const status = error.status || error.code || error?.error?.code || 0;
+      const msg = (error.message || error?.error?.message || JSON.stringify(error)).toLowerCase();
+      
+      // Retry on Server Errors (5xx) or Rate Limits (429/Resource Exhausted)
+      const isRateLimit = status === 429 || msg.includes('resource_exhausted') || msg.includes('quota') || msg.includes('429');
+      const isServerError = status === 500 || status === 503 || msg.includes('internal error') || msg.includes('overloaded');
+      
+      const isRetryable = isRateLimit || isServerError;
       
       if (isRetryable && i < retries - 1) {
-        const delay = baseDelay * Math.pow(2, i);
-        console.warn(`Gemini API Temporary Error (${error.status || 'Unknown'}). Retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`);
+        // Backoff: 429 needs more time (e.g. 6s, 12s, 24s)
+        const initialDelay = isRateLimit ? 6000 : baseDelay;
+        const delay = initialDelay * Math.pow(2, i) + (Math.random() * 1000); // Add jitter
+        
+        console.warn(`Gemini API Error (${status}). Retrying in ${(delay/1000).toFixed(1)}s... (Attempt ${i + 1}/${retries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
-      throw error;
+      
+      // Improve Error Message for UI if it's the final attempt
+      if (isRateLimit) {
+          const friendlyError = new Error("AI 분석 요청량이 많아 일시적으로 제한되었습니다. 약 1분 후 다시 시도해주세요. (Quota Limit)");
+          (friendlyError as any).originalError = lastError;
+          throw friendlyError;
+      }
+      
+      throw lastError;
     }
   }
   throw lastError;
@@ -130,6 +149,21 @@ const safeParseInt = (val: any): number => {
         return isNaN(parsed) ? 0 : parsed;
     }
     return 0;
+};
+
+// [NEW] Export for General Insight Generation (Used by SafetyDataLab)
+export const generateGeneralInsight = async (prompt: string): Promise<string> => {
+    try {
+        const ai = getAiClient();
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+        }));
+        return response.text || "분석 결과가 없습니다.";
+    } catch (error) {
+        console.error("Insight Generation Error:", error);
+        throw error;
+    }
 };
 
 // [NEW] Generate Safety Feedback (AI Recommendation)
@@ -358,6 +392,13 @@ export const evaluateTBMVideo = async (
   } catch (error: any) {
     console.warn("Video Analysis Failed. Attempting Text-Based Fallback...", error);
 
+    // Rate Limit or Quota Error check for fallback
+    // Check if error message indicates quota limit to re-throw instead of fallback
+    const msg = error.message || '';
+    if (msg.includes('429') || msg.includes('Quota') || msg.includes('제한')) {
+        throw error; // Re-throw to show user the friendly limit message
+    }
+
     // --- 2. Fallback: Text-Based Opinion Generation ---
     const fallbackScore = 0; 
     const fallbackRubric = { logQuality: 0, focus: 0, voice: 0, ppe: 0, deductions: ["영상 분석 불가 (네트워크/서버 오류)"] };
@@ -429,7 +470,6 @@ export const evaluateTBMVideo = async (
   }
 };
 
-// ... (Rest of file unchanged) ...
 export const extractMonthlyPriorities = async (
   base64Data: string, 
   mimeType: string,
@@ -494,7 +534,8 @@ export const extractMonthlyPriorities = async (
     throw new Error("No extracted text");
   } catch (error: any) {
     console.error("Gemini Extraction Error:", error);
-    return { items: [] };
+    // [CRITICAL] Propagate the error to UI so we can show the alert
+    throw error;
   }
 };
 
@@ -647,6 +688,6 @@ export const analyzeMasterLog = async (
       throw new Error("No response text");
     } catch (error: any) {
       console.error("Gemini Data Mining Error:", error);
-      return [];
+      throw error;
     }
   };

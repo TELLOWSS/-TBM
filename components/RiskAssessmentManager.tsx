@@ -7,6 +7,7 @@ import { Upload, Loader2, Trash2, ShieldCheck, Plus, RefreshCcw, Calendar, Trend
 interface RiskAssessmentManagerProps {
   assessments: MonthlyRiskAssessment[];
   onSave: (data: MonthlyRiskAssessment[]) => void;
+  onRestoreData: (files: FileList) => void; // [NEW] Unified Restore Handler
 }
 
 // --- Helper Types for Regular Assessment ---
@@ -156,7 +157,7 @@ const RiskGauge = ({ highCount, totalCount }: { highCount: number, totalCount: n
     );
 };
 
-export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ assessments, onSave }) => {
+export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ assessments, onSave, onRestoreData }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0); 
   
@@ -273,7 +274,6 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       alert("백업할 데이터가 없습니다.");
       return;
     }
-    // [FIX] Standardized Backup Format: Wrap in an object to match App.tsx structure
     const backupData = {
         version: '3.1.0',
         scope: 'RISK',
@@ -293,87 +293,14 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
     URL.revokeObjectURL(url);
   };
 
+  // [UPDATED] Use Unified Restore Handler
   const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    // Helper to read file
-    const readFile = (file: File): Promise<any> => {
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                try {
-                    resolve(JSON.parse(evt.target?.result as string));
-                } catch (e) {
-                    console.warn(`Skipping invalid JSON file: ${file.name}`);
-                    resolve(null);
-                }
-            };
-            reader.readAsText(file);
-        });
-    };
-
-    // Use async/await inside the handler (need to make handler async)
-    (async () => {
-        try {
-            const fileContents = await Promise.all(Array.from(files).map(readFile));
-            const validContents = fileContents.filter(c => c !== null);
-
-            const currentMap = new Map<string, MonthlyRiskAssessment>();
-            assessments.forEach(item => currentMap.set(item.id, item));
-            
-            let loadedCount = 0;
-
-            validContents.forEach(loadedData => {
-                // [FIX] Robust Restore Logic: Handle both Array (Legacy) and Object (Standard)
-                let itemsToProcess: any[] = [];
-                
-                if (Array.isArray(loadedData)) {
-                    // Legacy Format: direct array
-                    itemsToProcess = loadedData;
-                } else if (loadedData && Array.isArray(loadedData.assessments)) {
-                    // Standard Format: object with 'assessments' key
-                    itemsToProcess = loadedData.assessments;
-                } else if (typeof loadedData === 'object') {
-                    // Deep Scan fallback for other keys
-                    Object.keys(loadedData).forEach(key => {
-                        if (Array.isArray(loadedData[key])) {
-                            // Check if first item looks like assessment
-                            if (loadedData[key].length > 0 && loadedData[key][0].month && (loadedData[key][0].priorities || loadedData[key][0].type)) {
-                                itemsToProcess = [...itemsToProcess, ...loadedData[key]];
-                            }
-                        }
-                    });
-                }
-
-                itemsToProcess.forEach((item: any) => {
-                    if(item.id && item.month && (item.priorities || item.type)) {
-                        currentMap.set(item.id, item as MonthlyRiskAssessment);
-                        loadedCount++;
-                    }
-                });
-            });
-
-            if (loadedCount > 0) {
-                const merged: MonthlyRiskAssessment[] = Array.from(currentMap.values());
-                onSave(merged);
-                alert(`✅ 대량 복구 완료: 총 ${loadedCount}건의 위험성평가 데이터가 병합되었습니다.`);
-                
-                if (merged.length > 0) {
-                    // Sort to find latest
-                    const latest = merged.sort((a, b) => b.month.localeCompare(a.month))[0];
-                    setSelectedMonthId(latest.id);
-                }
-            } else {
-                alert("유효한 위험성평가 데이터를 찾을 수 없습니다.\n파일 형식을 확인해주세요.");
-            }
-        } catch (err) {
-            console.error(err);
-            alert("파일을 읽는 중 오류가 발생했습니다.");
-        } finally {
-            if(backupInputRef.current) backupInputRef.current.value = '';
-        }
-    })();
+    if (files && files.length > 0) {
+        // Delegate to the robust app-level restore function
+        onRestoreData(files);
+        if(backupInputRef.current) backupInputRef.current.value = '';
+    }
   };
 
   // --- REGULAR ASSESSMENT LOGIC (Overhauled) ---
@@ -639,9 +566,11 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           setCandidates([]);
           alert(`${addedCount}건의 항목이 등록되었습니다.`);
           
-        } catch (err) {
+        } catch (err: any) {
           console.error(err);
-          alert("문서 분석 중 오류가 발생했습니다.");
+          // [UPDATED] Show detailed error message if available (especially for Quota limits)
+          const msg = err.message || "문서 분석 중 오류가 발생했습니다.";
+          alert(msg.includes('429') || msg.includes('제한') || msg.includes('Quota') ? msg : "문서 분석 중 오류가 발생했습니다.");
         } finally {
           setIsAnalyzing(false);
           if (fileInputRef.current) fileInputRef.current.value = '';
