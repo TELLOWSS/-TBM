@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { Navigation } from './components/Navigation';
@@ -112,6 +113,15 @@ const App = () => {
   const handleRequestDelete = async (id: string) => {
       if (confirm('정말 삭제하시겠습니까?')) {
           const updated = entries.filter(e => e.id !== id);
+          setEntries(updated);
+          await StorageDB.set('entries', updated);
+      }
+  };
+
+  const handleBulkDelete = async (ids: string[]) => {
+      if (ids.length === 0) return;
+      if (confirm(`선택한 ${ids.length}건의 데이터를 영구 삭제하시겠습니까?\n(이 작업은 되돌릴 수 없습니다)`)) {
+          const updated = entries.filter(e => !ids.includes(e.id));
           setEntries(updated);
           await StorageDB.set('entries', updated);
       }
@@ -462,10 +472,11 @@ const App = () => {
                   case 'reports':
                     return <ReportCenter 
                         entries={entries} 
-                        onOpenPrintModal={() => { setReportTargetEntries(entries); setShowReportModal(true); }}
+                        onOpenPrintModal={(targetEntries) => { setReportTargetEntries(targetEntries); setShowReportModal(true); }}
                         signatures={signatures}
                         teams={teams}
                         onDelete={handleRequestDelete} 
+                        onBulkDelete={handleBulkDelete}
                     />;
                   case 'data-lab': 
                     return <SafetyDataLab 

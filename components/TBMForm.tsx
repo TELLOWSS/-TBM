@@ -370,24 +370,47 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
     }
   };
 
-  const handleSaveCurrent = () => {
-      const activeItem = queue.find(q => q.tempId === activeId);
-      if (!activeItem) return;
+  // [UPDATED] Save All Items in Queue (Batch Save Logic)
+  const handleSaveAll = () => {
+      if (queue.length === 0) return;
       
-      const entry: TBMEntry = {
-          id: activeItem.id || `ENTRY-${Date.now()}`,
-          date: entryDate, time: entryTime, teamId, 
-          teamName: teams.find(t=>t.id===teamId)?.name || 'Unknown',
-          leaderName, attendeesCount, workDescription, riskFactors, safetyFeedback,
-          tbmPhotoUrl: activeItem.tbmPhotoUrl || activeItem.tbmPhotoPreview,
-          originalLogImageUrl: activeItem.originalLogImageUrl || activeItem.originalLogPreview,
-          videoAnalysis: videoAnalysis || undefined,
-          tbmVideoFileName: tbmVideoFileName || activeItem.tbmVideoFileName || undefined,
-          tbmVideoUrl: tbmVideoPreview || activeItem.tbmVideoUrl || undefined,
-          createdAt: Date.now()
-      };
+      const now = new Date();
+      const defaultDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-      if (onSave(entry, true)) {
+      // Map all items in the queue to TBMEntry objects
+      const entriesToSave: TBMEntry[] = queue.map((item, index) => {
+          const uniqueSuffix = Math.random().toString(36).substr(2, 6); // Ensure unique ID per item
+          return {
+              id: item.id || `ENTRY-${Date.now()}-${index}-${uniqueSuffix}`,
+              date: item.date || defaultDate,
+              time: item.time || '07:30',
+              teamId: item.teamId || teams[0]?.id || '',
+              teamName: item.teamName || teams.find(t => t.id === (item.teamId || teams[0]?.id))?.name || 'Unknown',
+              leaderName: item.leaderName || '',
+              attendeesCount: item.attendeesCount || 0,
+              workDescription: item.workDescription || '',
+              riskFactors: item.riskFactors || [],
+              safetyFeedback: item.safetyFeedback || [],
+              tbmPhotoUrl: item.tbmPhotoUrl || item.tbmPhotoPreview, // Ensure URL is taken
+              originalLogImageUrl: item.originalLogImageUrl || item.originalLogPreview,
+              videoAnalysis: item.videoAnalysis,
+              tbmVideoFileName: item.tbmVideoFileName,
+              tbmVideoUrl: item.tbmVideoUrl || item.tbmVideoPreview,
+              createdAt: item.createdAt || Date.now()
+          };
+      });
+
+      // Filter out virtually empty items (e.g. initial placeholder if not touched)
+      // We keep items that have at least an image OR a team name set
+      const validEntries = entriesToSave.filter(e => e.teamName !== 'Unknown' || e.tbmPhotoUrl || e.originalLogImageUrl);
+
+      if (validEntries.length === 0) {
+          alert("저장할 유효한 데이터가 없습니다.");
+          return;
+      }
+
+      if (onSave(validEntries, true)) {
+          // Success handled by parent (usually closing form)
       }
   };
 
@@ -412,8 +435,8 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                       <Trash2 size={18} /> 삭제
                   </button>
               )}
-              <button onClick={handleSaveCurrent} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 shadow-lg flex items-center gap-2 transition-transform hover:scale-105">
-                  <Save size={18}/> 작성 완료
+              <button onClick={handleSaveAll} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 shadow-lg flex items-center gap-2 transition-transform hover:scale-105">
+                  <Save size={18}/> {queue.length > 1 ? `전체 저장 완료 (${queue.length}건)` : '작성 완료'}
               </button>
            </div>
         </div>
