@@ -11,6 +11,7 @@
 
 export const compressVideo = (file: File): Promise<Blob> => {
   return new Promise((resolve, reject) => {
+    // [FIX] Use document.createElement('video') instead of new Audio() or similar potentially risky constructors
     const video = document.createElement('video');
     const url = URL.createObjectURL(file);
     
@@ -84,11 +85,18 @@ export const compressVideo = (file: File): Promise<Blob> => {
       try {
          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
          if (AudioContextClass) {
-             audioCtx = new AudioContextClass();
-             source = audioCtx.createMediaElementSource(video);
-             dest = audioCtx.createMediaStreamDestination();
-             source.connect(dest);
-             audioTracks = dest.stream.getAudioTracks();
+             try {
+                 // [DEFENSIVE] Illegal Constructor protection for AudioContext
+                 audioCtx = new AudioContextClass();
+                 source = audioCtx.createMediaElementSource(video);
+                 dest = audioCtx.createMediaStreamDestination();
+                 source.connect(dest);
+                 audioTracks = dest.stream.getAudioTracks();
+             } catch (e) {
+                 console.warn("AudioContext init failed (Illegal Constructor likely):", e);
+                 audioCtx = null;
+                 audioTracks = []; // Ensure empty array on failure
+             }
          }
       } catch (e) {
          console.warn("Audio capture failed, silent video:", e);
@@ -96,8 +104,21 @@ export const compressVideo = (file: File): Promise<Blob> => {
 
       // 3. Low FPS Stream (10fps is enough for fast-forward analysis)
       const canvasStream = canvas.captureStream(10); 
-      const tracks = [...canvasStream.getVideoTracks(), ...audioTracks];
-      stream = new MediaStream(tracks);
+      // Default to video-only first to ensure we have something
+      stream = canvasStream;
+
+      // Try to mix audio if available
+      // [CRITICAL FIX] Avoid `new MediaStream([...])` constructor which throws Illegal Constructor in some envs.
+      // Instead, use `addTrack` on the existing valid stream instance.
+      if (audioTracks.length > 0) {
+          try {
+              audioTracks.forEach(track => {
+                  stream?.addTrack(track);
+              });
+          } catch (e) {
+              console.warn("Audio mixing failed (addTrack error), proceeding with video only.", e);
+          }
+      }
 
       // 4. Recorder - Ultra Low Bitrate
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' 
@@ -105,12 +126,14 @@ export const compressVideo = (file: File): Promise<Blob> => {
                      : 'video/mp4';
 
       try {
+        if (!stream) throw new Error("Stream is null");
         mediaRecorder = new MediaRecorder(stream, {
           mimeType,
           videoBitsPerSecond: 100000, // 100 kbps (Tiny file size)
         });
       } catch (e) {
         cleanup();
+        console.error("MediaRecorder init failed:", e);
         reject(new Error(`MediaRecorder failed: ${(e as any).message}`));
         return;
       }
@@ -134,7 +157,6 @@ export const compressVideo = (file: File): Promise<Blob> => {
       };
 
       // 5. Recording Strategy: Capture max 10s of *output* (representing 30s of reality)
-      // or until video ends. This keeps file size consistently small.
       const MAX_OUTPUT_DURATION_MS = 10000; 
       let startTime = Date.now();
 

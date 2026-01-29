@@ -3,7 +3,6 @@ import React, { useMemo, useState } from 'react';
 import { TBMEntry, TeamOption } from '../types';
 import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity, Database, BrainCircuit, Microscope, Trash2, CheckSquare, Square, XCircle } from 'lucide-react';
 import JSZip from 'jszip';
-import { GoogleGenAI } from "@google/genai";
 
 interface ReportCenterProps {
   entries: TBMEntry[];

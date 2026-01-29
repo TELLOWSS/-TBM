@@ -1,7 +1,9 @@
-import React, { useState, useRef } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, UserCheck, Users, Database, Save, Upload, Download, Plus, Trash2, Settings, AlertTriangle, CheckCircle2, FileText, ShieldCheck, Layers, Loader2, FileSearch, Stethoscope, Sparkles, Eraser } from 'lucide-react';
-import { TeamOption, TeamCategory } from '../types';
+import { X, UserCheck, Users, Database, Save, Upload, Download, Plus, Trash2, Settings, AlertTriangle, CheckCircle2, FileText, ShieldCheck, Layers, Loader2, FileSearch, Stethoscope, Sparkles, Eraser, Key, Server, Eye, EyeOff, HelpCircle, ExternalLink, Zap, Network } from 'lucide-react';
+import { TeamOption, TeamCategory, SiteConfig } from '../types';
+import { validateGeminiConnection } from '../services/geminiService';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -13,24 +15,51 @@ interface SettingsModalProps {
   onDeleteTeam: (id: string) => void;
   onBackupData: (scope: 'ALL' | 'TBM' | 'RISK') => void; 
   onRestoreData: (files: FileList) => void;
-  onOptimizeData: () => void; // [NEW] Optimization Handler
+  onOptimizeData: () => void;
+  
+  // [NEW] System Config Props
+  siteConfig: SiteConfig;
+  onUpdateSiteConfig: (config: SiteConfig) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ 
     isOpen, onClose, signatures, onUpdateSignature, 
-    teams, onAddTeam, onDeleteTeam, onBackupData, onRestoreData, onOptimizeData
+    teams, onAddTeam, onDeleteTeam, onBackupData, onRestoreData, onOptimizeData,
+    siteConfig, onUpdateSiteConfig
 }) => {
-    if (!isOpen) return null;
+    // [FIX] Initialize with safe defaults to prevent undefined access
+    const safeConfig = siteConfig || {
+        siteName: '',
+        managerName: '',
+        userApiKey: null
+    };
 
-    const [activeTab, setActiveTab] = useState<'BASIC' | 'TEAMS' | 'DATA'>('BASIC');
+    const [activeTab, setActiveTab] = useState<'BASIC' | 'SYSTEM' | 'TEAMS' | 'DATA'>('BASIC');
     const [isBackingUp, setIsBackingUp] = useState(false);
     const [isVerifying, setIsVerifying] = useState(false);
-    const [isOptimizing, setIsOptimizing] = useState(false); // [NEW]
+    const [isOptimizing, setIsOptimizing] = useState(false);
+    
+    // Config State
+    const [configForm, setConfigForm] = useState<SiteConfig>(safeConfig);
+    const [showApiKey, setShowApiKey] = useState(false);
+    
+    // [NEW] Connection Test State
+    const [isTestingConnection, setIsTestingConnection] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState<'IDLE' | 'SUCCESS' | 'FAILURE'>('IDLE');
     
     const [newTeamName, setNewTeamName] = useState('');
     const [newTeamCategory, setNewTeamCategory] = useState<string>(TeamCategory.FORMWORK);
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const verifyInputRef = useRef<HTMLInputElement>(null);
+
+    // [FIX] Sync form with props when modal opens
+    useEffect(() => {
+        if (isOpen && siteConfig) {
+            setConfigForm(siteConfig);
+        }
+    }, [isOpen, siteConfig]);
+
+    if (!isOpen) return null;
 
     const handleAddTeamSubmit = () => {
         if (!newTeamName.trim()) {
@@ -53,7 +82,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }, 500); 
     };
 
-    // [CRITICAL FIX] Reset value on click to allow re-selecting same file
     const onInputClick = (e: React.MouseEvent<HTMLInputElement>) => {
         (e.target as HTMLInputElement).value = '';
     };
@@ -65,7 +93,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
-    // [NEW] Optimize Handler with UX Feedback
     const handleOptimizeClick = () => {
         if (confirm("데이터 최적화를 진행하시겠습니까?\n\n내용이 완벽히 동일한 중복 일지를 찾아 제거하고, 데이터 품질이 가장 높은 항목만 남깁니다.\n(주의: 삭제된 데이터는 복구할 수 없습니다.)")) {
             setIsOptimizing(true);
@@ -112,9 +139,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         
                         const countItems = (items: any) => Array.isArray(items) ? items.length : 0;
 
-                        // Flexible Detection Logic
                         if (Array.isArray(json)) {
-                            // Legacy Array Format Detection
                             const tbmCount = json.filter((i:any) => i.workDescription || i.date || i.teamName).length;
                             const riskCount = json.filter((i:any) => i.month && i.priorities).length;
                             
@@ -122,15 +147,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             totalRisk += riskCount;
                             if (tbmCount > 0 || riskCount > 0) validFiles++;
                         } else {
-                            // Object Format Detection
                             let hasData = false;
-                            
-                            // Check known keys
                             if (json.entries) { totalTbm += countItems(json.entries); hasData = true; }
                             if (json.assessments) { totalRisk += countItems(json.assessments); hasData = true; }
                             if (json.teams) { totalTeam += countItems(json.teams); hasData = true; }
                             
-                            // Deep Search for any array in unknown keys
                             if (!hasData) {
                                 Object.keys(json).forEach(key => {
                                     if (Array.isArray(json[key])) {
@@ -177,9 +198,54 @@ ${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 �
         }, 300);
     };
 
+    const handleTestConnection = async () => {
+        const apiKey = configForm.userApiKey;
+        if (!apiKey || apiKey.trim() === '') {
+            alert("API Key를 입력해주세요.");
+            return;
+        }
+        
+        // [FIX] Validate prefix logic
+        if (!apiKey.trim().startsWith('AIza')) {
+            alert("API Key는 'AIza'로 시작해야 합니다. 올바른 키인지 확인해주세요.");
+            return;
+        }
+        
+        setIsTestingConnection(true);
+        setConnectionStatus('IDLE');
+        
+        const success = await validateGeminiConnection(apiKey);
+        
+        setIsTestingConnection(false);
+        setConnectionStatus(success ? 'SUCCESS' : 'FAILURE');
+        
+        if (success) {
+            alert("✅ 연결 성공! 유효한 API Key입니다.");
+        } else {
+            alert("❌ 연결 실패. Key가 유효하지 않거나 네트워크 문제입니다.");
+        }
+    };
+
+    const handleSaveConfig = () => {
+        // [FIX] Trim whitespace automatically
+        const trimmedKey = configForm.userApiKey ? configForm.userApiKey.trim() : null;
+        
+        if (trimmedKey && !trimmedKey.startsWith('AIza')) {
+            if(!confirm("경고: API Key 형식이 올바르지 않아 보입니다. (AIza로 시작해야 함)\n그래도 저장하시겠습니까?")) return;
+        }
+        
+        const cleanConfig = {
+            ...configForm,
+            userApiKey: trimmedKey
+        };
+        
+        onUpdateSiteConfig(cleanConfig);
+        alert("✅ 시스템 설정이 저장되었습니다.");
+    };
+
     return createPortal(
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
-            <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
                 
                 {/* Header */}
                 <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
@@ -198,16 +264,17 @@ ${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 �
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b border-slate-100 px-6 gap-6">
+                <div className="flex border-b border-slate-100 px-6 gap-6 overflow-x-auto no-scrollbar">
                     {[
                         { id: 'BASIC', label: '기본 설정 (서명)', icon: <UserCheck size={16}/> },
+                        { id: 'SYSTEM', label: '시스템 설정 (API/현장)', icon: <Server size={16}/> },
                         { id: 'TEAMS', label: '팀/공종 관리', icon: <Users size={16}/> },
                         { id: 'DATA', label: '데이터 백업/복구', icon: <Database size={16}/> }
                     ].map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
-                            className={`flex items-center gap-2 py-4 text-sm font-bold border-b-2 transition-all ${
+                            className={`flex items-center gap-2 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${
                                 activeTab === tab.id 
                                 ? 'border-indigo-600 text-indigo-600' 
                                 : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -221,7 +288,7 @@ ${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 �
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50 custom-scrollbar">
                     
-                    {/* 1. Signatures */}
+                    {/* 1. Basic (Signatures) */}
                     {activeTab === 'BASIC' && (
                         <div className="space-y-6">
                             <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-start gap-3">
@@ -287,7 +354,122 @@ ${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 �
                         </div>
                     )}
 
-                    {/* 2. Teams */}
+                    {/* 2. System Config (API Key, Site Info) */}
+                    {activeTab === 'SYSTEM' && (
+                        <div className="space-y-6 animate-fade-in">
+                            {/* Setup Guide (Infographic) */}
+                            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                                <div className="relative z-10">
+                                    <div className="flex items-center justify-between mb-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-indigo-500 p-2 rounded-lg text-white shadow-lg"><Key size={20}/></div>
+                                            <div>
+                                                <h3 className="text-lg font-black tracking-tight">API Key 발급 및 설정 가이드</h3>
+                                                <p className="text-xs text-indigo-300 font-medium">Google Gemini Pro를 무료로 사용하기 위한 3단계</p>
+                                            </div>
+                                        </div>
+                                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-white text-indigo-900 px-4 py-2 rounded-xl text-xs font-black hover:bg-indigo-50 transition-colors shadow-lg">
+                                            <ExternalLink size={14}/> 발급 사이트 이동
+                                        </a>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="bg-white/10 rounded-xl p-4 border border-white/10 backdrop-blur-sm relative group hover:bg-white/15 transition-colors">
+                                            <div className="absolute -top-3 left-4 bg-indigo-500 text-white text-[10px] font-black px-2 py-0.5 rounded shadow">STEP 1</div>
+                                            <div className="flex justify-center mb-3 text-indigo-300"><Layers size={24}/></div>
+                                            <p className="text-center text-xs font-bold leading-snug">Google AI Studio<br/>접속 및 로그인</p>
+                                        </div>
+                                        <div className="bg-white/10 rounded-xl p-4 border border-white/10 backdrop-blur-sm relative group hover:bg-white/15 transition-colors">
+                                            <div className="absolute -top-3 left-4 bg-indigo-500 text-white text-[10px] font-black px-2 py-0.5 rounded shadow">STEP 2</div>
+                                            <div className="flex justify-center mb-3 text-indigo-300"><Plus size={24}/></div>
+                                            <p className="text-center text-xs font-bold leading-snug">Create API Key<br/>버튼 클릭</p>
+                                        </div>
+                                        <div className="bg-white/10 rounded-xl p-4 border border-white/10 backdrop-blur-sm relative group hover:bg-white/15 transition-colors">
+                                            <div className="absolute -top-3 left-4 bg-indigo-500 text-white text-[10px] font-black px-2 py-0.5 rounded shadow">STEP 3</div>
+                                            <div className="flex justify-center mb-3 text-indigo-300"><CheckCircle2 size={24}/></div>
+                                            <p className="text-center text-xs font-bold leading-snug">생성된 Key 복사 후<br/>아래 입력창에 붙여넣기</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-6 flex items-center gap-3 bg-indigo-900/50 p-3 rounded-xl border border-indigo-500/30">
+                                        <Zap size={16} className="text-yellow-400 animate-pulse shrink-0"/>
+                                        <p className="text-[10px] text-indigo-200 leading-relaxed font-medium">
+                                            <span className="text-white font-bold">Why?</span> 무료 티어(Free Tier)는 개인 API 키를 사용할 때 가장 안정적입니다.
+                                            공용 키 사용 시 <span className="text-red-300 underline decoration-red-300/50">사용량 초과(429 Error)</span>가 발생할 수 있습니다.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Inputs */}
+                            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">현장명 (Project Name)</label>
+                                    <input 
+                                        type="text" 
+                                        value={configForm.siteName}
+                                        onChange={(e) => setConfigForm({...configForm, siteName: e.target.value})}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none focus:border-indigo-500 transition-colors"
+                                        placeholder="예: 용인 푸르지오 원클러스터"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">관리자 성명 (Manager)</label>
+                                    <input 
+                                        type="text" 
+                                        value={configForm.managerName}
+                                        onChange={(e) => setConfigForm({...configForm, managerName: e.target.value})}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none focus:border-indigo-500 transition-colors"
+                                        placeholder="예: 박성훈 부장"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Google Gemini API Key</label>
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <input 
+                                                type={showApiKey ? "text" : "password"} 
+                                                value={configForm.userApiKey || ''}
+                                                onChange={(e) => setConfigForm({...configForm, userApiKey: e.target.value})}
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 pr-10 text-sm font-mono font-bold outline-none focus:border-indigo-500 transition-colors"
+                                                placeholder="AIza..."
+                                            />
+                                            <button 
+                                                onClick={() => setShowApiKey(!showApiKey)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
+                                            >
+                                                {showApiKey ? <EyeOff size={16}/> : <Eye size={16}/>}
+                                            </button>
+                                        </div>
+                                        <button 
+                                            onClick={handleTestConnection}
+                                            disabled={isTestingConnection}
+                                            className={`px-4 rounded-xl font-bold text-xs flex items-center gap-2 border transition-all ${
+                                                connectionStatus === 'SUCCESS' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' :
+                                                connectionStatus === 'FAILURE' ? 'bg-red-50 border-red-200 text-red-600' :
+                                                'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            {isTestingConnection ? <Loader2 size={16} className="animate-spin"/> : <Network size={16}/>}
+                                            {isTestingConnection ? '확인 중...' : '연결 테스트'}
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                                        <Lock size={10}/> 입력한 키는 브라우저 내부에만 안전하게 저장됩니다.
+                                    </p>
+                                </div>
+                                <button 
+                                    onClick={handleSaveConfig}
+                                    className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
+                                >
+                                    <Save size={18}/> 설정 저장 및 적용
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 3. Teams */}
                     {activeTab === 'TEAMS' && (
                         <div className="space-y-6">
                             {/* Add Form */}
@@ -360,7 +542,7 @@ ${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 �
                         </div>
                     )}
 
-                    {/* 3. Data Backup/Restore */}
+                    {/* 4. Data Backup/Restore */}
                     {activeTab === 'DATA' && (
                         <div className="space-y-6">
                             <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex items-start gap-3">

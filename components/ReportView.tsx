@@ -1,7 +1,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { TBMEntry } from '../types';
+import { TBMEntry, TeamOption } from '../types';
 import { Printer, X, Download, Loader2, Edit3, Trash2, Sparkles, UserCheck, AlertOctagon, Eye, Users, Video, FileVideo, ImageOff, CheckCircle2, XCircle, Image as ImageIcon, Package, FileText, Mic, ShieldCheck, Lock } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -9,6 +9,8 @@ import JSZip from 'jszip';
 
 interface ReportViewProps {
   entries: TBMEntry[];
+  teams: TeamOption[];
+  siteName: string; 
   onClose: () => void;
   signatures: { safety: string | null; site: string | null };
   onUpdateSignature: (role: 'safety' | 'site', dataUrl: string) => void;
@@ -16,7 +18,7 @@ interface ReportViewProps {
   onDelete: (id: string) => void;
 }
 
-export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signatures, onUpdateSignature, onEdit, onDelete }) => {
+export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName, onClose, signatures, onUpdateSignature, onEdit, onDelete }) => {
   const [generatingMode, setGeneratingMode] = useState<'PDF' | 'IMAGE' | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [scale, setScale] = useState(1);
@@ -51,7 +53,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
               const color = style.color || '#000000';
               const fill = style.fill !== 'none' ? style.fill : 'none';
               
-              let svgData = new XMLSerializer().serializeToString(svg);
+              let svgData = '';
+              try {
+                  svgData = new XMLSerializer().serializeToString(svg);
+              } catch (e) {
+                  console.warn("XMLSerializer failed", e);
+                  continue;
+              }
               
               // In-line styles to ensure render consistency
               if (color) {
@@ -67,7 +75,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
               canvas.height = height * scaleFactor;
               
               const ctx = canvas.getContext('2d');
-              const img = new Image();
+              // [FIX] Use document.createElement for safer image creation to avoid Illegal Constructor
+              const img = document.createElement('img'); 
               
               const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
               const url = URL.createObjectURL(svgBlob);
@@ -86,6 +95,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                   };
                   img.onerror = () => {
                       console.warn("SVG Load Error", svg);
+                      URL.revokeObjectURL(url); // Ensure cleanup on error
                       resolve(null);
                   };
                   img.src = url;
@@ -143,8 +153,24 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
       const originalPages = document.querySelectorAll('.report-page');
       await document.fonts.ready;
 
-      const pdf = mode === 'PDF' ? new jsPDF('p', 'mm', 'a4') : null;
-      const zip = mode === 'IMAGE' && originalPages.length > 1 ? new JSZip() : null;
+      let pdf: any = null;
+      if (mode === 'PDF') {
+          try {
+              pdf = new jsPDF('p', 'mm', 'a4');
+          } catch (e) {
+              throw new Error("PDF 초기화 실패: 브라우저 호환성 문제");
+          }
+      }
+      
+      let zip: any = null;
+      if (mode === 'IMAGE' && originalPages.length > 1) {
+          try {
+              zip = new JSZip();
+          } catch (e) {
+              throw new Error("ZIP 초기화 실패");
+          }
+      }
+      
       let singleImageData: string | null = null;
 
       for (let i = 0; i < originalPages.length; i++) {
@@ -250,7 +276,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
               pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
           } else if (mode === 'IMAGE') {
               if (zip) {
-                  const safeTeamName = (entries[i].teamName || 'Team').replace(/[\/\\?%*:|"<>]/g, '_');
+                  // [UPDATED] Use resolved name for filename as well
+                  const resolvedTeam = teams.find(t => t.id === entries[i].teamId);
+                  const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[i].teamName || 'Team')).replace(/[\/\\?%*:|"<>]/g, '_');
                   const fileName = `TBM_Report_${entries[i].date}_${safeTeamName}.jpg`;
                   zip.file(fileName, imgData.split(',')[1], { base64: true });
               } else {
@@ -276,9 +304,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
               link.click();
               document.body.removeChild(link);
           } else if (singleImageData) {
+              const resolvedTeam = teams.find(t => t.id === entries[0].teamId);
+              const safeTeamName = resolvedTeam ? resolvedTeam.name : (entries[0].teamName || 'Team');
               const link = document.createElement('a');
               link.href = singleImageData;
-              link.setAttribute('download', `TBM_일지_${entries[0].date}_${entries[0].teamName}.jpg`);
+              link.setAttribute('download', `TBM_일지_${entries[0].date}_${safeTeamName}.jpg`);
               document.body.appendChild(link);
               link.click();
               document.body.removeChild(link);
@@ -451,7 +481,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
         {entries.map((entry, index) => {
             const safeDate = entry.date ? entry.date.replace(/-/g,'') : '00000000';
             const safeTime = entry.time || '00:00';
-            const safeTeamName = entry.teamName || '미지정';
+            
+            // [UPDATED] Resolve team name from 'teams' prop using ID
+            const resolvedTeam = teams.find(t => t.id === entry.teamId);
+            const safeTeamName = resolvedTeam ? resolvedTeam.name : (entry.teamName || '미지정');
+            
             const safeLeader = entry.leaderName || '미지정';
             const safeCount = entry.attendeesCount || 0;
 
@@ -484,7 +518,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, onClose, signat
                 <div className="row h-header">
                     <div className="col" style={{width: '65%'}}>
                         <div className="p-4 flex flex-col justify-center h-full">
-                            <div className="text-[10px] font-bold text-slate-500 mb-1">용인 푸르지오 원클러스터 2,3단지 현장</div>
+                            <div className="text-[10px] font-bold text-slate-500 mb-1">{siteName} 현장</div>
                             <h1 className="text-3xl font-black tracking-tighter mb-2 text-black leading-none">일일 TBM 및<br/>위험성평가 점검표</h1>
                              <div className="flex items-center text-[10px] font-bold gap-3 text-slate-700 mt-1">
                                  <span>일자: {entry.date} ({safeTime})</span>

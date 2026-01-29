@@ -13,7 +13,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { SystemIdentityModal } from './components/SystemIdentityModal';
 import { TEAMS } from './constants';
 import { StorageDB } from './utils/storageDB';
-import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline } from './types';
+import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig } from './types';
 import { Database, Loader2 } from 'lucide-react';
 
 // [UPDATED] Restore Progress Overlay Component
@@ -55,6 +55,13 @@ const App = () => {
   const [assessments, setAssessments] = useState<MonthlyRiskAssessment[]>([]);
   const [signatures, setSignatures] = useState<{ safety: string | null; site: string | null }>({ safety: null, site: null });
   
+  // [NEW] Site Config State
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>({
+      siteName: '용인 푸르지오 원클러스터 2,3단지',
+      managerName: '박성훈 부장',
+      userApiKey: null
+  });
+  
   const [reportTargetEntries, setReportTargetEntries] = useState<TBMEntry[]>([]);
   const [showReportModal, setShowReportModal] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -69,6 +76,15 @@ const App = () => {
 
   useEffect(() => {
     const loadData = async () => {
+        // 1. Critical Config (Sync Load priority)
+        const storedConfig = localStorage.getItem('siteConfig');
+        if (storedConfig) {
+            try {
+                setSiteConfig(JSON.parse(storedConfig));
+            } catch (e) { console.error("Config parse error"); }
+        }
+
+        // 2. Data Load
         const storedEntries = await StorageDB.get<TBMEntry[]>('entries');
         if (storedEntries) setEntries(storedEntries);
         
@@ -138,6 +154,12 @@ const App = () => {
       await StorageDB.set('signatures', newSigs);
   };
 
+  // [NEW] Update Site Config
+  const handleUpdateSiteConfig = (newConfig: SiteConfig) => {
+      setSiteConfig(newConfig);
+      localStorage.setItem('siteConfig', JSON.stringify(newConfig));
+  };
+
   const handleAddTeam = async (name: string, category: string) => {
       const newTeam: TeamOption = {
           id: `team-${Date.now()}`,
@@ -172,6 +194,7 @@ const App = () => {
       if (scope === 'ALL') {
           backupData.teams = teams;
           backupData.signatures = signatures;
+          backupData.siteConfig = siteConfig; // Include Config in Backup
       }
 
       const suffix = scope === 'ALL' ? 'FULL' : scope === 'TBM' ? 'TBM_LOGS' : 'RISK_DATA';
@@ -197,6 +220,7 @@ const App = () => {
       let mergedAssessments = [...assessments];
       let mergedTeams = [...teams];
       let mergedSignatures = { ...signatures };
+      let mergedConfig = { ...siteConfig };
       
       let totalFound = 0;
 
@@ -247,6 +271,9 @@ const App = () => {
                       }
                       if (json.signatures) {
                           mergedSignatures = { ...mergedSignatures, ...json.signatures };
+                      }
+                      if (json.siteConfig) {
+                          mergedConfig = { ...mergedConfig, ...json.siteConfig };
                       }
                       
                       // Fallback: If no standard keys, search recursively for arrays
@@ -322,6 +349,8 @@ const App = () => {
           await StorageDB.set('assessments', finalAssessments);
           await StorageDB.set('teams', mergedTeams);
           await StorageDB.set('signatures', mergedSignatures);
+          // Config saves to localStorage immediately
+          localStorage.setItem('siteConfig', JSON.stringify(mergedConfig));
 
           setRestoreProgress(100);
           await new Promise(r => setTimeout(r, 800));
@@ -331,6 +360,7 @@ const App = () => {
           setAssessments(finalAssessments);
           setTeams(mergedTeams);
           setSignatures(mergedSignatures);
+          setSiteConfig(mergedConfig);
           
           setIsRestoring(false);
           setIsSettingsOpen(false); // Close modal
@@ -487,7 +517,8 @@ const App = () => {
                     />;
                   default:
                     return <Dashboard 
-                        entries={entries} 
+                        entries={entries}
+                        siteName={siteConfig.siteName} // [NEW] Pass Config
                         onViewReport={() => { setReportTargetEntries(entries); setShowReportModal(true); }} 
                         onNavigateToReports={()=>setCurrentView('reports')} 
                         onNavigateToDataLab={()=>setCurrentView('data-lab')}
@@ -505,6 +536,8 @@ const App = () => {
       {showReportModal && (
           <ReportView 
             entries={reportTargetEntries} 
+            teams={teams}
+            siteName={siteConfig.siteName} // [NEW] Pass Config
             onClose={() => setShowReportModal(false)}
             signatures={signatures}
             onUpdateSignature={handleUpdateSignature}
@@ -528,6 +561,8 @@ const App = () => {
          onBackupData={handleBackupData}
          onRestoreData={handleRestoreData}
          onOptimizeData={handleOptimizeData}
+         siteConfig={siteConfig} // [NEW] Pass Config
+         onUpdateSiteConfig={handleUpdateSiteConfig} // [NEW] Handler
       />
     </div>
   );

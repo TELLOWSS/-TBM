@@ -245,6 +245,40 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  // Helper: Find best team match
+  const findBestMatchingTeam = (extractedName: string): string => {
+      if (!extractedName) return teamId;
+
+      // 1. Clean up noise (Company names, common suffixes)
+      // Removes: '휘강', '건설', '(주)', '주식회사', 'team', '팀', spaces
+      const cleanInput = extractedName.replace(/휘강|건설|\(주\)|주식회사|team|팀|\s/gi, '').trim();
+      
+      if (cleanInput.length === 0) return teamId; // If nothing left (e.g. input was just "휘강건설"), keep current
+
+      let bestMatchId = teamId;
+      let highestScore = 0;
+
+      teams.forEach(t => {
+          const cleanTeamName = t.name.replace(/팀|\s/g, '');
+          let score = 0;
+
+          // Exact substring match (strongest signal)
+          if (cleanTeamName.includes(cleanInput) || cleanInput.includes(cleanTeamName)) {
+              score += 10;
+              // Bonus for length similarity (avoids short string matching everything)
+              const lengthDiff = Math.abs(cleanTeamName.length - cleanInput.length);
+              score -= lengthDiff;
+          }
+
+          if (score > highestScore) {
+              highestScore = score;
+              bestMatchId = t.id;
+          }
+      });
+
+      return bestMatchId;
+  };
+
   const handleAnalyzeDocument = async () => {
     if (!originalLogPreview) {
         alert("분석할 수기 일지 사진이 없습니다.");
@@ -264,11 +298,11 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
             const newWork = data.workDescription || workDescription;
             const newLeader = data.leaderName || leaderName;
             const newCount = data.attendeesCount || attendeesCount;
+            
+            // [UPDATED] Smart Matching Logic
             let newTeamId = teamId;
-
             if (data.teamName) {
-                const foundTeam = teams.find(t => t.name.includes(data.teamName) || data.teamName.includes(t.name));
-                if (foundTeam) newTeamId = foundTeam.id;
+                newTeamId = findBestMatchingTeam(data.teamName);
             }
 
             setWorkDescription(newWork);
@@ -288,7 +322,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                 leaderName: newLeader,
                 attendeesCount: newCount,
                 teamId: newTeamId,
-                teamName: data.teamName,
+                teamName: teams.find(t => t.id === newTeamId)?.name || data.teamName, // Use matched name if possible
                 riskFactors: data.riskFactors,
                 safetyFeedback: data.safetyFeedback
             });

@@ -14,28 +14,90 @@ export interface MonthlyExtractionResult {
   items: ExtractedPriority[];
 }
 
-// [FIX] Safe API Key Access for Browser Environment
+// [UPDATED] Smart API Key Resolution Strategy
 const getApiKey = () => {
   try {
-    // Check if process is defined (Node.js style environment variables)
+    // 1. Priority: Check LocalStorage for User's Custom Key (BYOK)
+    const storedConfig = localStorage.getItem('siteConfig');
+    if (storedConfig) {
+        const config = JSON.parse(storedConfig);
+        // Trim and validate
+        if (config.userApiKey && config.userApiKey.trim().length > 0) {
+            return config.userApiKey.trim();
+        }
+    }
+
+    // 2. Fallback: Environment Variable (Demo/Dev mode)
     if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
       return process.env.API_KEY;
     }
   } catch (e) {
-    console.warn("Failed to read process.env");
+    console.warn("Failed to retrieve API Key");
   }
   return '';
 };
 
-// [CRITICAL FIX] Lazy Initialization
+// [CRITICAL FIX] Lazy Initialization & Error Handling
 let aiInstance: GoogleGenAI | null = null;
+let currentKey: string | null = null;
 
 const getAiClient = () => {
-    if (!aiInstance) {
-        const apiKey = getApiKey();
-        aiInstance = new GoogleGenAI({ apiKey });
+    const key = getApiKey();
+    
+    // Reset instance if key changed or empty
+    if (!key) {
+        aiInstance = null;
+        currentKey = null;
+        throw new Error("API Key가 설정되지 않았습니다. [설정] 메뉴에서 키를 등록해주세요.");
+    }
+
+    if (!aiInstance || currentKey !== key) {
+        // [DEFENSIVE] Check if SDK is available
+        if (typeof GoogleGenAI !== 'function') {
+             console.error("GoogleGenAI SDK is not loaded correctly.");
+             throw new Error("Critical Error: AI SDK not loaded.");
+        }
+        
+        try {
+            // [FIX] Wrap constructor in try-catch to prevent Illegal Constructor crashes
+            // Ensure no invalid arguments are passed
+            aiInstance = new GoogleGenAI({ apiKey: key });
+            currentKey = key;
+        } catch (e) {
+            console.error("Failed to initialize GoogleGenAI:", e);
+            aiInstance = null;
+            throw new Error(`AI Initialization Failed: ${(e as any).message || 'Unknown Error'}`);
+        }
     }
     return aiInstance;
+};
+
+// [NEW] Validate Connection Function (Used in Settings)
+export const validateGeminiConnection = async (apiKey: string): Promise<boolean> => {
+    if (!apiKey) return false;
+    const cleanKey = apiKey.trim();
+    if (!cleanKey.startsWith('AIza')) return false;
+
+    try {
+        // [FIX] Wrap constructor in try-catch to safely handle errors
+        let testClient;
+        try {
+            testClient = new GoogleGenAI({ apiKey: cleanKey });
+        } catch (e) {
+            console.error("GoogleGenAI Constructor Error in Validation:", e);
+            return false;
+        }
+
+        const response = await testClient.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
+        });
+        
+        return !!response; // Success if no error thrown
+    } catch (e) {
+        console.error("Connection Test Failed:", e);
+        return false;
+    }
 };
 
 // Helper: Promise with Timeout
@@ -84,7 +146,7 @@ const withRetry = async <T>(fn: () => Promise<T>, retries = 3, baseDelay = 2000)
       
       // Improve Error Message for UI if it's the final attempt
       if (isRateLimit) {
-          const friendlyError = new Error("AI 분석 요청량이 많아 일시적으로 제한되었습니다. 약 1분 후 다시 시도해주세요. (Quota Limit)");
+          const friendlyError = new Error("AI 사용량이 초과되었습니다. (설정에서 개인 API 키를 등록하면 해결됩니다)");
           (friendlyError as any).originalError = lastError;
           throw friendlyError;
       }
@@ -577,6 +639,13 @@ export const analyzeMasterLog = async (
       const prompt = `
         역할: 건설 현장 데이터 분석가.
         ${promptContext}
+        
+        [필수 규칙 - 팀명 추출]
+        1. 회사명(예: (주)휘강건설)은 'teamName'이 될 수 없습니다. 
+        2. 팀 이름은 구체적인 작업 단위(예: 이태호 팀, 시스템 팀, 철근 팀, 형틀 팀, 해체 팀, 직영)여야 합니다.
+        3. 문서 헤더의 회사명은 무시하고, 실제 TBM을 수행한 '작업 팀' 이름을 찾으세요.
+        4. 만약 팀 이름이 '휘강건설'이나 '골조공사'로만 보인다면, 작업 내용(예: 알폼, 갱폼, 시스템)을 보고 적절한 공종 이름을 팀명으로 추정하십시오.
+
         [필수 추출 항목]
         - teams 배열 내 'safetyFeedback'은 반드시 위 규칙에 따라 생성된 코멘트 배열이어야 합니다.
       `;

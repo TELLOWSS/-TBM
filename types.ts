@@ -17,6 +17,12 @@ export interface TeamOption {
   category: string; 
 }
 
+export interface SiteConfig {
+  siteName: string;
+  managerName: string;
+  userApiKey: string | null; // Bring Your Own Key
+}
+
 export interface RiskAssessmentItem {
   risk: string;
   measure: string;

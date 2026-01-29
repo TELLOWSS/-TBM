@@ -1,9 +1,11 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { TBMEntry } from '../types';
 import { Calendar, Users, AlertCircle, FileText, BarChart2, TrendingUp, ShieldAlert, Trash2, Radio, CloudRain, Sun, CloudSnow, MapPin, ArrowRight, ShieldCheck, Zap, Activity, Microscope, Clock, Siren, Megaphone, CheckCircle2, AlertTriangle, Wind, Droplets, HardHat, RefreshCw, CloudLightning, Cloud, Medal, Eye, Mic, Shield, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface DashboardProps {
   entries: TBMEntry[];
+  siteName: string; // [NEW] Dynamic Site Name
   onViewReport: () => void;
   onNavigateToReports: () => void;
   onNavigateToDataLab: () => void; 
@@ -36,8 +38,9 @@ const DailyBarChart = ({
                 {chartData.map((val, i) => (
                     <div key={i} className="flex-1 flex flex-col items-center group relative">
                         {/* Tooltip */}
-                        <div className="absolute -top-6 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded transition-opacity whitespace-nowrap z-10 font-bold">
-                            {val > 0 ? `${val}점` : '기록없음'}
+                        <div className="absolute -top-8 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-[10px] px-2 py-1 rounded transition-opacity whitespace-nowrap z-20 font-bold shadow-lg pointer-events-none transform -translate-y-1">
+                            {val > 0 ? `${Math.round(val)}점` : '미실시'}
+                            <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
                         </div>
                         
                         {/* Bar */}
@@ -134,7 +137,7 @@ const SafetyCampaignBanner = () => {
 };
 
 // --- [Component 2] Site Weather Station ---
-const WeatherStation = () => {
+const WeatherStation = ({ siteName }: { siteName: string }) => {
     const [weather, setWeather] = useState({ temp: 0, condition: 'Sun', wind: 0, humidity: 0 });
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isLoaded, setIsLoaded] = useState(false);
@@ -199,7 +202,7 @@ const WeatherStation = () => {
                 <div>
                     <div className="flex items-center gap-1.5 text-slate-500 mb-1">
                         <MapPin size={12} />
-                        <span className="text-xs font-bold">용인 푸르지오 2,3단지</span>
+                        <span className="text-xs font-bold truncate max-w-[120px]">{siteName}</span>
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="text-4xl font-black text-slate-800 tracking-tighter">
@@ -314,7 +317,7 @@ const KpiCard = ({ icon, label, value, unit, trend, colorClass }: any) => (
     </div>
 );
 
-export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onNavigateToReports, onNavigateToDataLab, onNewEntry, onEdit, onDelete }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewReport, onNavigateToReports, onNavigateToDataLab, onNewEntry, onEdit, onDelete }) => {
     const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
 
     const now = new Date();
@@ -384,11 +387,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
 
                     const r = e.videoAnalysis?.rubric;
                     if (r) {
-                        // Normalize to 100 scale for consistency
-                        data.detailed.log[dateIndex] = Math.max(data.detailed.log[dateIndex], (r.logQuality || 0) / 30 * 100);
-                        data.detailed.focus[dateIndex] = Math.max(data.detailed.focus[dateIndex], (r.focus || 0) / 30 * 100);
-                        data.detailed.voice[dateIndex] = Math.max(data.detailed.voice[dateIndex], (r.voice || 0) / 20 * 100);
-                        data.detailed.ppe[dateIndex] = Math.max(data.detailed.ppe[dateIndex], (r.ppe || 0) / 20 * 100);
+                        // Normalize to 100 scale for consistency and store rounded values
+                        data.detailed.log[dateIndex] = Math.max(data.detailed.log[dateIndex], Math.round((r.logQuality || 0) / 30 * 100));
+                        data.detailed.focus[dateIndex] = Math.max(data.detailed.focus[dateIndex], Math.round((r.focus || 0) / 30 * 100));
+                        data.detailed.voice[dateIndex] = Math.max(data.detailed.voice[dateIndex], Math.round((r.voice || 0) / 20 * 100));
+                        data.detailed.ppe[dateIndex] = Math.max(data.detailed.ppe[dateIndex], Math.round((r.ppe || 0) / 20 * 100));
                     }
                 }
             }
@@ -397,13 +400,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
         const sortedTeams = Object.entries(teamMap)
             .map(([name, data]) => {
                 const avgScore = data.scoreCount > 0 ? Math.round(data.scoreSum / data.scoreCount) : 0;
+                
+                // Helper to get average of non-zero entries for detailed metrics
+                const getAvg = (arr: number[]) => {
+                    const nonZero = arr.filter(n => n > 0);
+                    return nonZero.length > 0 ? Math.round(nonZero.reduce((a, b) => a + b, 0) / nonZero.length) : 0;
+                };
+
+                const detailAvgs = {
+                    log: getAvg(data.detailed.log),
+                    focus: getAvg(data.detailed.focus),
+                    voice: getAvg(data.detailed.voice),
+                    ppe: getAvg(data.detailed.ppe)
+                };
+
                 let grade = '-';
                 if (avgScore >= 90) grade = 'S';
                 else if (avgScore >= 80) grade = 'A';
                 else if (avgScore >= 70) grade = 'B';
                 else if (avgScore > 0) grade = 'C';
 
-                return { name, ...data, avgScore, grade };
+                return { name, ...data, avgScore, grade, detailAvgs };
             })
             .sort((a, b) => b.totalActivity - a.totalActivity);
 
@@ -429,7 +446,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-auto">
                 <div className="lg:col-span-4 h-[320px] lg:h-auto">
-                    <WeatherStation />
+                    <WeatherStation siteName={siteName} />
                 </div>
                 <div className="lg:col-span-4 h-[320px] lg:h-auto">
                     <CommandActionCard onClick={onNewEntry} />
@@ -548,24 +565,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, onViewReport, onN
                                                 {/* Expanded Detail View */}
                                                 {isExpanded && (
                                                     <div className="p-4 pt-0 border-t border-indigo-100/50 mt-2 grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
-                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                                                            <p className="text-[10px] font-bold text-indigo-500 mb-2 flex items-center gap-1"><FileText size={10}/> 일지 품질</p>
+                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col">
+                                                            <div className="flex justify-between items-end mb-2">
+                                                                <p className="text-[10px] font-bold text-indigo-500 flex items-center gap-1"><FileText size={10}/> 일지 품질</p>
+                                                                <span className="text-xl font-black text-indigo-600 leading-none">{team.detailAvgs.log}</span>
+                                                            </div>
                                                             <DailyBarChart data={team.detailed.log} labels={teamActivityData.labels} color="#6366f1" height={40}/>
                                                         </div>
-                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                                                            <p className="text-[10px] font-bold text-emerald-600 mb-2 flex items-center gap-1"><Eye size={10}/> 작업 집중도</p>
+                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col">
+                                                            <div className="flex justify-between items-end mb-2">
+                                                                <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><Eye size={10}/> 작업 집중도</p>
+                                                                <span className="text-xl font-black text-emerald-600 leading-none">{team.detailAvgs.focus}</span>
+                                                            </div>
                                                             <DailyBarChart data={team.detailed.focus} labels={teamActivityData.labels} color="#10b981" height={40}/>
                                                         </div>
-                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                                                            <p className="text-[10px] font-bold text-amber-500 mb-2 flex items-center gap-1"><Mic size={10}/> 전파 명확성</p>
+                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col">
+                                                            <div className="flex justify-between items-end mb-2">
+                                                                <p className="text-[10px] font-bold text-amber-500 flex items-center gap-1"><Mic size={10}/> 전파 명확성</p>
+                                                                <span className="text-xl font-black text-amber-500 leading-none">{team.detailAvgs.voice}</span>
+                                                            </div>
                                                             <DailyBarChart data={team.detailed.voice} labels={teamActivityData.labels} color="#f59e0b" height={40}/>
                                                         </div>
-                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                                                            <p className="text-[10px] font-bold text-rose-500 mb-2 flex items-center gap-1"><Shield size={10}/> 보호구 상태</p>
+                                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col">
+                                                            <div className="flex justify-between items-end mb-2">
+                                                                <p className="text-[10px] font-bold text-rose-500 flex items-center gap-1"><Shield size={10}/> 보호구 상태</p>
+                                                                <span className="text-xl font-black text-rose-500 leading-none">{team.detailAvgs.ppe}</span>
+                                                            </div>
                                                             <DailyBarChart data={team.detailed.ppe} labels={teamActivityData.labels} color="#f43f5e" height={40}/>
                                                         </div>
                                                         <div className="col-span-full text-center">
-                                                            <p className="text-[10px] text-slate-400">※ 각 막대는 해당 일자의 평가 점수(100점 만점)를 나타냅니다.</p>
+                                                            <p className="text-[10px] text-slate-400">※ 각 항목 점수는 AI 정밀 진단(100점 만점)의 주간 평균입니다.</p>
                                                         </div>
                                                     </div>
                                                 )}
