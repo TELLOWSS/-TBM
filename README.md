@@ -10,6 +10,8 @@ This contains everything you need to run your app locally.
 
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
 - Release Template: [RELEASE_TEMPLATE.md](RELEASE_TEMPLATE.md)
+- SafetyDataLab v2 Plan: [SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md](SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md)
+- SafetyDataLab v2 Tracker: [SAFETY_DATALAB_V2_TRACKER.md](SAFETY_DATALAB_V2_TRACKER.md)
 - Latest updates are tracked by date and grouped by feature/fix.
 
 View your app in AI Studio: https://ai.studio/apps/drive/1kGsf_MnKnV5FU0zmjqTd_c6YSfVNS85n

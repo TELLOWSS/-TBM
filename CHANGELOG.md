@@ -41,9 +41,61 @@
     - `node: >=20 <23`
     - `npm: >=10`
 
----
+### ✅ 구현 계획/기록관리 체계 추가
+- 신규 문서
+  - `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`
+  - `SAFETY_DATALAB_V2_TRACKER.md`
+- 반영 내용
+  - 안전데이터 심층연구소 v2를 단계별(Phase 1~4)로 순차 실행하는 계획서 정의
+  - 체크리스트/작업로그/Clear 기록 테이블을 통한 진행·완료 관리 체계 도입
 
-## 기록 원칙
+### ✅ 안전데이터 심층연구소 v2 Phase 1 구현
+- `components/SafetyDataLab.tsx`
+  - 기간 필터 추가: 최근 7일 / 최근 30일 / 당월 / 전체 / 커스텀
+  - 다중 필터 상태 구조 도입: 팀 + 위험 + 기간 동시 적용
+  - 필터 상태 뱃지 및 일괄 초기화 동작 반영
+  - 커스텀 기간 입력(start/end) UI 및 기간 기반 분석 데이터셋 분리
+
+### ✅ Phase 1 검증/기록 관리 업데이트
+- `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`
+  - Phase 1 검증 케이스 10종 정의
+  - 빌드 통과 항목 체크 완료
+- `SAFETY_DATALAB_V2_TRACKER.md`
+  - 검증 케이스 표(10종) 추가
+  - 작업 로그에 빌드 검증 성공 이력 추가
+
+### ✅ 안전데이터 심층연구소 v2 Phase 2 상세 구현
+- `components/SafetyDataLab.tsx`
+  - `RISK_KEYWORD_DICT` 모듈 레벨 상수로 분리 (카테고리 체계 포함: 추락/낙하/전도, 장비/환경, 화학/게 사고)
+  - 트렌드 바 첫트 스케일 개선: `/10` 고정값 → `maxTrendCount` 동적 최대값 기준
+  - `filteredAnalysis`에 `maxTrendCount` 추가 반환
+- Phase 2 Cleared (2026-04-28) — 빌드 통과
+
+### ✅ 안전데이터 심층연구소 v2 Phase 4 구현
+- `components/SafetyDataLab.tsx`
+  - `LabSnapshot` 인터페이스 + `SNAPSHOT_STORAGE_KEY` 상수 추가
+  - `compareAnalysis` useMemo: 전주/전월 대비 건수·점수·인원 5개 비교 지표 계산
+  - `handleSaveSnapshot`: 현재 분석 상태를 localStorage에 최대 10개 보존
+  - `handleDeleteSnapshot`: 스냅샷 개별 삭제
+  - `handleExportCSV`: 필터 적용된 entries를 BOM UTF-8 CSV로 다운로드
+  - `handleCopyShareText`: 분석 요약을 클립보드에 복사 + 완료 피드백 (`copyDone`)
+  - `filteredAnalysis`에 `filteredEntries` 반환 추가 (CSV 내보내기 연결)
+  - 렌더링: "Period Comparison" 비교 지표 5행 카드 + "Snapshot & Export" 패널 추가
+- Phase 4 Cleared (2026-04-28) — 빌드 통과 (`✓ built in 5.26s`)
+
+### 🎉 안전데이터 심층연구소 v2 — All Phases Cleared (2026-04-28)
+
+---
+- `components/SafetyDataLab.tsx`
+  - `CommandOrder` 인터페이스 + `PRIORITY_CONFIG` 상수 추가 (CRITICAL / HIGH / MEDIUM)
+  - `CommandOrderCard` 컴포넌트 신규 구현 (담당팀 / 우선순위 / 기한 / 근거 / KPI 카드)
+  - AI 프롬프트를 JSON 배열 반환 요청 구조로 변경
+  - JSON 파싱 성공 시 카드 렌더링, 실패 시 raw 텍스트 fallback 처리
+  - 로딩 스켈레톤 / 오류 상태 / 재시도 버튼 UX 추가
+  - 카드 닫기(X) 버튼 및 터미널 닫기 버튼 추가
+- Phase 3 Cleared (2026-04-28) — 빌드 통과
+
+---
 - 기능 단위로 묶어서 기록
 - 파일 경로 + 핵심 변경 요약을 함께 기재
 - 배포 영향이 있는 변경은 별도 섹션으로 명시
