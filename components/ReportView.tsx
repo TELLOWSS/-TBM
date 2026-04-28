@@ -1,5 +1,5 @@
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TBMEntry, TeamOption } from '../types';
 import { Printer, X, Download, Loader2, Edit3, Trash2, Sparkles, UserCheck, AlertOctagon, Eye, Users, Video, FileVideo, ImageOff, CheckCircle2, XCircle, Image as ImageIcon, Package, FileText, Mic, ShieldCheck, Lock } from 'lucide-react';
@@ -34,7 +34,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       });
   };
 
-  useEffect(() => {
+    React.useEffect(() => {
       previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
       window.setTimeout(() => {
           reportCloseButtonRef.current?.focus();
@@ -86,7 +86,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
   };
 
   // Auto-scale for mobile/tablet screens
-  useEffect(() => {
+    React.useEffect(() => {
       const handleResize = () => {
           const maxWidth = Math.min(window.innerWidth - 32, 794); // -32 for padding
           const newScale = Math.min(1, maxWidth / 794);

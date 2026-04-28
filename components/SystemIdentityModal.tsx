@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Cpu, ShieldCheck, Zap, Server, Activity, Lock, Globe, Database, Layers } from 'lucide-react';
 
@@ -12,7 +12,7 @@ export const SystemIdentityModal: React.FC<SystemIdentityModalProps> = ({ onClos
     const systemIdentityCloseButtonRef = useRef<HTMLButtonElement>(null);
     const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
 
-    useEffect(() => {
+    React.useEffect(() => {
         previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
         window.setTimeout(() => {
             systemIdentityCloseButtonRef.current?.focus();

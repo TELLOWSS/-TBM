@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Rocket, Shield, BrainCircuit, LayoutDashboard, FileText, Video, Sparkles, History, GitCommit, Zap, Minimize2, Edit2, ListOrdered, Save, FileVideo, Presentation, CalendarRange, FolderInput, GraduationCap, Lock, Database, Compass, TrendingUp, Grid, Layers, Monitor, HardDrive } from 'lucide-react';
 
@@ -199,7 +199,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ onClose }) => {
   const historyCloseButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
     window.setTimeout(() => {
       historyCloseButtonRef.current?.focus();

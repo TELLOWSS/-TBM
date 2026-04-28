@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { TBMEntry } from '../types';
 import { Calendar, Users, AlertCircle, FileText, BarChart2, TrendingUp, ShieldAlert, Trash2, Radio, CloudRain, Sun, CloudSnow, MapPin, ArrowRight, ShieldCheck, Zap, Activity, Microscope, Clock, Siren, Megaphone, CheckCircle2, AlertTriangle, Wind, Droplets, HardHat, RefreshCw, CloudLightning, Cloud, Medal, Eye, Mic, Shield, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -73,7 +73,7 @@ const DailyBarChart = ({
 const LiveClock = () => {
     const [time, setTime] = useState<Date>(new Date());
 
-    useEffect(() => {
+    React.useEffect(() => {
         const updateClock = () => {
             setTime(new Date());
         };
@@ -111,7 +111,7 @@ const SAFETY_SLOGANS = [
 const SafetyCampaignBanner = () => {
     const [index, setIndex] = useState(0);
 
-    useEffect(() => {
+    React.useEffect(() => {
         const timer = setInterval(() => {
             setIndex((prev) => (prev + 1) % SAFETY_SLOGANS.length);
         }, 5000);
@@ -217,7 +217,7 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
         }
     };
 
-    useEffect(() => {
+    React.useEffect(() => {
         fetchRealWeather();
         const interval = setInterval(fetchRealWeather, 15 * 60 * 1000);
         return () => {

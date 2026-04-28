@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { MonthlyRiskAssessment, SafetyGuideline } from '../types';
 import { extractMonthlyPriorities, ExtractedPriority, MonthlyExtractionResult } from '../services/geminiService';
 import { Upload, Loader2, Trash2, ShieldCheck, Plus, RefreshCcw, Calendar, TrendingUp, Search, Edit2, Save, X, Download, FileJson, Layers, ArrowRight, BarChart3, AlertTriangle, CheckCircle2, ChevronDown, GitMerge, Scale, BookOpen, AlertOctagon, FileText, PieChart, Activity, FileStack, Sparkles, BrainCircuit, Clock } from 'lucide-react';
@@ -132,7 +132,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   const [selectedMonthId, setSelectedMonthId] = useState<string>('');
 
   // Auto-Select Logic
-  useEffect(() => {
+    React.useEffect(() => {
       // [FIX] Ensure selectedMonthId is valid. If deleted, switch to another.
       if (selectedMonthId && assessments.some(a => a.id === selectedMonthId)) return;
 
@@ -196,7 +196,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       });
   };
 
-  useEffect(() => {
+    React.useEffect(() => {
       if (!showRegularBuilder) return;
 
       const handleEscClose = (event: KeyboardEvent) => {
@@ -213,7 +213,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       return () => window.removeEventListener('keydown', handleEscClose);
     }, [showRegularBuilder, confirmDialogState.isOpen]);
 
-  useEffect(() => {
+    React.useEffect(() => {
       if (showRegularBuilder) {
           window.setTimeout(() => {
               regularBuilderCloseButtonRef.current?.focus();

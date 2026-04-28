@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, UserCheck, Users, Database, Save, Upload, Download, Plus, Trash2, Settings, AlertTriangle, CheckCircle2, FileText, ShieldCheck, Layers, Loader2, FileSearch, Stethoscope, Sparkles, Eraser, Key, Server, Eye, EyeOff, HelpCircle, ExternalLink, Zap, Network, Lock } from 'lucide-react';
 import { ConfirmDialog } from './common/ConfirmDialog';
@@ -73,7 +73,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     };
 
     // [FIX] Sync form with props when modal opens
-    useEffect(() => {
+    React.useEffect(() => {
         mountedRef.current = true;
         if (isOpen && siteConfig) {
             setConfigForm(siteConfig);
@@ -81,7 +81,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         return () => { mountedRef.current = false; };
     }, [isOpen, siteConfig]);
 
-    useEffect(() => {
+    React.useEffect(() => {
         if (!isOpen) return;
 
         previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;

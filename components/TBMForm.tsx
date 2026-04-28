@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { TBMEntry, RiskAssessmentItem, SafetyGuideline, TeamOption, TBMAnalysisResult, ScoreRubric } from '../types';
 import { analyzeMasterLog, evaluateTBMVideo, generateSafetyFeedback } from '../services/geminiService';
@@ -87,7 +87,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const videoBlobUrlRef = useRef<string | null>(null);
 
   // [FIX] Revoke video blob URL on component unmount
-  useEffect(() => {
+    React.useEffect(() => {
       return () => {
           if (videoBlobUrlRef.current) {
               URL.revokeObjectURL(videoBlobUrlRef.current);
@@ -96,7 +96,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       };
   }, []);
 
-  useEffect(() => {
+    React.useEffect(() => {
       if (initialData) {
           const item: QueueItem = {
               tempId: initialData.id,
@@ -115,7 +115,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       }
   }, [initialData, mode]);
 
-  useEffect(() => {
+    React.useEffect(() => {
       const activeItem = queue.find(q => q.tempId === activeId);
       if (activeItem) {
           const now = new Date();

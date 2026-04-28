@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
 import { type ConfirmVariant } from '../../hooks/useConfirmDialog';
 
@@ -31,11 +31,11 @@ export const ConfirmDialog = ({
     zIndexClassName = 'z-[1000000]',
     variant = 'default'
 }: ConfirmDialogProps) => {
-    const dialogRef = useRef<HTMLDivElement>(null);
-    const cancelButtonRef = useRef<HTMLButtonElement>(null);
-    const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+    const dialogRef = React.useRef<HTMLDivElement>(null);
+    const cancelButtonRef = React.useRef<HTMLButtonElement>(null);
+    const previouslyFocusedElementRef = React.useRef<HTMLElement | null>(null);
 
-    useEffect(() => {
+    React.useEffect(() => {
         if (!isOpen) return;
 
         previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;

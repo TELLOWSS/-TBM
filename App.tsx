@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, Suspense, useRef, useMemo } from 'react';
+import React, { useState, Suspense, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Navigation } from './components/Navigation';
 import { Dashboard } from './components/Dashboard';
@@ -124,7 +124,7 @@ const App = () => {
       });
   };
 
-  useEffect(() => {
+    React.useEffect(() => {
     mountedRef.current = true;
     const loadData = async () => {
         // 1. Critical Config (Sync Load priority)

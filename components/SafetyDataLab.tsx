@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { TBMEntry, TeamOption } from '../types';
 import { BarChart2, TrendingUp, BrainCircuit, Activity, Database, Info, Hexagon, Radar, ShieldCheck, Upload, HardDrive, Search, AlertTriangle, Users, Zap, Layers, FileText, Download, Share2, Target, CheckCircle2, XCircle, Filter } from 'lucide-react';
 import { generateGeneralInsight } from '../services/geminiService';
@@ -143,7 +143,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     const restoreInputRef = useRef<HTMLInputElement>(null);
     // [FIX] 컴포넌트 언마운트 후 setState 방지
     const mountedRef = useRef(true);
-    useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+    React.useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
     const announceStatus = (message: string) => {
         if (!mountedRef.current) return;

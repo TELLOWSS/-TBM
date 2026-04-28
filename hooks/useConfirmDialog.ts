@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React from 'react';
 
 export type ConfirmVariant = 'default' | 'danger' | 'warning';
 
@@ -28,8 +28,8 @@ const DEFAULT_CONFIRM_STATE: ConfirmDialogState = {
 };
 
 export const useConfirmDialog = () => {
-    const [confirmDialogState, setConfirmDialogState] = useState<ConfirmDialogState>(DEFAULT_CONFIRM_STATE);
-    const resolverRef = useRef<((value: boolean) => void) | null>(null);
+    const [confirmDialogState, setConfirmDialogState] = React.useState<ConfirmDialogState>(DEFAULT_CONFIRM_STATE);
+    const resolverRef = React.useRef<((value: boolean) => void) | null>(null);
 
     const requestConfirm = (message: string, options?: ConfirmRequestOptions) => {
         return new Promise<boolean>((resolve) => {
@@ -52,7 +52,7 @@ export const useConfirmDialog = () => {
         resolver?.(result);
     };
 
-    useEffect(() => {
+    React.useEffect(() => {
         return () => {
             if (resolverRef.current) {
                 resolverRef.current(false);
