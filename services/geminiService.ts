@@ -37,21 +37,42 @@ const getApiKey = () => {
         }
     }
 
-    // 3. Fallback: Environment Variable (Demo/Dev mode)
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      return process.env.API_KEY;
-    }
+    // 3. [REMOVED] Environment Variable fallback intentionally disabled.
+    //    API key must NOT be embedded in the client bundle.
+    //    Dev mode uses the Vite server proxy (/api/gemini) instead.
   } catch (e) {
     console.warn("Failed to retrieve API Key");
   }
   return '';
 };
 
+// Detect if running under local Vite dev server (proxy available)
+const isDevProxyAvailable = () =>
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' ||
+   window.location.hostname === '127.0.0.1');
+
 // [CRITICAL FIX] Lazy Initialization & Error Handling
 let aiInstance: GoogleGenAI | null = null;
 let currentKey: string | null = null;
 
 const getAiClient = () => {
+    // [A] Dev proxy path: no user key needed on localhost
+    if (isDevProxyAvailable()) {
+        const proxyBase = `${window.location.origin}/api/gemini`;
+        if (!aiInstance || currentKey !== '__dev_proxy__') {
+            if (typeof GoogleGenAI !== 'function') throw new Error('Critical Error: AI SDK not loaded.');
+            try {
+                aiInstance = new GoogleGenAI({ apiKey: 'dev-proxy', baseUrl: proxyBase } as any);
+                currentKey = '__dev_proxy__';
+                console.info('[GeminiService] Dev proxy enabled:', proxyBase);
+            } catch (e) {
+                throw new Error(`AI Proxy Init Failed: ${(e as any).message}`);
+            }
+        }
+        return aiInstance;
+    }
+
     const key = getApiKey();
     
     // Reset instance if key changed or empty
@@ -69,8 +90,6 @@ const getAiClient = () => {
         }
         
         try {
-            // [FIX] Wrap constructor in try-catch to prevent Illegal Constructor crashes
-            // Ensure no invalid arguments are passed
             aiInstance = new GoogleGenAI({ apiKey: key });
             currentKey = key;
         } catch (e) {

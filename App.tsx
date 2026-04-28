@@ -228,11 +228,26 @@ const App = () => {
           alert(`⚠️ 한 번에 최대 ${MAX_BACKUP_FILE_COUNT}개의 파일만 처리할 수 있습니다.`);
           return;
       }
+
+      // [C] 총 파일 크기 예산 검사 (합산 200 MB 초과 시 조기 경고)
+      const TOTAL_SIZE_BUDGET = 200 * 1024 * 1024;
+      let totalInputSize = 0;
       for (let i = 0; i < files.length; i++) {
           if (files[i].size > MAX_BACKUP_FILE_SIZE) {
               alert(`⚠️ 파일 크기 제한 초과: "${files[i].name}"\n최대 50MB 파일만 복구 가능합니다.`);
               return;
           }
+          totalInputSize += files[i].size;
+      }
+      if (totalInputSize > TOTAL_SIZE_BUDGET) {
+          alert(`⚠️ 총 파일 용량(${(totalInputSize / 1024 / 1024).toFixed(1)} MB)이 너무 큽니다.\n한 번에 200 MB 이하로 처리해 주세요.`);
+          return;
+      }
+
+      // [C] 메모리 사용량 기준점 로그 (Chrome DevTools Memory API)
+      const memStart = (performance as any).memory?.usedJSHeapSize ?? null;
+      if (memStart !== null) {
+          console.info(`[Restore] 시작 힙: ${(memStart / 1024 / 1024).toFixed(1)} MB`);
       }
       setIsRestoring(true);
       setRestoreProgress(0);
@@ -350,7 +365,13 @@ const App = () => {
               if (mountedRef.current) {
                   setRestoreProgress(Math.round(((i + 1) / fileArray.length) * 50));
               }
-              await new Promise(resolve => setTimeout(resolve, 0));
+              // [C] GC 양보: 이벤트 루프를 비워 브라우저가 메모리를 회수할 시간을 줌
+              await new Promise(resolve => setTimeout(resolve, 10));
+              // [C] 파일별 힙 사용량 기록
+              const memMid = (performance as any).memory?.usedJSHeapSize ?? null;
+              if (memMid !== null) {
+                  console.debug(`[Restore] ${file.name} 처리 후 힙: ${(memMid / 1024 / 1024).toFixed(1)} MB`);
+              }
           }
 
           if (totalFound === 0) {
@@ -401,6 +422,14 @@ const App = () => {
           if (mountedRef.current) {
               setIsRestoring(false);
               setIsSettingsOpen(false); // Close modal
+          }
+
+          // [C] 완료 후 힙 증가량 요약
+          const memEnd = (performance as any).memory?.usedJSHeapSize ?? null;
+          if (memStart !== null && memEnd !== null) {
+              const delta = ((memEnd - memStart) / 1024 / 1024).toFixed(1);
+              const sign = Number(delta) >= 0 ? '+' : '';
+              console.info(`[Restore] 완료. 힙 변화: ${sign}${delta} MB (최종 ${(memEnd / 1024 / 1024).toFixed(1)} MB)`);
           }
           
           if (mountedRef.current) {
