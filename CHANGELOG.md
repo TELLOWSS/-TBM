@@ -89,6 +89,10 @@
   - 캡처 시 `windowWidth/windowHeight`를 A4 기준(`794x1123`)으로 고정
   - 전역 강제 `letter-spacing`/`img height:auto` 제거로 텍스트·그리드 변형 최소화
   - 내보내기 전용 레이아웃 강제 CSS(`.row/.col/.h-*`)로 화면/출력 간 비율 일치 강화
+  - 캡처 직전 `lockExportLayout()` 적용으로 주요 셀/그리드/이미지의 계산 크기 고정 (브라우저별 미세 틀어짐 완화)
+  - `lockExportLayout()` 정밀화: 반올림 대신 소수점(px) 보존 + min/max 동시 고정으로 누적 오차 완화
+  - 이미지 preload 단계에 `img.decode()` 추가로 렌더 완료 시점 동기화 강화
+  - 내보내기 클론 문서에 폰트 스택 강제 지정으로 화면/출력 텍스트 폭 차이 최소화
 
 ### 🎉 안전데이터 심층연구소 v2 — All Phases Cleared (2026-04-28)
 

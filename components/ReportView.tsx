@@ -186,6 +186,54 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       }
   };
 
+  // [EXPORT STABILITY] Lock computed layout to reduce PDF/image drift
+  const lockExportLayout = (element: HTMLElement) => {
+      const lockSelectors = [
+          '.report-page',
+          '.row',
+          '.col',
+          '.section-header',
+          '.body-row-images',
+          '.body-row-text',
+          'table',
+          'td',
+          'img'
+      ];
+
+      lockSelectors.forEach((selector) => {
+          element.querySelectorAll(selector).forEach((node) => {
+              const target = node as HTMLElement;
+              const computed = window.getComputedStyle(target);
+              const rect = target.getBoundingClientRect();
+              if (rect.width > 0) {
+                  const width = `${rect.width.toFixed(3)}px`;
+                  target.style.width = width;
+                  target.style.minWidth = width;
+                  target.style.maxWidth = width;
+              }
+              if (rect.height > 0) {
+                  const height = `${rect.height.toFixed(3)}px`;
+                  target.style.height = height;
+                  target.style.minHeight = height;
+                  target.style.maxHeight = height;
+              }
+              if (computed.display === 'inline') {
+                  target.style.display = 'inline-block';
+              }
+          });
+      });
+
+      // Preserve image baseline alignment without forcing block layout
+      element.querySelectorAll('img').forEach((node) => {
+          const img = node as HTMLElement;
+          const computed = window.getComputedStyle(img);
+          if (computed.display === 'inline') {
+              img.style.display = 'inline-block';
+          }
+          img.style.verticalAlign = computed.verticalAlign || 'middle';
+      });
+  };
+
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
     if (generatingMode) return;
     setGeneratingMode(mode);
@@ -263,17 +311,26 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
           ghostContainer.appendChild(clone);
 
+          // 0. Lock layout dimensions before conversion/capture
+          lockExportLayout(clone);
+
           // 1. Convert SVGs to PNGs (Critical for icon alignment)
           await convertSvgToImage(clone);
 
           // 2. Preload all images
           const images = Array.from(clone.querySelectorAll('img'));
-          await Promise.all(images.map(img => {
-              if (img.complete) return Promise.resolve();
-              return new Promise((resolve) => {
-                  img.onload = resolve;
-                  img.onerror = resolve; 
-              });
+          await Promise.all(images.map(async (img) => {
+              if (!img.complete) {
+                  await new Promise((resolve) => {
+                      img.onload = resolve;
+                      img.onerror = resolve;
+                  });
+              }
+              try {
+                  await img.decode();
+              } catch {
+                  // ignore decode failure and continue export
+              }
           }));
           
           // Brief pause for rendering stabilization
@@ -299,6 +356,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       box-sizing: border-box !important;
                       -webkit-font-smoothing: antialiased !important;
                       text-rendering: geometricPrecision !important;
+                      font-family: -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif !important;
                   }
                   .report-page {
                       width: 794px !important;

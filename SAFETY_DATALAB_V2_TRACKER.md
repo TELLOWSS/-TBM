@@ -63,6 +63,7 @@
 | 2026-04-28 | Phase 2 | 위험 키워드 사전 모듈화 + 트렌드 스케일 동적화 | Done | 빌드 성공 → Phase 2 Cleared |
 | 2026-04-28 | Phase 3 | CommandOrder 스키마 + 카드 UI + 오류/재시도 UX | Done | 빌드 성공 → Phase 3 Cleared |
 | 2026-04-28 | Phase 4 | 비교지표+스냅샷+CSV+공유 요약 구현 | Done | 빌드 성공 → Phase 4 Cleared |
+| 2026-04-28 | Export 안정화 | PDF/이미지 균형감 보정 + 레이아웃 락 정밀화 | Done | 빌드 성공, 내일 실출력 검증 예정 |
 
 ## Clear 기록
 | Phase | Clear 일시 | 검증 결과 | 확인자 |
@@ -71,3 +72,10 @@
 | Phase 2 | 2026-04-28 | 정적 분석 + 빌드 통과 | AI Agent |
 | Phase 3 | 2026-04-28 | 정적 분석 + 빌드 통과 | AI Agent |
 | Phase 4 | 2026-04-28 | 정적 분석 + 빌드 통과 | AI Agent |
+
+## 다음 세션 시작 체크리스트 (2026-04-29)
+- [ ] `npm run dev` 실행 후 보고서 센터 진입
+- [ ] 동일 샘플 1건: 화면 vs PDF vs 이미지 품질 비교
+- [ ] 다건 출력(5건 이상)에서 레이아웃 일관성 확인
+- [ ] 이상 시 `components/ReportView.tsx`의 캡처 경로 우선 점검
+- [ ] 검증 결과를 작업 로그에 1줄 추가
