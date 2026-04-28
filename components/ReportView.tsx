@@ -260,7 +260,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
     document.body.appendChild(ghostContainer);
 
     try {
-      const originalPages = document.querySelectorAll('.report-page');
+            const originalPages = reportDialogRef.current?.querySelectorAll('.report-page') || [];
+            if (originalPages.length === 0) {
+                    announceStatus('내보낼 보고서 페이지가 없습니다.');
+                    return;
+            }
       await document.fonts.ready;
 
       let pdf: any = null;
@@ -443,7 +447,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               URL.revokeObjectURL(url);
           } else if (singleImageData) {
               const resolvedTeam = teams.find(t => t.id === entries[0].teamId);
-              const safeTeamName = resolvedTeam ? resolvedTeam.name : (entries[0].teamName || 'Team');
+              const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[0].teamName || 'Team')).replace(/[\/\\?%*:|"<>]/g, '_');
               const link = document.createElement('a');
               link.href = singleImageData;
               link.setAttribute('download', `TBM_일지_${entries[0].date}_${safeTeamName}.jpg`);
