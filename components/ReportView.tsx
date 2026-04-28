@@ -333,6 +333,17 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
   const handleSignatureUpload = (role: 'safety' | 'site') => (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      // [FIX] 파일 타입 및 크기 검증 — 서명 이미지에만 허용
+      if (!file.type.startsWith('image/')) {
+          alert('이미지 파일만 업로드 가능합니다.');
+          e.target.value = '';
+          return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+          alert('서명 이미지는 최대 2MB까지 가능합니다.');
+          e.target.value = '';
+          return;
+      }
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
@@ -359,15 +370,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
   return createPortal(
     <div className="fixed inset-0 bg-slate-900/95 z-50 overflow-y-auto flex flex-col items-center report-container-wrapper">
       <style>{`
-        @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
-        
         .report-page {
             width: 794px;
             height: 1123px;
             background: white;
             margin: 0 auto 40px auto;
             position: relative;
-            font-family: "Pretendard", "Malgun Gothic", sans-serif;
+                        font-family: -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
             color: black;
             box-sizing: border-box;
             border: 2px solid black; 

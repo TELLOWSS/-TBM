@@ -195,6 +195,12 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const handleLogUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
           const file = e.target.files[0];
+          // [FIX] 이미지 파일 크기 제한 — 10MB 초과 시 IndexedDB OOM 방지
+          if (file.size > 10 * 1024 * 1024) {
+              alert('이미지 파일이 너무 큽니다. (최대 10MB)\n사진 크기를 줄인 후 다시 업로드해주세요.');
+              e.target.value = '';
+              return;
+          }
           const preview = await blobToBase64(file);
           setOriginalLogPreview(preview);
           updateActiveItem({ originalLogFile: file, originalLogPreview: preview, originalLogImageUrl: preview });
@@ -205,6 +211,12 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
           const file = e.target.files[0];
+          // [FIX] 이미지 파일 크기 제한 — 10MB 초과 시 IndexedDB OOM 방지
+          if (file.size > 10 * 1024 * 1024) {
+              alert('이미지 파일이 너무 큽니다. (최대 10MB)\n사진 크기를 줄인 후 다시 업로드해주세요.');
+              e.target.value = '';
+              return;
+          }
           const preview = await blobToBase64(file);
           setTbmPhotoPreview(preview);
           updateActiveItem({ tbmPhotoFile: file, tbmPhotoPreview: preview, tbmPhotoUrl: preview });
@@ -220,6 +232,12 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
               videoBlobUrlRef.current = null;
           }
           const file = e.target.files[0];
+          // [FIX] 영상 파일 크기 제한 — 500MB 초과 시 메모리 압박 방지
+          if (file.size > 500 * 1024 * 1024) {
+              alert('영상 파일이 너무 큽니다. (최대 500MB)\n압축 후 다시 업로드해주세요.');
+              e.target.value = '';
+              return;
+          }
           setTbmVideoFile(file);
           setTbmVideoFileName(file.name);
           const url = URL.createObjectURL(file);

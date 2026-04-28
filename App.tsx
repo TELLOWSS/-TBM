@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Navigation } from './components/Navigation';
 import { Dashboard } from './components/Dashboard';
@@ -12,6 +12,8 @@ import { HistoryModal } from './components/HistoryModal';
 import { SettingsModal } from './components/SettingsModal'; 
 import { SystemIdentityModal } from './components/SystemIdentityModal';
 import { TEAMS } from './constants';
+import { hasSupportedBackupShape, MAX_BACKUP_FILE_COUNT, MAX_BACKUP_FILE_SIZE } from './utils/backupValidation';
+import { loadStoredSiteConfig, persistSiteConfig } from './utils/siteConfigStorage';
 import { StorageDB } from './utils/storageDB';
 import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig } from './types';
 import { Database, Loader2 } from 'lucide-react';
@@ -73,36 +75,39 @@ const App = () => {
 
   const [editingEntry, setEditingEntry] = useState<TBMEntry | null>(null);
   const [entryMode, setEntryMode] = useState<'ROUTINE' | 'BATCH'>('ROUTINE');
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     const loadData = async () => {
         // 1. Critical Config (Sync Load priority)
-        const storedConfig = localStorage.getItem('siteConfig');
-        if (storedConfig) {
-            try {
-                setSiteConfig(JSON.parse(storedConfig));
-            } catch (e) { console.error("Config parse error"); }
-        }
+        const loadedConfig = loadStoredSiteConfig({
+            siteName: '용인 푸르지오 원클러스터 2,3단지',
+            managerName: '박성훈 부장',
+            userApiKey: null
+        });
+        if (mountedRef.current) setSiteConfig(loadedConfig);
 
         // 2. Data Load
         const storedEntries = await StorageDB.get<TBMEntry[]>('entries');
-        if (storedEntries) setEntries(storedEntries);
+        if (storedEntries && mountedRef.current) setEntries(storedEntries);
         
         const storedAssessments = await StorageDB.get<MonthlyRiskAssessment[]>('assessments');
-        if (storedAssessments) setAssessments(storedAssessments);
+        if (storedAssessments && mountedRef.current) setAssessments(storedAssessments);
         
         const storedSignatures = await StorageDB.get<{ safety: string | null; site: string | null }>('signatures');
-        if (storedSignatures) setSignatures(storedSignatures);
+        if (storedSignatures && mountedRef.current) setSignatures(storedSignatures);
 
         const storedTeams = await StorageDB.get<TeamOption[]>('teams');
         if (storedTeams && storedTeams.length > 0) {
-            setTeams(storedTeams);
+            if (mountedRef.current) setTeams(storedTeams);
         } else {
             await StorageDB.set('teams', TEAMS);
-            setTeams(TEAMS);
+            if (mountedRef.current) setTeams(TEAMS);
         }
     };
     loadData();
+    return () => { mountedRef.current = false; };
   }, []);
 
   const handleSaveEntry = async (data: TBMEntry | TBMEntry[], shouldExit = true) => {
@@ -156,8 +161,12 @@ const App = () => {
 
   // [NEW] Update Site Config
   const handleUpdateSiteConfig = (newConfig: SiteConfig) => {
-      setSiteConfig(newConfig);
-      localStorage.setItem('siteConfig', JSON.stringify(newConfig));
+      const cleanConfig = {
+          ...newConfig,
+          userApiKey: newConfig.userApiKey?.trim() || null
+      };
+      setSiteConfig(cleanConfig);
+      persistSiteConfig(cleanConfig);
   };
 
   const handleAddTeam = async (name: string, category: string) => {
@@ -215,15 +224,13 @@ const App = () => {
   // [FIXED] Soft-Refresh Restore Logic (No Page Reload)
   const handleRestoreData = async (files: FileList) => {
       // [FIX] Guard against oversized or excessive files to prevent OOM
-      const MAX_FILE_SIZE_MB = 50;
-      const MAX_FILE_COUNT = 20;
-      if (files.length > MAX_FILE_COUNT) {
-          alert(`⚠️ 한 번에 최대 ${MAX_FILE_COUNT}개의 파일만 처리할 수 있습니다.`);
+      if (files.length > MAX_BACKUP_FILE_COUNT) {
+          alert(`⚠️ 한 번에 최대 ${MAX_BACKUP_FILE_COUNT}개의 파일만 처리할 수 있습니다.`);
           return;
       }
       for (let i = 0; i < files.length; i++) {
-          if (files[i].size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-              alert(`⚠️ 파일 크기 제한 초과: "${files[i].name}"\n최대 ${MAX_FILE_SIZE_MB}MB 파일만 복구 가능합니다.`);
+          if (files[i].size > MAX_BACKUP_FILE_SIZE) {
+              alert(`⚠️ 파일 크기 제한 초과: "${files[i].name}"\n최대 50MB 파일만 복구 가능합니다.`);
               return;
           }
       }
@@ -253,6 +260,10 @@ const App = () => {
 
               try {
                   const json = JSON.parse(text);
+                  if (!hasSupportedBackupShape(json)) {
+                      console.warn("Skipping unsupported backup schema:", file.name);
+                      continue;
+                  }
                   
                   // Strategy 1: Standard Backup Format (Object with keys)
                   if (!Array.isArray(json)) {
@@ -288,7 +299,8 @@ const App = () => {
                           mergedSignatures = { ...mergedSignatures, ...json.signatures };
                       }
                       if (json.siteConfig) {
-                          mergedConfig = { ...mergedConfig, ...json.siteConfig };
+                          // [FIX] 복구 파일에 API 키가 없어도 현재 키를 유지 (보안상 백업에서 제외됨)
+                          mergedConfig = { ...mergedConfig, ...json.siteConfig, userApiKey: siteConfig.userApiKey };
                       }
                       
                       // Fallback: If no standard keys, search recursively for arrays
@@ -333,12 +345,17 @@ const App = () => {
                   console.warn("Skipping invalid file:", file.name);
               }
               
-              setRestoreProgress(Math.round(((i + 1) / fileArray.length) * 50));
+              if (mountedRef.current) {
+                  setRestoreProgress(Math.round(((i + 1) / fileArray.length) * 50));
+              }
+              await new Promise(resolve => setTimeout(resolve, 0));
           }
 
           if (totalFound === 0) {
-              alert("⚠️ 복구할 유효한 데이터가 파일에 없습니다.");
-              setIsRestoring(false);
+              if (mountedRef.current) {
+                  alert("⚠️ 복구할 유효한 데이터가 파일에 없습니다.");
+                  setIsRestoring(false);
+              }
               return;
           }
 
@@ -357,36 +374,44 @@ const App = () => {
           mergedAssessments.forEach(a => uniqueAssMap.set(a.id, a));
           const finalAssessments = Array.from(uniqueAssMap.values());
 
-          setRestoreProgress(70);
+          if (mountedRef.current) setRestoreProgress(70);
 
           // Save to DB
           await StorageDB.set('entries', finalEntries);
           await StorageDB.set('assessments', finalAssessments);
           await StorageDB.set('teams', mergedTeams);
           await StorageDB.set('signatures', mergedSignatures);
-          // Config saves to localStorage immediately
-          localStorage.setItem('siteConfig', JSON.stringify(mergedConfig));
+          // [SECURITY FIX] API 키는 sessionStorage에만 보관
+          persistSiteConfig(mergedConfig);
 
-          setRestoreProgress(100);
+          if (mountedRef.current) setRestoreProgress(100);
           await new Promise(r => setTimeout(r, 800));
 
           // Soft Update (No Reload)
-          setEntries(finalEntries);
-          setAssessments(finalAssessments);
-          setTeams(mergedTeams);
-          setSignatures(mergedSignatures);
-          setSiteConfig(mergedConfig);
+          if (mountedRef.current) {
+              setEntries(finalEntries);
+              setAssessments(finalAssessments);
+              setTeams(mergedTeams);
+              setSignatures(mergedSignatures);
+              setSiteConfig(mergedConfig);
+          }
           
-          setIsRestoring(false);
-          setIsSettingsOpen(false); // Close modal
+          if (mountedRef.current) {
+              setIsRestoring(false);
+              setIsSettingsOpen(false); // Close modal
+          }
           
-          alert(`✅ 데이터 복구 완료!\n총 ${totalFound}건의 데이터가 처리되었습니다.`);
-          setCurrentView('dashboard'); // Navigate to home
+          if (mountedRef.current) {
+              alert(`✅ 데이터 복구 완료!\n총 ${totalFound}건의 데이터가 처리되었습니다.`);
+              setCurrentView('dashboard'); // Navigate to home
+          }
 
       } catch (err: any) {
           console.error("Critical Restore Error:", err);
-          alert(`복구 중 치명적 오류 발생: ${err.message}`);
-          setIsRestoring(false);
+          if (mountedRef.current) {
+              alert(`복구 중 치명적 오류 발생: ${err.message}`);
+              setIsRestoring(false);
+          }
       }
   };
 

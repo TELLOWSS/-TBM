@@ -1,5 +1,6 @@
 
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { SESSION_API_KEY_STORAGE_KEY } from "../utils/siteConfigStorage";
 import { RiskAssessmentItem, SafetyGuideline, TBMAnalysisResult, ExtractedTBMData } from "../types";
 
 // [ADDED] Exported Interfaces for Risk Assessment Extraction
@@ -17,17 +18,26 @@ export interface MonthlyExtractionResult {
 // [UPDATED] Smart API Key Resolution Strategy
 const getApiKey = () => {
   try {
-    // 1. Priority: Check LocalStorage for User's Custom Key (BYOK)
+    // 1. Priority: Session Storage only (do not persist credentials in localStorage)
+    const sessionKey = sessionStorage.getItem(SESSION_API_KEY_STORAGE_KEY);
+    if (sessionKey && sessionKey.trim().length > 0) {
+      return sessionKey.trim();
+    }
+
+    // 2. Legacy migration path: move old localStorage key into sessionStorage and scrub it
     const storedConfig = localStorage.getItem('siteConfig');
     if (storedConfig) {
         const config = JSON.parse(storedConfig);
-        // Trim and validate
         if (config.userApiKey && config.userApiKey.trim().length > 0) {
-            return config.userApiKey.trim();
+            const migratedKey = config.userApiKey.trim();
+            sessionStorage.setItem(SESSION_API_KEY_STORAGE_KEY, migratedKey);
+            delete config.userApiKey;
+            localStorage.setItem('siteConfig', JSON.stringify(config));
+            return migratedKey;
         }
     }
 
-    // 2. Fallback: Environment Variable (Demo/Dev mode)
+    // 3. Fallback: Environment Variable (Demo/Dev mode)
     if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
       return process.env.API_KEY;
     }

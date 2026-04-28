@@ -96,26 +96,28 @@ const LiveClock = () => {
 };
 
 // --- [Component 1.5] Safety Campaign Banner ---
+// [FIX] 컴포넌트 리렌더 시 재생성 방지 — 모듈 스코프 상수로 이동
+const SAFETY_SLOGANS = [
+    "안전은 구호가 아니라 실천입니다. 작업 전 TBM 필수!",
+    "나의 안전이 가족의 행복입니다. 보호구 착용 철저!",
+    "정리정돈 잘된 현장, 사고 없는 안전 현장",
+    "서두르지 마세요. 안전보다 중요한 일정은 없습니다.",
+    "위험요인 발견 즉시 작업 중지 및 관리자 보고"
+];
+
 const SafetyCampaignBanner = () => {
-    const slogans = [
-        "안전은 구호가 아니라 실천입니다. 작업 전 TBM 필수!",
-        "나의 안전이 가족의 행복입니다. 보호구 착용 철저!",
-        "정리정돈 잘된 현장, 사고 없는 안전 현장",
-        "서두르지 마세요. 안전보다 중요한 일정은 없습니다.",
-        "위험요인 발견 즉시 작업 중지 및 관리자 보고"
-    ];
     const [index, setIndex] = useState(0);
 
     useEffect(() => {
         const timer = setInterval(() => {
-            setIndex((prev) => (prev + 1) % slogans.length);
+            setIndex((prev) => (prev + 1) % SAFETY_SLOGANS.length);
         }, 5000);
         return () => clearInterval(timer);
     }, []);
 
     return (
         <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-3 shadow-lg shadow-orange-200 text-white flex items-center justify-between overflow-hidden relative mb-6">
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.45) 0.8px, transparent 0.8px)', backgroundSize: '12px 12px' }}></div>
             <div className="flex items-center gap-3 relative z-10 px-2">
                 <div className="bg-white/20 p-2 rounded-full backdrop-blur-sm animate-pulse">
                     <HardHat size={20} className="text-white"/>
@@ -123,12 +125,12 @@ const SafetyCampaignBanner = () => {
                 <div className="flex flex-col">
                     <span className="text-[9px] font-black bg-black/20 px-1.5 py-0.5 rounded w-fit mb-0.5 text-orange-100">SAFETY FIRST</span>
                     <span key={index} className="text-sm font-bold animate-slide-up-fade">
-                        {slogans[index]}
+                        {SAFETY_SLOGANS[index]}
                     </span>
                 </div>
             </div>
             <div className="hidden md:flex relative z-10 gap-1 opacity-80">
-                {slogans.map((_, i) => (
+                {SAFETY_SLOGANS.map((_, i) => (
                     <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === index ? 'bg-white scale-125' : 'bg-white/40'}`}></div>
                 ))}
             </div>
