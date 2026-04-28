@@ -281,48 +281,64 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
           // 3. Capture with html2canvas
           const canvas = await html2canvas(clone, {
-            scale: 2, // 2x Scale for crisp text
+            scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
             useCORS: true,
             logging: false,
             width: 794,
             height: 1123,
             x: 0,
             y: 0,
+            windowWidth: 794,
+            windowHeight: 1123,
             backgroundColor: '#ffffff',
             // Enforce font rendering to fix layout shifts
             onclone: (doc) => {
                const style = doc.createElement('style');
                style.innerHTML = `
-                  * { 
-                     -webkit-font-smoothing: antialiased !important; 
-                     font-family: "Pretendard", "Malgun Gothic", sans-serif !important; 
-                     box-sizing: border-box !important;
-                     letter-spacing: -0.5px !important; /* Tighter tracking for lists */
+                  .report-page, .report-page * {
+                      box-sizing: border-box !important;
+                      -webkit-font-smoothing: antialiased !important;
+                      text-rendering: geometricPrecision !important;
                   }
-                  /* Enforce vertical centering in table-like structures */
-                  td, .col, .row {
-                      border-color: black !important;
+                  .report-page {
+                      width: 794px !important;
+                      height: 1123px !important;
+                      transform: none !important;
+                      margin: 0 !important;
+                      border: 2px solid black !important;
                   }
-                  .badge-cell {
-                      vertical-align: middle !important;
-                      text-align: center !important;
-                      padding: 2px !important;
-                  }
-                  .text-cell {
-                      vertical-align: middle !important;
-                      padding-left: 4px !important;
-                      line-height: 1.3 !important; /* Fixed line height */
-                  }
+                  .row { display: flex !important; width: 100% !important; border-bottom: 1px solid black !important; flex-shrink: 0 !important; }
+                  .row.last { border-bottom: none !important; }
+                  .col { border-right: 1px solid black !important; height: 100% !important; position: relative !important; overflow: hidden !important; flex-shrink: 0 !important; }
+                  .col.last { border-right: none !important; }
+                  .h-header { height: 130px !important; }
+                  .h-info { height: 45px !important; }
+                  .h-body { height: 908px !important; display: flex !important; flex-direction: column !important; }
+                  .h-footer { height: 36px !important; border-top: 1px solid black !important; display: flex !important; align-items: center !important; }
                   .section-header {
+                      height: 30px !important;
                       background-color: #f3f4f6 !important;
+                      border-bottom: 1px solid black !important;
+                      display: flex !important;
+                      align-items: center !important;
+                      justify-content: center !important;
+                      font-size: 11px !important;
+                      font-weight: 800 !important;
+                      color: black !important;
                       -webkit-print-color-adjust: exact !important;
                       print-color-adjust: exact !important;
                   }
-                  img { 
-                      max-width: 100% !important; 
-                      height: auto !important; 
+                  .body-row-images { height: 400px !important; border-bottom: 1px solid black !important; display: flex !important; width: 100% !important; flex-shrink: 0 !important; }
+                  .body-row-text { flex: 1 !important; display: flex !important; width: 100% !important; min-height: 0 !important; }
+                  .text-wrap-fix { white-space: pre-wrap !important; word-break: keep-all !important; line-height: 1.35 !important; }
+                  table { border-collapse: collapse !important; width: 100% !important; table-layout: fixed !important; }
+                  td { vertical-align: middle !important; padding: 2px !important; }
+                  .badge-cell { vertical-align: middle !important; text-align: center !important; padding: 2px !important; }
+                  .text-cell { vertical-align: middle !important; padding-left: 4px !important; line-height: 1.3 !important; }
+                  img {
+                      max-width: 100% !important;
                       object-fit: contain !important;
-                      display: inline-block !important; /* Prevents block-level margins */
+                      image-rendering: -webkit-optimize-contrast !important;
                   }
                `;
                doc.head.appendChild(style);

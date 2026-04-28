@@ -83,9 +83,17 @@
   - 렌더링: "Period Comparison" 비교 지표 5행 카드 + "Snapshot & Export" 패널 추가
 - Phase 4 Cleared (2026-04-28) — 빌드 통과 (`✓ built in 5.26s`)
 
+### ✅ 문서 내보내기 균형감 보정 (PDF/이미지)
+- `components/ReportView.tsx`
+  - html2canvas 캡처 스케일을 디바이스 픽셀 비율 기반으로 조정 (`2~3` 범위)
+  - 캡처 시 `windowWidth/windowHeight`를 A4 기준(`794x1123`)으로 고정
+  - 전역 강제 `letter-spacing`/`img height:auto` 제거로 텍스트·그리드 변형 최소화
+  - 내보내기 전용 레이아웃 강제 CSS(`.row/.col/.h-*`)로 화면/출력 간 비율 일치 강화
+
 ### 🎉 안전데이터 심층연구소 v2 — All Phases Cleared (2026-04-28)
 
 ---
+### ✅ 안전데이터 심층연구소 v2 Phase 3 구현
 - `components/SafetyDataLab.tsx`
   - `CommandOrder` 인터페이스 + `PRIORITY_CONFIG` 상수 추가 (CRITICAL / HIGH / MEDIUM)
   - `CommandOrderCard` 컴포넌트 신규 구현 (담당팀 / 우선순위 / 기한 / 근거 / KPI 카드)
@@ -96,6 +104,7 @@
 - Phase 3 Cleared (2026-04-28) — 빌드 통과
 
 ---
+## 기록 원칙
 - 기능 단위로 묶어서 기록
 - 파일 경로 + 핵심 변경 요약을 함께 기재
 - 배포 영향이 있는 변경은 별도 섹션으로 명시
