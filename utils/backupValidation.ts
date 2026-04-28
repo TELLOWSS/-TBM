@@ -1,6 +1,93 @@
+import { z } from 'zod';
+
 export const MAX_BACKUP_FILE_SIZE = 50 * 1024 * 1024;
 export const MAX_BACKUP_FILE_COUNT = 20;
 export const KNOWN_BACKUP_KEYS = ['version', 'backupDate', 'scope', 'entries', 'assessments', 'teams', 'signatures', 'siteConfig'] as const;
+
+// ============================================
+// Zod Schemas for Runtime Backup Validation
+// ============================================
+
+const RiskAssessmentItemSchema = z.object({
+  risk: z.string().optional(),
+  measure: z.string().optional(),
+}).passthrough();
+
+const SafetyGuidelineSchema = z.object({
+  content: z.string().optional(),
+  level: z.enum(['HIGH', 'GENERAL']).optional(),
+  category: z.string().optional(),
+}).passthrough();
+
+const MonthlyRiskAssessmentSchema = z.object({
+  id: z.string().optional(),
+  month: z.string(),
+  fileName: z.string().optional(),
+  priorities: z.array(SafetyGuidelineSchema).optional(),
+  createdAt: z.number().optional(),
+}).passthrough();
+
+const TBMEntrySchema = z.object({
+  id: z.union([z.string(), z.number()]).optional(),
+  date: z.string(),
+  time: z.string().optional(),
+  teamId: z.string().optional(),
+  teamName: z.string().optional(),
+  leaderName: z.string().optional(),
+  attendeesCount: z.number().optional(),
+  workDescription: z.string().optional(),
+  riskFactors: z.array(RiskAssessmentItemSchema).optional(),
+  safetyFeedback: z.array(z.string()).optional(),
+  tbmPhotoUrl: z.string().optional(),
+  tbmVideoUrl: z.string().optional(),
+  videoAnalysis: z.any().optional(),
+}).passthrough();
+
+const TeamOptionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  category: z.string().optional(),
+}).passthrough();
+
+const SiteConfigSchema = z.object({
+  siteName: z.string().optional(),
+  managerName: z.string().optional(),
+  userApiKey: z.string().nullable().optional(),
+}).passthrough();
+
+const SignaturesSchema = z.object({
+  safety: z.string().nullable().optional(),
+  site: z.string().nullable().optional(),
+}).passthrough();
+
+/** Full typed backup payload schema */
+export const BackupPayloadSchema = z.object({
+  version: z.string().optional(),
+  scope: z.enum(['ALL', 'TBM', 'RISK']).optional(),
+  backupDate: z.string().optional(),
+  entries: z.array(TBMEntrySchema).optional(),
+  assessments: z.array(MonthlyRiskAssessmentSchema).optional(),
+  teams: z.array(TeamOptionSchema).optional(),
+  signatures: SignaturesSchema.optional(),
+  siteConfig: SiteConfigSchema.optional(),
+}).passthrough();
+
+export type BackupPayload = z.infer<typeof BackupPayloadSchema>;
+
+/**
+ * Runtime-safe backup payload validation using Zod.
+ * Returns the validated payload or null if it fails.
+ */
+export const validateBackupPayload = (payload: unknown): BackupPayload | null => {
+  const result = BackupPayloadSchema.safeParse(payload);
+  if (!result.success) {
+    console.warn('[BackupValidation] Zod parse failed:', result.error.issues.slice(0, 5));
+    return null;
+  }
+  return result.data;
+};
+
+// ============================================
 
 const isPlainObject = (value: unknown): value is Record<string, any> => {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -11,6 +98,70 @@ export const hasSupportedBackupShape = (value: unknown) => {
   if (!isPlainObject(value)) return false;
   if (KNOWN_BACKUP_KEYS.some(key => key in value)) return true;
   return Object.values(value).some(Array.isArray);
+};
+
+/** Count TBM entries, risk assessments, and teams in a backup payload */
+export const summarizeBackupPayload = (payload: unknown) => {
+  let totalTbm = 0;
+  let totalRisk = 0;
+  let totalTeam = 0;
+  let hasData = false;
+
+  const countItems = (items: unknown) => Array.isArray(items) ? items.length : 0;
+
+  // Try strict Zod validation first
+  const validated = validateBackupPayload(payload);
+  if (validated) {
+    if (Array.isArray(validated.entries) && validated.entries.length > 0) {
+      totalTbm = validated.entries.length;
+      hasData = true;
+    }
+    if (Array.isArray(validated.assessments) && validated.assessments.length > 0) {
+      totalRisk = validated.assessments.length;
+      hasData = true;
+    }
+    if (Array.isArray(validated.teams) && validated.teams.length > 0) {
+      totalTeam = validated.teams.length;
+      hasData = true;
+    }
+    // If validated but no known keys, try array heuristic
+    if (!hasData && Array.isArray(payload)) {
+      const arr = payload as any[];
+      totalTbm = arr.filter(item => item?.workDescription || item?.date || item?.teamName).length;
+      totalRisk = arr.filter(item => item?.month && item?.priorities).length;
+      hasData = totalTbm > 0 || totalRisk > 0;
+    }
+    return { totalTbm, totalRisk, totalTeam, hasData };
+  }
+
+  // Fallback: heuristic scan for non-strict formats
+  if (Array.isArray(payload)) {
+    const tbmCount = (payload as any[]).filter(item => item?.workDescription || item?.date).length;
+    const riskCount = (payload as any[]).filter(item => item?.month && item?.priorities).length;
+    totalTbm = tbmCount;
+    totalRisk = riskCount;
+    hasData = tbmCount > 0 || riskCount > 0;
+    return { totalTbm, totalRisk, totalTeam, hasData };
+  }
+
+  if (isPlainObject(payload)) {
+    if (payload.entries) { totalTbm += countItems(payload.entries); hasData = true; }
+    if (payload.assessments) { totalRisk += countItems(payload.assessments); hasData = true; }
+    if (payload.teams) { totalTeam += countItems(payload.teams); hasData = true; }
+
+    if (!hasData) {
+      Object.keys(payload).forEach(key => {
+        const arr = payload[key];
+        if (!Array.isArray(arr) || arr.length === 0) return;
+        const first = arr[0];
+        if (first?.workDescription || first?.date) { totalTbm += arr.length; hasData = true; }
+        else if (first?.month && first?.priorities) { totalRisk += arr.length; hasData = true; }
+        else if (first?.category && first?.name) { totalTeam += arr.length; hasData = true; }
+      });
+    }
+  }
+
+  return { totalTbm, totalRisk, totalTeam, hasData };
 };
 
 export const summarizeBackupPayload = (payload: unknown) => {

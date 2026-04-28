@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, UserCheck, Users, Database, Save, Upload, Download, Plus, Trash2, Settings, AlertTriangle, CheckCircle2, FileText, ShieldCheck, Layers, Loader2, FileSearch, Stethoscope, Sparkles, Eraser, Key, Server, Eye, EyeOff, HelpCircle, ExternalLink, Zap, Network, Lock } from 'lucide-react';
 import { TeamOption, TeamCategory, SiteConfig } from '../types';
-import { hasSupportedBackupShape, MAX_BACKUP_FILE_COUNT, MAX_BACKUP_FILE_SIZE, summarizeBackupPayload } from '../utils/backupValidation';
+import { hasSupportedBackupShape, validateBackupPayload, MAX_BACKUP_FILE_COUNT, MAX_BACKUP_FILE_SIZE, summarizeBackupPayload } from '../utils/backupValidation';
 import { validateGeminiConnection } from '../services/geminiService';
 
 interface SettingsModalProps {
@@ -183,7 +183,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             throw new Error("Invalid JSON format");
                         }
 
-                        if (!hasSupportedBackupShape(json)) {
+                        const zodValidated = validateBackupPayload(json);
+                        if (!zodValidated && !hasSupportedBackupShape(json)) {
                             throw new Error("Unsupported backup schema");
                         }
                         

@@ -12,7 +12,7 @@ import { HistoryModal } from './components/HistoryModal';
 import { SettingsModal } from './components/SettingsModal'; 
 import { SystemIdentityModal } from './components/SystemIdentityModal';
 import { TEAMS } from './constants';
-import { hasSupportedBackupShape, MAX_BACKUP_FILE_COUNT, MAX_BACKUP_FILE_SIZE } from './utils/backupValidation';
+import { hasSupportedBackupShape, validateBackupPayload, MAX_BACKUP_FILE_COUNT, MAX_BACKUP_FILE_SIZE } from './utils/backupValidation';
 import { loadStoredSiteConfig, persistSiteConfig } from './utils/siteConfigStorage';
 import { StorageDB } from './utils/storageDB';
 import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig } from './types';
@@ -260,7 +260,9 @@ const App = () => {
 
               try {
                   const json = JSON.parse(text);
-                  if (!hasSupportedBackupShape(json)) {
+                  // [UPDATED] Use Zod validation first, then fall back to shape check
+                  const validated = validateBackupPayload(json);
+                  if (!validated && !hasSupportedBackupShape(json)) {
                       console.warn("Skipping unsupported backup schema:", file.name);
                       continue;
                   }
