@@ -451,7 +451,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   };
 
   // [UPDATED] Save All Items in Queue (Batch Save Logic)
-  const handleSaveAll = () => {
+    const handleSaveAll = async () => {
       if (queue.length === 0) return;
       
       const now = new Date();

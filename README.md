@@ -6,6 +6,12 @@
 
 This contains everything you need to run your app locally.
 
+## Change Management
+
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+- Release Template: [RELEASE_TEMPLATE.md](RELEASE_TEMPLATE.md)
+- Latest updates are tracked by date and grouped by feature/fix.
+
 View your app in AI Studio: https://ai.studio/apps/drive/1kGsf_MnKnV5FU0zmjqTd_c6YSfVNS85n
 
 ## Run Locally
