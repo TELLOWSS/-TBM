@@ -449,7 +449,8 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
               originalLogImageUrl: item.originalLogImageUrl || item.originalLogPreview,
               videoAnalysis: item.videoAnalysis,
               tbmVideoFileName: item.tbmVideoFileName,
-              tbmVideoUrl: item.tbmVideoUrl || item.tbmVideoPreview,
+              // [FIX] blob: URL은 세션 종료 후 무효화되므로 절대 저장하지 않음
+              tbmVideoUrl: item.tbmVideoUrl?.startsWith('blob:') ? null : (item.tbmVideoUrl || null),
               createdAt: item.createdAt || Date.now()
           };
       });

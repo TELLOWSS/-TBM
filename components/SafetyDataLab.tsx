@@ -120,6 +120,9 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     const [aiReport, setAiReport] = useState<string | null>(null);
     const [filter, setFilter] = useState<{ type: 'TEAM' | 'RISK' | 'NONE', value: string }>({ type: 'NONE', value: '' });
     const restoreInputRef = useRef<HTMLInputElement>(null);
+    // [FIX] 컴포넌트 언마운트 후 setState 방지
+    const mountedRef = useRef(true);
+    useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
     // --- 1. Global Analysis (Always calculated from FULL dataset) ---
     // Needed to display the "Menu" (Full list of teams, full list of risks) even when filtered
@@ -223,11 +226,11 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                 Tone: Professional, direct, authoritative.
             `;
             const result = await generateGeneralInsight(prompt);
-            setAiReport(result);
+            if (mountedRef.current) setAiReport(result);
         } catch (e) {
-            alert("AI 분석 실패");
+            if (mountedRef.current) alert("AI 분석 실패");
         } finally {
-            setIsAnalyzing(false);
+            if (mountedRef.current) setIsAnalyzing(false);
         }
     };
 

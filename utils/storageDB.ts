@@ -93,11 +93,16 @@ export const StorageDB = {
     await this.init();
     return new Promise<void>((resolve, reject) => {
       if (!this.db) return reject(new Error("Database not initialized"));
-      const tx = this.db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.delete(key);
-      tx.oncomplete = () => resolve();
-      req.onerror = () => reject(req.error);
+      try {
+          const tx = this.db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.delete(key);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          req.onerror = () => reject(req.error);
+      } catch (e) {
+          reject(e);
+      }
     });
   },
 
@@ -105,11 +110,16 @@ export const StorageDB = {
     await this.init();
     return new Promise<void>((resolve, reject) => {
       if (!this.db) return reject(new Error("Database not initialized"));
-      const tx = this.db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.clear();
-      tx.oncomplete = () => resolve();
-      req.onerror = () => reject(req.error);
+      try {
+          const tx = this.db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.clear();
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          req.onerror = () => reject(req.error);
+      } catch (e) {
+          reject(e);
+      }
     });
   }
 };

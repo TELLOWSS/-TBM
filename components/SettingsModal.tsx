@@ -110,6 +110,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const handleVerifyClick = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
+
+        // [FIX] 파일 크기 및 개수 제한 (App.tsx 복구 제한과 동일 기준)
+        const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+        const MAX_FILE_COUNT = 20;
+        if (files.length > MAX_FILE_COUNT) {
+            alert(`파일은 최대 ${MAX_FILE_COUNT}개까지 검사할 수 있습니다.`);
+            e.target.value = '';
+            return;
+        }
+        for (let i = 0; i < files.length; i++) {
+            if (files[i].size > MAX_FILE_SIZE) {
+                alert(`"${files[i].name}" 파일이 너무 큽니다. (최대 50MB)`);
+                e.target.value = '';
+                return;
+            }
+        }
         
         setIsVerifying(true);
 
