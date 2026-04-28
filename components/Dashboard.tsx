@@ -283,7 +283,6 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
                         {weather.condition === 'Snow' ? <CloudSnow size={28} className="text-sky-400"/> : 
                         weather.condition === 'Rain' ? <CloudRain size={28} className="text-blue-400"/> : 
                         weather.condition === 'Cloud' ? <Cloud size={28} className="text-slate-400"/> :
-                                        aria-label={`${entry.teamName} 기록 삭제`}
                         <Sun size={28} className="text-amber-500"/>}
                     </div>
                 </div>

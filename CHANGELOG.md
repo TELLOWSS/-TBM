@@ -8,6 +8,9 @@
 - `components/TBMForm.tsx`
   - `handleSaveAll` 함수에서 `await onSave(...)` 사용에 맞춰 `async` 선언 추가
   - Vercel 빌드 오류 해결: `"await" can only be used inside an "async" function`
+- `components/Dashboard.tsx`
+  - 기상 아이콘 ternary 구문 내 잘못 삽입된 `aria-label` 문자열 제거
+  - Vercel 빌드 오류 해결: `Expected identifier but found "\`${"`
 
 ### ✅ 확인 다이얼로그 공통화
 - 신규 추가
