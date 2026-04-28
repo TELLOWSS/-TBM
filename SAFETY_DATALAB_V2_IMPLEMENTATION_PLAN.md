@@ -114,6 +114,11 @@
 	- ZIP 파일 누락/중복 없음
 5. 이상 발생 시 `components/ReportView.tsx` 우선 점검 후 `CHANGELOG.md`/트래커 작업 로그 갱신
 
+### 오늘 종료 조건 (Done Definition)
+- 단건/다건 검증 항목 전체 체크 완료
+- 작업 로그 최종 1줄 반영(`Done` 또는 이슈 시 `In Progress`)
+- 이슈 조치가 있었다면 `CHANGELOG.md`에 당일 변경 반영
+
 ## 종료 핸드오프 (내일 즉시 재개용)
 
 ### 현재 확정 상태
