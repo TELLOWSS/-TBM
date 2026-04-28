@@ -52,6 +52,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const [newTeamCategory, setNewTeamCategory] = useState<string>(TeamCategory.FORMWORK);
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const verifyInputRef = useRef<HTMLInputElement>(null);
+    const settingsDialogRef = useRef<HTMLDivElement>(null);
+    const settingsCloseButtonRef = useRef<HTMLButtonElement>(null);
+    const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
     // [FIX] Mounted ref to prevent state update on unmounted component from delayed async handlers
     const mountedRef = useRef(true);
 
@@ -63,6 +66,59 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
         return () => { mountedRef.current = false; };
     }, [isOpen, siteConfig]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
+        window.setTimeout(() => {
+            settingsCloseButtonRef.current?.focus();
+        }, 0);
+
+        const handleEscClose = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+
+        window.addEventListener('keydown', handleEscClose);
+        return () => {
+            window.removeEventListener('keydown', handleEscClose);
+            window.setTimeout(() => {
+                previouslyFocusedElementRef.current?.focus();
+            }, 0);
+        };
+    }, [isOpen, onClose]);
+
+    const handleSettingsDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key !== 'Tab') return;
+
+        const dialogNode = settingsDialogRef.current;
+        if (!dialogNode) return;
+
+        const focusableElements = dialogNode.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+
+        if (focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+        const activeElement = document.activeElement as HTMLElement | null;
+
+        if (event.shiftKey) {
+            if (activeElement === firstElement || !dialogNode.contains(activeElement)) {
+                event.preventDefault();
+                lastElement.focus();
+            }
+            return;
+        }
+
+        if (activeElement === lastElement) {
+            event.preventDefault();
+            firstElement.focus();
+        }
+    };
 
     const handleSignatureFileChange = (role: 'safety' | 'site') => (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -281,7 +337,7 @@ ${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 �
 
     return createPortal(
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
-            <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div ref={settingsDialogRef} role="dialog" aria-modal="true" aria-labelledby="settings-modal-title" aria-describedby="settings-modal-description" onKeyDown={handleSettingsDialogKeyDown} className="bg-white rounded-[24px] shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
                 
                 {/* Header */}
                 <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
@@ -290,11 +346,11 @@ ${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 �
                             <Settings size={24} />
                         </div>
                         <div>
-                            <h2 className="text-xl font-black text-slate-800">환경 설정 (Settings)</h2>
-                            <p className="text-xs text-slate-500 font-medium">시스템 운영에 필요한 기본 정보를 관리합니다.</p>
+                            <h2 id="settings-modal-title" className="text-xl font-black text-slate-800">환경 설정 (Settings)</h2>
+                            <p id="settings-modal-description" className="text-xs text-slate-500 font-medium">시스템 운영에 필요한 기본 정보를 관리합니다.</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+                    <button ref={settingsCloseButtonRef} onClick={onClose} aria-label="환경 설정 닫기" className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600">
                         <X size={20} />
                     </button>
                 </div>
@@ -531,7 +587,7 @@ ${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 �
                                             onChange={(e) => setNewTeamName(e.target.value)}
                                             placeholder="예: A동 형틀 1팀"
                                             className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-xs font-bold outline-none focus:border-indigo-500"
-                                            onKeyPress={(e) => e.key === 'Enter' && handleAddTeamSubmit()}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddTeamSubmit()}
                                         />
                                     </div>
                                     <div className="flex items-end">
@@ -711,7 +767,7 @@ ${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 �
 
                 {/* Footer */}
                 <div className="p-4 border-t border-slate-100 flex justify-end bg-slate-50">
-                    <button onClick={onClose} className="px-6 py-2 bg-white border border-slate-300 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">
+                    <button onClick={onClose} aria-label="환경 설정 닫기" className="px-6 py-2 bg-white border border-slate-300 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors">
                         닫기
                     </button>
                 </div>

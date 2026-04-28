@@ -174,6 +174,9 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
+    const regularBuilderTriggerRef = useRef<HTMLButtonElement>(null);
+    const regularBuilderCloseButtonRef = useRef<HTMLButtonElement>(null);
+        const regularBuilderDialogRef = useRef<HTMLDivElement>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -181,6 +184,30 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   const [editForm, setEditForm] = useState<{content: string, level: string, category: string}>({
       content: '', level: 'GENERAL', category: '공통'
   });
+
+  useEffect(() => {
+      if (!showRegularBuilder) return;
+
+      const handleEscClose = (event: KeyboardEvent) => {
+          if (event.key === 'Escape') {
+              setShowRegularBuilder(false);
+              window.setTimeout(() => {
+                  regularBuilderTriggerRef.current?.focus();
+              }, 0);
+          }
+      };
+
+      window.addEventListener('keydown', handleEscClose);
+      return () => window.removeEventListener('keydown', handleEscClose);
+  }, [showRegularBuilder]);
+
+  useEffect(() => {
+      if (showRegularBuilder) {
+          window.setTimeout(() => {
+              regularBuilderCloseButtonRef.current?.focus();
+          }, 0);
+      }
+  }, [showRegularBuilder]);
 
   const displayPriorities = useMemo(() => {
     if (!activeAssessment) return [];
@@ -265,6 +292,43 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       setRegularStep('SELECT');
   };
 
+  const handleCloseRegularBuilder = () => {
+      setShowRegularBuilder(false);
+      window.setTimeout(() => {
+          regularBuilderTriggerRef.current?.focus();
+      }, 0);
+  };
+
+  const handleRegularDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Tab') return;
+
+      const dialogNode = regularBuilderDialogRef.current;
+      if (!dialogNode) return;
+
+      const focusableElements = dialogNode.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+
+      if (focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement as HTMLElement | null;
+
+      if (event.shiftKey) {
+          if (activeElement === firstElement || !dialogNode.contains(activeElement)) {
+              event.preventDefault();
+              lastElement.focus();
+          }
+          return;
+      }
+
+      if (activeElement === lastElement) {
+          event.preventDefault();
+          firstElement.focus();
+      }
+  };
+
   const handleAnalyzeRegular = () => {
       const baseAssessment = assessments.find(a => a.id === baseAssessmentId);
       const targetAssessments = monthlyAssessments.filter(a => a.month.startsWith(regularTargetYear));
@@ -346,7 +410,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
       onSave([newAssessment, ...assessments]);
       setSelectedMonthId(newAssessment.id);
-      setShowRegularBuilder(false);
+      handleCloseRegularBuilder();
       setRegularStep('SELECT');
       alert(`✅ ${title}가 생성되었습니다.\n\n[법적 사항 충족]\n- 최초 평가 반영: ${aggregatedRisks.filter(r=>r.source==='INITIAL').length}건\n- 근로자 참여(빈도분석): ${aggregatedRisks.filter(r=>r.source==='ADDED').length}건 반영`);
   };
@@ -639,7 +703,11 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
        {/* Sidebar */}
        <div className="w-64 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
           <button 
+                 ref={regularBuilderTriggerRef}
              onClick={handleOpenRegularBuilder}
+                 aria-label="정기 위험성평가 수립 마법사 열기"
+                 aria-haspopup="dialog"
+                 aria-expanded={showRegularBuilder}
              className="w-full bg-indigo-600 text-white p-4 rounded-2xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex flex-col items-center gap-2 group border border-indigo-500"
           >
              <div className="p-2 bg-indigo-500 rounded-lg group-hover:scale-110 transition-transform">
@@ -866,12 +934,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                  type="text" 
                                  value={manualInput}
                                  onChange={(e) => setManualInput(e.target.value)}
-                                 onKeyPress={(e) => e.key === 'Enter' && addManualPriority()}
+                                            onKeyDown={(e) => e.key === 'Enter' && addManualPriority()}
                                  placeholder="내용 입력..."
                                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                               />
                            </div>
-                           <button onClick={addManualPriority} className="w-full bg-slate-800 text-white py-2 rounded-lg text-xs font-bold hover:bg-slate-700">추가하기</button>
+                           <button onClick={addManualPriority} aria-label="수동 입력 위험요소 추가하기" className="w-full bg-slate-800 text-white py-2 rounded-lg text-xs font-bold hover:bg-slate-700">추가하기</button>
                          </div>
                       </div>
 
@@ -885,7 +953,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                               {candidates.map((item, idx) => (
                                  <div key={idx} className="bg-slate-50 p-2 rounded-lg border border-slate-100 flex justify-between items-center group">
                                     <span className="text-xs text-slate-600 truncate flex-1">{item.content}</span>
-                                    <button onClick={() => addToFinal(item)} className="text-blue-500 hover:text-blue-700"><Plus size={16}/></button>
+                                    <button onClick={() => addToFinal(item)} aria-label={`${item.content} 항목 다시 추가`} className="text-blue-500 hover:text-blue-700"><Plus size={16}/></button>
                                  </div>
                               ))}
                            </div>
@@ -1004,7 +1072,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                             <p className="text-sm font-bold text-slate-800 leading-snug">{item.content}</p>
                                          </div>
 
-                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                                                             <button onClick={() => startEditing(originalIndex, item)} aria-label={`${item.content} 항목 수정`} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="수정">
                                                 <Edit2 size={16}/>
                                              </button>
@@ -1055,7 +1123,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
        {/* Regular Assessment Modal */}
        {showRegularBuilder && (
            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-fade-in">
-               <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+               <div ref={regularBuilderDialogRef} role="dialog" aria-modal="true" aria-labelledby="regular-assessment-dialog-title" aria-describedby="regular-assessment-dialog-desc" onKeyDown={handleRegularDialogKeyDown} className="bg-white rounded-[24px] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
                    <div className="bg-indigo-900 text-white p-6 shrink-0 relative overflow-hidden">
                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-900 to-indigo-800"></div>
                        <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
@@ -1065,10 +1133,10 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                    <Scale size={18} />
                                    <span className="text-xs font-bold uppercase tracking-wider">Legal Compliance Module (2026)</span>
                                </div>
-                               <h2 className="text-2xl font-black">정기 위험성평가 수립 마법사</h2>
-                               <p className="text-sm text-indigo-200 mt-1 opacity-80">최초평가(전체) + 월간평가(추가분) = 차기 정기평가(통합)</p>
+                               <h2 id="regular-assessment-dialog-title" className="text-2xl font-black">정기 위험성평가 수립 마법사</h2>
+                               <p id="regular-assessment-dialog-desc" className="text-sm text-indigo-200 mt-1 opacity-80">최초평가(전체) + 월간평가(추가분) = 차기 정기평가(통합)</p>
                            </div>
-                           <button onClick={() => setShowRegularBuilder(false)} aria-label="정기 위험성평가 수립 마법사 닫기" className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"><X size={20}/></button>
+                           <button ref={regularBuilderCloseButtonRef} onClick={handleCloseRegularBuilder} aria-label="정기 위험성평가 수립 마법사 닫기" className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"><X size={20}/></button>
                        </div>
                    </div>
 
@@ -1088,6 +1156,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                            <select 
                                                value={baseAssessmentId} 
                                                onChange={(e) => setBaseAssessmentId(e.target.value)}
+                                               aria-label="정기평가 기준 기초 데이터 선택"
                                                className="w-full text-sm font-bold border border-slate-300 rounded-xl p-3 appearance-none outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 bg-white"
                                            >
                                                <option value="">선택 안함</option>
@@ -1111,6 +1180,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                            type="number" 
                                            value={regularTargetYear} 
                                            onChange={(e) => setRegularTargetYear(e.target.value)}
+                                           aria-label="정기평가 분석 연도 입력"
                                            className="w-full text-center font-bold text-lg border border-slate-300 rounded-xl py-2.5 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none"
                                        />
                                    </div>

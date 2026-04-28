@@ -22,6 +22,60 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
   const [generatingMode, setGeneratingMode] = useState<'PDF' | 'IMAGE' | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [scale, setScale] = useState(1);
+  const reportDialogRef = useRef<HTMLDivElement>(null);
+  const reportCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+      previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
+      window.setTimeout(() => {
+          reportCloseButtonRef.current?.focus();
+      }, 0);
+
+      const handleEscClose = (event: KeyboardEvent) => {
+          if (event.key === 'Escape') {
+              onClose();
+          }
+      };
+
+      window.addEventListener('keydown', handleEscClose);
+      return () => {
+          window.removeEventListener('keydown', handleEscClose);
+          window.setTimeout(() => {
+              previouslyFocusedElementRef.current?.focus();
+          }, 0);
+      };
+  }, [onClose]);
+
+  const handleReportDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Tab') return;
+
+      const dialogNode = reportDialogRef.current;
+      if (!dialogNode) return;
+
+      const focusableElements = dialogNode.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+
+      if (focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement as HTMLElement | null;
+
+      if (event.shiftKey) {
+          if (activeElement === firstElement || !dialogNode.contains(activeElement)) {
+              event.preventDefault();
+              lastElement.focus();
+          }
+          return;
+      }
+
+      if (activeElement === lastElement) {
+          event.preventDefault();
+          firstElement.focus();
+      }
+  };
 
   // Auto-scale for mobile/tablet screens
   useEffect(() => {
@@ -368,7 +422,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
   };
 
   return createPortal(
-    <div className="fixed inset-0 bg-slate-900/95 z-50 overflow-y-auto flex flex-col items-center report-container-wrapper">
+        <div ref={reportDialogRef} role="dialog" aria-modal="true" aria-labelledby="report-view-title" aria-describedby="report-view-description" onKeyDown={handleReportDialogKeyDown} className="fixed inset-0 bg-slate-900/95 z-50 overflow-y-auto flex flex-col items-center report-container-wrapper">
       <style>{`
         .report-page {
             width: 794px;
@@ -452,8 +506,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       {/* Toolbar */}
       <div className="sticky top-0 z-50 w-full bg-slate-800 text-white p-4 shadow-lg flex justify-between items-center max-w-[794px] rounded-b-xl mb-4 md:mb-8 no-print-ui">
         <div>
-          <h2 className="font-bold text-base md:text-lg">🖨️ 보고서 센터 (인쇄 모드)</h2>
-          <p className="text-[10px] md:text-xs text-slate-400">
+                    <h2 id="report-view-title" className="font-bold text-base md:text-lg">🖨️ 보고서 센터 (인쇄 모드)</h2>
+                    <p id="report-view-description" className="text-[10px] md:text-xs text-slate-400">
             {entries.length}개의 TBM 일지가 준비되었습니다.
           </p>
         </div>
@@ -480,7 +534,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           </button>
 
           <button 
+                        ref={reportCloseButtonRef}
             onClick={onClose}
+                        aria-label="보고서 센터 닫기"
             className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 px-3 md:px-4 py-2 rounded transition-colors text-xs md:text-sm"
           >
             <X size={16} /> 닫기
