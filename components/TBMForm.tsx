@@ -7,7 +7,7 @@ import { compressVideo } from '../utils/videoUtils';
 import { Upload, Camera, FileText, X, Layers, ArrowLeft, Trash2, Film, Save, Plus, UserCheck, BrainCircuit, CheckCircle2, AlertCircle, Loader2, PlayCircle, Zap, Image as ImageIcon, Copy, Sparkles, Maximize, ScanText, ChevronRight, SplitSquareHorizontal, Paperclip, Users, Eye, Mic, Edit3, Sliders, Shield, Award } from 'lucide-react';
 
 interface TBMFormProps {
-  onSave: (data: TBMEntry | TBMEntry[], shouldExit?: boolean) => boolean;
+    onSave: (data: TBMEntry | TBMEntry[], shouldExit?: boolean) => Promise<boolean>;
   onCancel: () => void;
   monthlyGuidelines: SafetyGuideline[];
   initialData?: TBMEntry;
@@ -482,7 +482,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           return;
       }
 
-      if (onSave(validEntries, true)) {
+      if (await onSave(validEntries, true)) {
           // Success handled by parent (usually closing form)
       }
   };

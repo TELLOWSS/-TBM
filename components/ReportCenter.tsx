@@ -4,6 +4,26 @@ import { TBMEntry, TeamOption } from '../types';
 import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity, Database, BrainCircuit, Microscope, Trash2, CheckSquare, Square, XCircle } from 'lucide-react';
 import JSZip from 'jszip';
 
+const sanitizeFileName = (value: string) => value.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_');
+
+const dataUrlToUint8Array = async (dataUrl: string) => {
+    const response = await fetch(dataUrl);
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
+};
+
+const getVideoExtension = (entry: TBMEntry) => {
+    const fromFileName = entry.tbmVideoFileName?.split('.').pop()?.toLowerCase();
+    if (fromFileName && ['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(fromFileName)) return fromFileName;
+
+    const mime = entry.tbmVideoUrl?.match(/^data:video\/([a-zA-Z0-9.+-]+);/)?.[1]?.toLowerCase();
+    if (!mime) return 'webm';
+    if (mime.includes('mp4')) return 'mp4';
+    if (mime.includes('quicktime')) return 'mov';
+    if (mime.includes('x-matroska')) return 'mkv';
+    return mime.replace(/[^a-z0-9]/g, '') || 'webm';
+};
+
 interface ReportCenterProps {
   entries: TBMEntry[];
   onOpenPrintModal: (targetEntries: TBMEntry[]) => void;
@@ -118,7 +138,81 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
       }
   };
 
-  const handleExportDataPackage = async () => { /* Placeholder for ZIP logic if needed */ };
+  const handleExportDataPackage = async () => {
+      const targetEntries = selectedIds.size > 0
+          ? entries.filter(entry => selectedIds.has(entry.id))
+          : filteredEntries;
+
+      if (targetEntries.length === 0) {
+          alert('내보낼 데이터가 없습니다.');
+          return;
+      }
+
+      setIsZipping(true);
+      try {
+          const zip = new JSZip();
+          const exportedAt = new Date().toISOString();
+          const packageEntries = targetEntries.map(({ tbmPhotoUrl, originalLogImageUrl, tbmVideoUrl, ...entry }) => ({
+              ...entry,
+              tbmPhotoUrl: tbmPhotoUrl ? '[PACKAGED_SEPARATELY]' : null,
+              originalLogImageUrl: originalLogImageUrl ? '[PACKAGED_SEPARATELY]' : null,
+              tbmVideoUrl: tbmVideoUrl ? '[PACKAGED_SEPARATELY]' : null,
+          }));
+
+          zip.file('manifest.json', JSON.stringify({
+              exportedAt,
+              count: targetEntries.length,
+              selectedCount: selectedIds.size,
+              filters: {
+                  team: selectedTeam,
+                  date: selectedDate || null,
+              },
+          }, null, 2));
+
+          zip.file('entries.json', JSON.stringify(packageEntries, null, 2));
+          zip.file('signatures.json', JSON.stringify(signatures, null, 2));
+
+          const evidenceFolder = zip.folder('evidence');
+          for (const entry of targetEntries) {
+              const baseName = sanitizeFileName(`${entry.date}_${entry.teamName || entry.teamId}_${entry.id}`);
+
+              if (entry.tbmPhotoUrl?.startsWith('data:')) {
+                  evidenceFolder?.file(`${baseName}_photo.png`, await dataUrlToUint8Array(entry.tbmPhotoUrl));
+              }
+              if (entry.originalLogImageUrl?.startsWith('data:')) {
+                  const ext = entry.originalLogMimeType?.includes('pdf') ? 'pdf' : 'png';
+                  evidenceFolder?.file(`${baseName}_log.${ext}`, await dataUrlToUint8Array(entry.originalLogImageUrl));
+              }
+              if (entry.tbmVideoUrl?.startsWith('data:')) {
+                  const ext = getVideoExtension(entry);
+                  evidenceFolder?.file(`${baseName}_video.${ext}`, await dataUrlToUint8Array(entry.tbmVideoUrl));
+              }
+          }
+
+          if (signatures.safety?.startsWith('data:')) {
+              zip.file('signatures/safety-signature.png', await dataUrlToUint8Array(signatures.safety));
+          }
+          if (signatures.site?.startsWith('data:')) {
+              zip.file('signatures/site-signature.png', await dataUrlToUint8Array(signatures.site));
+          }
+
+          const blob = await zip.generateAsync({ type: 'blob' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const timestamp = exportedAt.replace(/[-:TZ.]/g, '').slice(0, 14);
+          a.href = url;
+          a.download = `TBM_Data_Package_${timestamp}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+      } catch (error) {
+          console.error('Data package export failed:', error);
+          alert('데이터 패키지 생성 중 오류가 발생했습니다.');
+      } finally {
+          setIsZipping(false);
+      }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in pb-24 relative">
@@ -139,7 +233,11 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
            </p>
         </div>
         <div className="flex flex-col md:flex-row gap-2 items-stretch md:items-center">
-           <button onClick={handlePrintClick} className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-700 transition-colors shadow-lg shadow-slate-900/20">
+              <button onClick={handleExportDataPackage} aria-label={selectedIds.size > 0 ? `선택된 ${selectedIds.size}개 항목 데이터 패키지 내보내기` : '현재 목록 데이터 패키지 내보내기'} className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-500 transition-colors shadow-lg shadow-emerald-600/20">
+                  <Download size={18} />
+                  {selectedIds.size > 0 ? `선택 항목 (${selectedIds.size}) 패키지` : '현재 목록 데이터 패키지'}
+              </button>
+              <button onClick={handlePrintClick} aria-label={selectedIds.size > 0 ? `선택된 ${selectedIds.size}개 항목 인쇄 또는 PDF 생성` : '현재 목록 인쇄 또는 PDF 생성'} className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-700 transition-colors shadow-lg shadow-slate-900/20">
               <Printer size={18} /> 
               {selectedIds.size > 0 ? `선택 항목 (${selectedIds.size}) 출력/PDF` : '현재 목록 출력/PDF'}
            </button>
@@ -158,16 +256,16 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="bg-transparent text-sm font-bold text-slate-700 outline-none w-32"
                  />
-                 {selectedDate && <button onClick={() => setSelectedDate('')} className="text-slate-400 hover:text-red-500"><XCircle size={14}/></button>}
+                 {selectedDate && <button onClick={() => setSelectedDate('')} aria-label="날짜 필터 초기화" className="text-slate-400 hover:text-red-500"><XCircle size={14}/></button>}
              </div>
 
              <div className="h-6 w-px bg-slate-200 mx-2"></div>
 
              {/* Team Filter Buttons */}
              <div className="flex gap-2">
-                 <button onClick={() => setSelectedTeam('all')} className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border ${selectedTeam === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>전체</button>
+                      <button onClick={() => setSelectedTeam('all')} aria-pressed={selectedTeam === 'all'} aria-label="전체 팀 필터" className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border ${selectedTeam === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>전체</button>
                  {uniqueTeams.map(team => (
-                    <button key={team.id} onClick={() => setSelectedTeam(team.id)} className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border whitespace-nowrap ${selectedTeam === team.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>{team.name}</button>
+                          <button key={team.id} onClick={() => setSelectedTeam(team.id)} aria-pressed={selectedTeam === team.id} aria-label={`${team.name} 팀 필터`} className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border whitespace-nowrap ${selectedTeam === team.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>{team.name}</button>
                  ))}
              </div>
          </div>
@@ -176,6 +274,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
          <div className="flex items-center gap-3 w-full md:w-auto justify-end">
              <button 
                 onClick={toggleSelectAll} 
+                     aria-pressed={selectedIds.size > 0 && selectedIds.size === filteredEntries.length}
+                     aria-label={selectedIds.size > 0 && selectedIds.size === filteredEntries.length ? '전체 선택 해제' : '현재 목록 전체 선택'}
                 className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-800 px-3 py-2 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors"
              >
                 {selectedIds.size > 0 && selectedIds.size === filteredEntries.length ? <CheckSquare size={16} className="text-indigo-600"/> : <Square size={16}/>}
@@ -189,7 +289,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <Search size={48} className="mb-4 opacity-20"/>
               <p className="font-bold">조건에 맞는 문서가 없습니다.</p>
-              <button onClick={() => { setSelectedDate(''); setSelectedTeam('all'); }} className="mt-4 text-sm text-blue-500 underline">필터 초기화</button>
+              <button onClick={() => { setSelectedDate(''); setSelectedTeam('all'); }} aria-label="날짜 및 팀 필터 초기화" className="mt-4 text-sm text-blue-500 underline">필터 초기화</button>
           </div>
       ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -199,6 +299,16 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
                 <div 
                     key={entry.id} 
                     onClick={() => toggleSelection(entry.id)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleSelection(entry.id);
+                        }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
+                    aria-label={`${entry.teamName} ${entry.date} ${entry.time} 기록 ${isSelected ? '선택됨' : '선택 안됨'}`}
                     className={`bg-white rounded-2xl border p-0 overflow-hidden transition-all duration-300 group cursor-pointer relative ${isSelected ? 'ring-2 ring-indigo-500 border-indigo-500 shadow-md transform scale-[1.01]' : 'border-slate-200 hover:shadow-lg hover:-translate-y-1'}`} 
                     style={{ animation: `slideUpFade 0.5s ease-out forwards ${idx * 0.05}s`, opacity: 0 }}
                 >
@@ -230,7 +340,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
                          <span className="flex items-center gap-1"><AlertCircle size={12}/> {entry.riskFactors?.length || 0}건</span>
                       </div>
                       <div className="flex items-center gap-1">
-                          <button onClick={(e) => { e.stopPropagation(); onOpenPrintModal([entry]); }} className="text-blue-600 hover:bg-blue-50 px-2 py-1 rounded font-bold transition-colors">상세</button>
+                          <button onClick={(e) => { e.stopPropagation(); onOpenPrintModal([entry]); }} aria-label={`${entry.teamName} ${entry.date} 상세 보고서 열기`} className="text-blue-600 hover:bg-blue-50 px-2 py-1 rounded font-bold transition-colors">상세</button>
                       </div>
                    </div>
                 </div>
@@ -240,21 +350,21 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
 
       {/* Floating Bulk Action Bar */}
       {selectedIds.size > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-slide-up">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-slide-up" role="region" aria-label="선택 항목 빠른 작업">
               <span className="font-bold text-sm flex items-center gap-2">
                   <CheckCircle2 size={18} className="text-emerald-400"/>
                   {selectedIds.size}개 선택됨
               </span>
               <div className="h-4 w-px bg-slate-700"></div>
               <div className="flex items-center gap-2">
-                  <button onClick={handlePrintClick} className="flex items-center gap-1.5 hover:text-emerald-400 transition-colors text-xs font-bold">
+                  <button onClick={handlePrintClick} aria-label={`선택된 ${selectedIds.size}개 항목 인쇄`} className="flex items-center gap-1.5 hover:text-emerald-400 transition-colors text-xs font-bold">
                       <Printer size={16}/> 선택 인쇄
                   </button>
-                  <button onClick={handleBulkDeleteClick} className="flex items-center gap-1.5 hover:text-red-400 transition-colors text-xs font-bold ml-4">
+                  <button onClick={handleBulkDeleteClick} aria-label={`선택된 ${selectedIds.size}개 항목 일괄 삭제`} className="flex items-center gap-1.5 hover:text-red-400 transition-colors text-xs font-bold ml-4">
                       <Trash2 size={16}/> 일괄 삭제
                   </button>
               </div>
-              <button onClick={() => setSelectedIds(new Set())} className="ml-2 bg-slate-800 rounded-full p-1 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+              <button onClick={() => setSelectedIds(new Set())} aria-label="선택 해제" className="ml-2 bg-slate-800 rounded-full p-1 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
                   <XCircle size={16}/>
               </button>
           </div>

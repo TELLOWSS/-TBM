@@ -38,13 +38,16 @@ const DailyBarChart = ({
                 {chartData.map((val, i) => (
                     <div key={i} className="flex-1 flex flex-col items-center group relative">
                         {/* Tooltip */}
-                        <div className="absolute -top-8 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-[10px] px-2 py-1 rounded transition-opacity whitespace-nowrap z-20 font-bold shadow-lg pointer-events-none transform -translate-y-1">
+                        <div className="absolute -top-8 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 bg-slate-800 text-white text-[10px] px-2 py-1 rounded transition-opacity whitespace-nowrap z-20 font-bold shadow-lg pointer-events-none transform -translate-y-1">
                             {val > 0 ? `${Math.round(val)}점` : '미실시'}
                             <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
                         </div>
                         
                         {/* Bar */}
                         <div 
+                            tabIndex={0}
+                            role="img"
+                            aria-label={`${labels[i] || `${i + 1}일`} 점수 ${val > 0 ? `${Math.round(val)}점` : '미실시'}`}
                             className={`w-full rounded-t-sm transition-all duration-500 relative ${val > 0 ? '' : 'bg-slate-100'}`}
                             style={{ 
                                 height: val > 0 ? `${(val / maxVal) * 100}%` : '4px',
@@ -83,7 +86,7 @@ const LiveClock = () => {
     const timeStr = time.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     return (
-        <div className="flex flex-col items-end">
+        <div className="flex flex-col items-end" role="status" aria-live="polite" aria-label="현재 한국 표준시 시계">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> KST (한국 표준시)
             </div>
@@ -138,6 +141,31 @@ const SafetyCampaignBanner = () => {
     );
 };
 
+const DEFAULT_SITE_COORDS = { latitude: 37.241, longitude: 127.178 };
+
+const resolveSiteCoordinates = async (siteName: string, signal: AbortSignal) => {
+    const query = encodeURIComponent(siteName.trim());
+    if (!query) return DEFAULT_SITE_COORDS;
+
+    try {
+        const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${query}&count=1&language=ko&format=json`, { signal });
+        if (!response.ok) throw new Error('Geocoding API Error');
+
+        const data = await response.json();
+        const firstResult = data?.results?.[0];
+        if (!firstResult) return DEFAULT_SITE_COORDS;
+
+        return {
+            latitude: firstResult.latitude,
+            longitude: firstResult.longitude,
+        };
+    } catch (error: any) {
+        if (error.name === 'AbortError') throw error;
+        console.warn('Failed to resolve site coordinates:', error);
+        return DEFAULT_SITE_COORDS;
+    }
+};
+
 // --- [Component 2] Site Weather Station ---
 const WeatherStation = ({ siteName }: { siteName: string }) => {
     const [weather, setWeather] = useState({ temp: 0, condition: 'Sun', wind: 0, humidity: 0 });
@@ -156,7 +184,8 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
 
         setIsRefreshing(true);
         try {
-            const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.241&longitude=127.178&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=Asia%2FSeoul', { signal: controller.signal });
+            const coords = await resolveSiteCoordinates(siteName, controller.signal);
+            const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=Asia%2FSeoul`, { signal: controller.signal });
             if (!response.ok) throw new Error("Weather API Error");
             
             const data = await response.json();
@@ -198,7 +227,7 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
                 abortControllerRef.current.abort();
             }
         };
-    }, []);
+    }, [siteName]);
     
     const riskLevel = useMemo(() => {
         if (weather.temp <= -10) return { level: 'CRITICAL', msg: '작업 중지 검토 (한파)' };
@@ -215,7 +244,7 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
     };
 
     return (
-        <div className="bg-white rounded-[24px] p-5 border border-slate-200 shadow-sm h-full flex flex-col justify-between relative overflow-hidden group">
+        <div className="bg-white rounded-[24px] p-5 border border-slate-200 shadow-sm h-full flex flex-col justify-between relative overflow-hidden group" aria-label={`${siteName} 실시간 기상 정보`}>
             <div className={`absolute top-0 left-0 right-0 h-1.5 ${riskLevel.level === 'CRITICAL' ? 'bg-red-500' : riskLevel.level === 'WARNING' ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
 
             <div className="flex justify-between items-start z-10">
@@ -243,6 +272,7 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
                     <button 
                         onClick={handleRefresh}
                         disabled={isRefreshing}
+                        aria-label="현장 기상 정보 새로고침"
                         className={`p-2 rounded-full transition-all text-slate-400 hover:text-indigo-600 disabled:opacity-50 flex items-center gap-1 bg-slate-50 hover:bg-slate-100 ${isRefreshing ? 'ring-2 ring-indigo-100' : ''}`}
                         title="현장 기상 실시간 갱신"
                     >
@@ -253,6 +283,7 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
                         {weather.condition === 'Snow' ? <CloudSnow size={28} className="text-sky-400"/> : 
                         weather.condition === 'Rain' ? <CloudRain size={28} className="text-blue-400"/> : 
                         weather.condition === 'Cloud' ? <Cloud size={28} className="text-slate-400"/> :
+                                        aria-label={`${entry.teamName} 기록 삭제`}
                         <Sun size={28} className="text-amber-500"/>}
                     </div>
                 </div>
@@ -289,6 +320,7 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
 const CommandActionCard = ({ onClick }: { onClick: () => void }) => (
     <button 
         onClick={onClick}
+        aria-label="스마트 TBM 지휘 시작"
         className="w-full h-full bg-slate-900 rounded-[24px] p-6 text-left relative overflow-hidden group hover:scale-[1.01] transition-transform duration-300 shadow-xl shadow-slate-200 flex flex-col justify-between border-2 border-slate-900"
     >
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
@@ -322,7 +354,15 @@ const CommandActionCard = ({ onClick }: { onClick: () => void }) => (
     </button>
 );
 
-const KpiCard = ({ icon, label, value, unit, trend, colorClass }: any) => (
+interface KpiCardProps {
+    icon: React.ReactNode;
+    label: string;
+    value: number | string;
+    unit: string;
+    colorClass: string;
+}
+
+const KpiCard = ({ icon, label, value, unit, colorClass }: KpiCardProps) => (
     <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
         <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">{label}</p>
@@ -342,10 +382,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
 
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    
-    const todaysEntries = entries.filter(e => e.date === today);
-    const riskCount = todaysEntries.reduce((acc, curr) => acc + (curr.riskFactors?.length || 0), 0);
-    const workerCount = todaysEntries.reduce((acc, curr) => acc + (curr.attendeesCount || 0), 0);
+
+    const dailySummary = useMemo(() => {
+        const todaysEntries = entries.filter(entry => entry.date === today);
+        const riskCount = todaysEntries.reduce((acc, curr) => acc + (curr.riskFactors?.length || 0), 0);
+        const workerCount = todaysEntries.reduce((acc, curr) => acc + (curr.attendeesCount || 0), 0);
+        const recentEntries = todaysEntries.slice(0, 10);
+
+        return {
+            todaysEntries,
+            riskCount,
+            workerCount,
+            recentEntries,
+        };
+    }, [entries, today]);
     
     const teamActivityData = useMemo(() => {
         // Generate last 7 days keys (D-6 to D-Day)
@@ -476,21 +526,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                         <KpiCard 
                             icon={<Users size={18} className="text-blue-600"/>}
                             label="금일 출력"
-                            value={workerCount}
+                            value={dailySummary.workerCount}
                             unit="명"
                             colorClass="bg-blue-50"
                         />
                         <KpiCard 
                             icon={<ShieldAlert size={18} className="text-red-600"/>}
                             label="위험 요인"
-                            value={riskCount}
+                            value={dailySummary.riskCount}
                             unit="건"
                             colorClass="bg-red-50"
                         />
                     </div>
                     
                     <div className="flex-1 grid grid-cols-1 gap-3">
-                        <button onClick={onNavigateToReports} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all flex items-center justify-between group">
+                        <button onClick={onNavigateToReports} aria-label="문서 보관소로 이동" className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all flex items-center justify-between group">
                             <div className="flex items-center gap-3">
                                 <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                                     <FileText size={20}/>
@@ -503,7 +553,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                             <ArrowRight size={16} className="text-slate-300 group-hover:text-indigo-500"/>
                         </button>
                         
-                        <button onClick={onNavigateToDataLab} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-300 hover:shadow-md transition-all flex items-center justify-between group">
+                        <button onClick={onNavigateToDataLab} aria-label="데이터 연구소로 이동" className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-300 hover:shadow-md transition-all flex items-center justify-between group">
                             <div className="flex items-center gap-3">
                                 <div className="bg-emerald-50 p-2.5 rounded-xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                                     <Microscope size={20}/>
@@ -547,7 +597,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                                                 {/* Main Row (Summary) */}
                                                 <div 
                                                     className="flex items-center p-3 cursor-pointer gap-4"
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    aria-expanded={isExpanded}
+                                                    aria-label={`${team.name} 팀 주간 평가 상세 ${isExpanded ? '접기' : '펼치기'}`}
                                                     onClick={() => setExpandedTeamId(isExpanded ? null : team.name)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            setExpandedTeamId(isExpanded ? null : team.name);
+                                                        }
+                                                    }}
                                                 >
                                                     {/* Sticky Identifier */}
                                                     <div className="flex items-center gap-3 min-w-[140px]">
@@ -632,17 +692,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                         <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
                             <Radio size={16} className="text-red-500 animate-pulse"/> 실시간 활동 (금일)
                         </h3>
-                        <span className="bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold">{todaysEntries.length}건</span>
+                        <span className="bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold">{dailySummary.todaysEntries.length}건</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-                        {todaysEntries.length === 0 ? (
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar" role="status" aria-live="polite" aria-label="금일 실시간 활동 목록">
+                        {dailySummary.todaysEntries.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 p-4 text-center">
                                 <Clock size={24} className="opacity-20"/>
                                 <span className="text-xs font-bold">금일 작성된 일지가 없습니다.</span>
                                 <span className="text-[10px] opacity-70">과거 기록은 '문서 보관소'에서 확인하세요.</span>
                             </div>
                         ) : (
-                            todaysEntries.slice(0, 10).map((entry) => (
+                            dailySummary.recentEntries.map((entry) => (
                                 <div key={entry.id} className="p-3 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:bg-indigo-50/30 transition-all flex items-center gap-3 group relative">
                                     <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
                                         {entry.tbmPhotoUrl ? (
@@ -663,6 +723,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                                             e.stopPropagation();
                                             onDelete(entry.id);
                                         }}
+                                        aria-label={`${entry.teamName} 기록 삭제`}
                                         className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                                         title="기록 삭제"
                                     >

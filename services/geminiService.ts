@@ -57,6 +57,18 @@ const isDevProxyAvailable = () =>
 // [CRITICAL FIX] Lazy Initialization & Error Handling
 let aiInstance: GoogleGenAI | null = null;
 let currentKey: string | null = null;
+type GoogleGenAIConfig = ConstructorParameters<typeof GoogleGenAI>[0] & { baseUrl?: string };
+type AppError = Error & { originalError?: unknown };
+type Participation = TBMAnalysisResult['details']['participation'];
+type VoiceClarity = TBMAnalysisResult['details']['voiceClarity'];
+type PpeStatus = TBMAnalysisResult['details']['ppeStatus'];
+type FocusZone = TBMAnalysisResult['focusAnalysis']['focusZones']['front'];
+
+const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Unknown Error';
+const normalizeParticipation = (value: unknown): Participation => value === 'BAD' || value === 'MODERATE' ? value : 'GOOD';
+const normalizeVoiceClarity = (value: unknown): VoiceClarity => value === 'MUFFLED' || value === 'NONE' ? value : 'CLEAR';
+const normalizePpeStatus = (value: unknown): PpeStatus => value === 'BAD' ? 'BAD' : 'GOOD';
+const normalizeFocusZone = (value: unknown): FocusZone => value === 'LOW' ? 'LOW' : 'HIGH';
 
 const getAiClient = () => {
     // [A] Dev proxy path: no user key needed on localhost
@@ -65,11 +77,12 @@ const getAiClient = () => {
         if (!aiInstance || currentKey !== '__dev_proxy__') {
             if (typeof GoogleGenAI !== 'function') throw new Error('Critical Error: AI SDK not loaded.');
             try {
-                aiInstance = new GoogleGenAI({ apiKey: 'dev-proxy', baseUrl: proxyBase } as any);
+        const proxyConfig: GoogleGenAIConfig = { apiKey: 'dev-proxy', baseUrl: proxyBase };
+        aiInstance = new GoogleGenAI(proxyConfig);
                 currentKey = '__dev_proxy__';
                 console.info('[GeminiService] Dev proxy enabled:', proxyBase);
             } catch (e) {
-                throw new Error(`AI Proxy Init Failed: ${(e as any).message}`);
+        throw new Error(`AI Proxy Init Failed: ${getErrorMessage(e)}`);
             }
         }
         return aiInstance;
@@ -97,7 +110,7 @@ const getAiClient = () => {
         } catch (e) {
             console.error("Failed to initialize GoogleGenAI:", e);
             aiInstance = null;
-            throw new Error(`AI Initialization Failed: ${(e as any).message || 'Unknown Error'}`);
+          throw new Error(`AI Initialization Failed: ${getErrorMessage(e)}`);
         }
     }
     return aiInstance;
@@ -177,8 +190,8 @@ const withRetry = async <T>(fn: () => Promise<T>, retries = 3, baseDelay = 2000)
       
       // Improve Error Message for UI if it's the final attempt
       if (isRateLimit) {
-          const friendlyError = new Error("AI 사용량이 초과되었습니다. (설정에서 개인 API 키를 등록하면 해결됩니다)");
-          (friendlyError as any).originalError = lastError;
+          const friendlyError: AppError = new Error("AI 사용량이 초과되었습니다. (설정에서 개인 API 키를 등록하면 해결됩니다)");
+          friendlyError.originalError = lastError;
           throw friendlyError;
       }
       
@@ -458,18 +471,18 @@ export const evaluateTBMVideo = async (
           rubric: finalRubric,
           leaderCoaching: raw.leaderCoaching || { actionItem: "목소리를 더 크게 내세요.", rationale: "전달력이 부족합니다." },
           details: {
-              participation: (raw.details?.participation || 'GOOD') as any,
-              voiceClarity: (raw.details?.voiceClarity || 'CLEAR') as any,
-              ppeStatus: (raw.details?.ppeStatus || 'GOOD') as any,
+              participation: normalizeParticipation(raw.details?.participation),
+              voiceClarity: normalizeVoiceClarity(raw.details?.voiceClarity),
+              ppeStatus: normalizePpeStatus(raw.details?.ppeStatus),
               interaction: !!raw.details?.interaction
           },
           focusAnalysis: {
               overall: raw.focusAnalysis?.overall ?? 90,
               distractedCount: raw.focusAnalysis?.distractedCount ?? 0,
               focusZones: {
-                  front: (raw.focusAnalysis?.focusZones?.front || 'HIGH') as any,
-                  back: (raw.focusAnalysis?.focusZones?.back || 'HIGH') as any,
-                  side: (raw.focusAnalysis?.focusZones?.side || 'HIGH') as any
+                front: normalizeFocusZone(raw.focusAnalysis?.focusZones?.front),
+                back: normalizeFocusZone(raw.focusAnalysis?.focusZones?.back),
+                side: normalizeFocusZone(raw.focusAnalysis?.focusZones?.side)
               }
           },
           insight: {

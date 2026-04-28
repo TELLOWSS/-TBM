@@ -12,7 +12,7 @@ import { HistoryModal } from './components/HistoryModal';
 import { SettingsModal } from './components/SettingsModal'; 
 import { SystemIdentityModal } from './components/SystemIdentityModal';
 import { TEAMS } from './constants';
-import { hasSupportedBackupShape, validateBackupPayload, MAX_BACKUP_FILE_COUNT, MAX_BACKUP_FILE_SIZE } from './utils/backupValidation';
+import { hasSupportedBackupShape, validateBackupPayload, MAX_BACKUP_FILE_COUNT, MAX_BACKUP_FILE_SIZE, type BackupPayload } from './utils/backupValidation';
 import { loadStoredSiteConfig, persistSiteConfig } from './utils/siteConfigStorage';
 import { StorageDB } from './utils/storageDB';
 import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig } from './types';
@@ -49,6 +49,38 @@ const RestoreOverlay = ({ progress }: { progress: number }) => {
         document.body
     );
 };
+
+type HeapPerformance = Performance & { memory?: { usedJSHeapSize?: number } };
+type RestorePayloadObject = Partial<BackupPayload> & Record<string, unknown>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+const getUsedHeapSize = () => (performance as HeapPerformance).memory?.usedJSHeapSize ?? null;
+const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : '알 수 없는 오류';
+const createLegacyId = () => `LEGACY-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+
+const isRestoreEntry = (value: unknown): value is TBMEntry => {
+    if (!isRecord(value)) return false;
+    return typeof value.date === 'string' || typeof value.id === 'string' || typeof value.teamName === 'string';
+};
+
+const isRestoreAssessment = (value: unknown): value is Partial<MonthlyRiskAssessment> & Record<string, unknown> => {
+    if (!isRecord(value)) return false;
+    return typeof value.month === 'string';
+};
+
+const isRestoreTeam = (value: unknown): value is TeamOption => {
+    if (!isRecord(value)) return false;
+    return typeof value.id === 'string' && typeof value.name === 'string';
+};
+
+const sanitizeAssessment = (assessment: Partial<MonthlyRiskAssessment> & Record<string, unknown>): MonthlyRiskAssessment => ({
+    id: typeof assessment.id === 'string' && assessment.id ? assessment.id : createLegacyId(),
+    type: assessment.type === 'INITIAL' || assessment.type === 'REGULAR' || assessment.type === 'MONTHLY' ? assessment.type : undefined,
+    month: typeof assessment.month === 'string' ? assessment.month : '',
+    fileName: typeof assessment.fileName === 'string' ? assessment.fileName : 'legacy-import',
+    priorities: Array.isArray(assessment.priorities) ? assessment.priorities as SafetyGuideline[] : [],
+    createdAt: typeof assessment.createdAt === 'number' ? assessment.createdAt : Date.now(),
+});
 
 const App = () => {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -188,7 +220,7 @@ const App = () => {
   };
 
   const handleBackupData = (scope: 'ALL' | 'TBM' | 'RISK') => {
-      const backupData: any = {
+      const backupData: BackupPayload = {
           version: '3.1.0',
           backupDate: new Date().toISOString(),
           scope: scope
@@ -245,7 +277,7 @@ const App = () => {
       }
 
       // [C] 메모리 사용량 기준점 로그 (Chrome DevTools Memory API)
-      const memStart = (performance as any).memory?.usedJSHeapSize ?? null;
+      const memStart = getUsedHeapSize();
       if (memStart !== null) {
           console.info(`[Restore] 시작 힙: ${(memStart / 1024 / 1024).toFixed(1)} MB`);
       }
@@ -281,30 +313,26 @@ const App = () => {
                       console.warn("Skipping unsupported backup schema:", file.name);
                       continue;
                   }
+                  const payloadObject: RestorePayloadObject | null = validated ?? (isRecord(json) ? json : null);
                   
                   // Strategy 1: Standard Backup Format (Object with keys)
-                  if (!Array.isArray(json)) {
+                  if (payloadObject) {
                       let fileFound = false;
-                      if (Array.isArray(json.entries)) {
-                          const validEntries = json.entries.filter((e: any) => e && (e.date || e.id));
+                      if (Array.isArray(payloadObject.entries)) {
+                          const validEntries = payloadObject.entries.filter(isRestoreEntry);
                           mergedEntries = [...validEntries, ...mergedEntries]; 
                           totalFound += validEntries.length;
                           fileFound = true;
                       }
-                      if (Array.isArray(json.assessments)) {
-                          const validAss = json.assessments.filter((a: any) => a && a.month);
-                          // [SANITIZE] Ensure ID exists for legacy data
-                          validAss.forEach((a: any) => {
-                              if (!a.id) a.id = `LEGACY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                              if (!Array.isArray(a.priorities)) a.priorities = [];
-                          });
+                      if (Array.isArray(payloadObject.assessments)) {
+                          const validAss = payloadObject.assessments.filter(isRestoreAssessment).map(sanitizeAssessment);
                           mergedAssessments = [...validAss, ...mergedAssessments];
                           totalFound += validAss.length;
                           fileFound = true;
                       }
-                      if (Array.isArray(json.teams)) {
+                      if (Array.isArray(payloadObject.teams)) {
                           const existingIds = new Set(mergedTeams.map(t => t.id));
-                          json.teams.forEach((t: any) => {
+                          payloadObject.teams.filter(isRestoreTeam).forEach((t) => {
                               if (!existingIds.has(t.id)) {
                                   mergedTeams.push(t);
                                   totalFound++;
@@ -312,31 +340,28 @@ const App = () => {
                           });
                           fileFound = true;
                       }
-                      if (json.signatures) {
-                          mergedSignatures = { ...mergedSignatures, ...json.signatures };
+                      if (isRecord(payloadObject.signatures)) {
+                          mergedSignatures = { ...mergedSignatures, ...payloadObject.signatures };
                       }
-                      if (json.siteConfig) {
+                      if (isRecord(payloadObject.siteConfig)) {
                           // [FIX] 복구 파일에 API 키가 없어도 현재 키를 유지 (보안상 백업에서 제외됨)
-                          mergedConfig = { ...mergedConfig, ...json.siteConfig, userApiKey: siteConfig.userApiKey };
+                          mergedConfig = { ...mergedConfig, ...payloadObject.siteConfig, userApiKey: siteConfig.userApiKey };
                       }
                       
                       // Fallback: If no standard keys, search recursively for arrays
                       if (!fileFound) {
-                          Object.keys(json).forEach(key => {
-                              if (Array.isArray(json[key]) && json[key].length > 0) {
-                                  const arr = json[key];
+                          Object.keys(payloadObject).forEach(key => {
+                              const arr = payloadObject[key];
+                              if (Array.isArray(arr) && arr.length > 0) {
                                   const first = arr[0];
-                                  if (first.workDescription || first.teamName) {
-                                      mergedEntries = [...arr, ...mergedEntries];
-                                      totalFound += arr.length;
-                                  } else if (first.month && first.priorities) {
-                                      // [SANITIZE]
-                                      arr.forEach((a: any) => {
-                                          if (!a.id) a.id = `LEGACY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                                          if (!Array.isArray(a.priorities)) a.priorities = [];
-                                      });
-                                      mergedAssessments = [...arr, ...mergedAssessments];
-                                      totalFound += arr.length;
+                                  if (isRestoreEntry(first)) {
+                                      const validEntries = arr.filter(isRestoreEntry);
+                                      mergedEntries = [...validEntries, ...mergedEntries];
+                                      totalFound += validEntries.length;
+                                  } else if (isRestoreAssessment(first)) {
+                                      const validAssessments = arr.filter(isRestoreAssessment).map(sanitizeAssessment);
+                                      mergedAssessments = [...validAssessments, ...mergedAssessments];
+                                      totalFound += validAssessments.length;
                                   }
                               }
                           });
@@ -345,17 +370,14 @@ const App = () => {
                   // Strategy 2: Raw Array (Legacy TBM Array)
                   else if (Array.isArray(json) && json.length > 0) {
                       const first = json[0];
-                      if (first.workDescription || first.teamName) {
-                          mergedEntries = [...json, ...mergedEntries];
-                          totalFound += json.length;
-                      } else if (first.month && first.priorities) {
-                          // [SANITIZE]
-                          json.forEach((a: any) => {
-                              if (!a.id) a.id = `LEGACY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                              if (!Array.isArray(a.priorities)) a.priorities = [];
-                          });
-                          mergedAssessments = [...json, ...mergedAssessments];
-                          totalFound += json.length;
+                      if (isRestoreEntry(first)) {
+                          const validEntries = json.filter(isRestoreEntry);
+                          mergedEntries = [...validEntries, ...mergedEntries];
+                          totalFound += validEntries.length;
+                      } else if (isRestoreAssessment(first)) {
+                          const validAssessments = json.filter(isRestoreAssessment).map(sanitizeAssessment);
+                          mergedAssessments = [...validAssessments, ...mergedAssessments];
+                          totalFound += validAssessments.length;
                       }
                   }
               } catch (e) {
@@ -368,7 +390,7 @@ const App = () => {
               // [C] GC 양보: 이벤트 루프를 비워 브라우저가 메모리를 회수할 시간을 줌
               await new Promise(resolve => setTimeout(resolve, 10));
               // [C] 파일별 힙 사용량 기록
-              const memMid = (performance as any).memory?.usedJSHeapSize ?? null;
+              const memMid = getUsedHeapSize();
               if (memMid !== null) {
                   console.debug(`[Restore] ${file.name} 처리 후 힙: ${(memMid / 1024 / 1024).toFixed(1)} MB`);
               }
@@ -425,7 +447,7 @@ const App = () => {
           }
 
           // [C] 완료 후 힙 증가량 요약
-          const memEnd = (performance as any).memory?.usedJSHeapSize ?? null;
+          const memEnd = getUsedHeapSize();
           if (memStart !== null && memEnd !== null) {
               const delta = ((memEnd - memStart) / 1024 / 1024).toFixed(1);
               const sign = Number(delta) >= 0 ? '+' : '';
@@ -437,10 +459,10 @@ const App = () => {
               setCurrentView('dashboard'); // Navigate to home
           }
 
-      } catch (err: any) {
+      } catch (err) {
           console.error("Critical Restore Error:", err);
           if (mountedRef.current) {
-              alert(`복구 중 치명적 오류 발생: ${err.message}`);
+              alert(`복구 중 치명적 오류 발생: ${getErrorMessage(err)}`);
               setIsRestoring(false);
           }
       }
@@ -541,7 +563,6 @@ const App = () => {
           .sort((a, b) => {
               const monthlyWeightA = a.type === 'MONTHLY' ? 1 : 0;
               const monthlyWeightB = b.type === 'MONTHLY' ? 1 : 0;
-
               if (monthlyWeightA !== monthlyWeightB) {
                   return monthlyWeightB - monthlyWeightA;
               }
@@ -551,7 +572,6 @@ const App = () => {
 
       return latestAssessment?.priorities ?? [];
   }, [assessments]);
-
   return (
     <div className="flex bg-slate-50 min-h-screen font-sans text-slate-900">
       {isRestoring && <RestoreOverlay progress={restoreProgress} />}

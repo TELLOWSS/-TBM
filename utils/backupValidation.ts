@@ -93,8 +93,28 @@ const isPlainObject = (value: unknown): value is Record<string, any> => {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 };
 
+const isLikelyTbmEntry = (value: unknown) => {
+  if (!isPlainObject(value)) return false;
+  return typeof value.date === 'string' || typeof value.workDescription === 'string' || typeof value.teamName === 'string';
+};
+
+const isLikelyRiskAssessment = (value: unknown) => {
+  if (!isPlainObject(value)) return false;
+  return typeof value.month === 'string' && Array.isArray(value.priorities);
+};
+
+const isLikelyTeamOption = (value: unknown) => {
+  if (!isPlainObject(value)) return false;
+  return typeof value.id === 'string' && typeof value.name === 'string';
+};
+
+const isSupportedArrayBackup = (value: unknown[]) => {
+  if (value.length === 0) return false;
+  return value.every(item => isLikelyTbmEntry(item) || isLikelyRiskAssessment(item) || isLikelyTeamOption(item));
+};
+
 export const hasSupportedBackupShape = (value: unknown) => {
-  if (Array.isArray(value)) return true;
+  if (Array.isArray(value)) return isSupportedArrayBackup(value);
   if (!isPlainObject(value)) return false;
   if (KNOWN_BACKUP_KEYS.some(key => key in value)) return true;
   return Object.values(value).some(Array.isArray);

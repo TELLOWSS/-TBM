@@ -177,6 +177,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
   const [searchTerm, setSearchTerm] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+    const [backupStatusMessage, setBackupStatusMessage] = useState('');
   const [editForm, setEditForm] = useState<{content: string, level: string, category: string}>({
       content: '', level: 'GENERAL', category: '공통'
   });
@@ -223,6 +224,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   // --- Handlers (Backup, Export, Regular Logic) ---
   const handleExportBackup = () => {
     if (assessments.length === 0) {
+            setBackupStatusMessage("백업할 위험성평가 데이터가 없습니다.");
       alert("백업할 데이터가 없습니다.");
       return;
     }
@@ -243,11 +245,13 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+        setBackupStatusMessage(`위험성평가 ${assessments.length}건 백업 파일을 생성했습니다.`);
   };
 
   const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
+                setBackupStatusMessage(`복구 파일 ${files.length}개를 불러오는 중입니다...`);
         onRestoreData(files);
         if(backupInputRef.current) backupInputRef.current.value = '';
     }
@@ -539,7 +543,11 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
   const removeFromFinal = (indexToRemove: number) => {
     if (!activeAssessment) return;
-    if (confirm("정말 삭제하시겠습니까?")) {
+        const targetItem = activeAssessment.priorities[indexToRemove];
+        const confirmMessage = targetItem
+            ? `선택한 위험요소를 삭제하시겠습니까?\n\n[${targetItem.category}] ${targetItem.content}`
+            : "정말 삭제하시겠습니까?";
+        if (confirm(confirmMessage)) {
         const newPriorities = activeAssessment.priorities.filter((_, i) => i !== indexToRemove);
         updateActiveAssessment(newPriorities);
     }
@@ -560,8 +568,14 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   // [FIXED] Robust Deletion Handler
   const handleDeleteMonth = () => {
      if (!selectedMonthId) return;
+      const selectedAssessment = assessments.find(a => a.id === selectedMonthId);
+      const targetLabel = selectedAssessment?.type === 'INITIAL'
+          ? `최초 위험성평가 (${selectedAssessment.month})`
+          : selectedAssessment?.type === 'REGULAR'
+          ? `정기 위험성평가 (${selectedAssessment.month})`
+          : `월간 위험성평가 (${selectedAssessment?.month || '미지정'})`;
      
-     if (confirm("정말 이 데이터를 삭제하시겠습니까? (삭제 후 복구 불가)")) {
+      if (confirm(`${targetLabel}를 삭제하시겠습니까?\n\n삭제 후 복구할 수 없습니다.`)) {
         const updated = assessments.filter(a => a.id !== selectedMonthId);
         onSave(updated); // Sync with Parent State & DB
         setSelectedMonthId(''); // Clear selection to force UI update
@@ -643,13 +657,18 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                 <h3 className="font-black text-slate-800 flex items-center gap-2 text-xs">
                    <BookOpen size={14} className="text-amber-500"/> 기준 정보 (Standard)
                 </h3>
-                <button onClick={() => handleUploadClick('INITIAL')} className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors" title="최초 위험성평가 등록">
+                <button onClick={() => handleUploadClick('INITIAL')} aria-label="최초 위험성평가 문서 등록" className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors" title="최초 위험성평가 등록">
                    <Plus size={14}/>
                 </button>
              </div>
              <div className="space-y-2">
                 {initialAssessments.length === 0 ? (
-                    <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 cursor-pointer hover:bg-slate-100" onClick={() => handleUploadClick('INITIAL')}>
+                    <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 cursor-pointer hover:bg-slate-100" onClick={() => handleUploadClick('INITIAL')} onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleUploadClick('INITIAL');
+                        }
+                    }} role="button" tabIndex={0} aria-label="최초 평가 등록 시작">
                         <span className="text-[10px] text-slate-400 font-bold">최초 평가 등록 필요</span>
                     </div>
                 ) : (
@@ -657,6 +676,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                         <button
                             key={ass.id}
                             onClick={() => setSelectedMonthId(ass.id)}
+                            aria-label={`${ass.type === 'INITIAL' ? '최초평가' : '정기평가'} ${ass.fileName} 선택`}
                             className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
                                 selectedMonthId === ass.id 
                                 ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-200' 
@@ -680,7 +700,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                 <h3 className="font-black text-slate-800 flex items-center gap-2 text-xs">
                    <Calendar size={14} className="text-blue-600"/> 운영 정보 (Updates)
                 </h3>
-                <button onClick={() => setNewMonthMode(true)} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
+                     <button onClick={() => setNewMonthMode(true)} aria-label="신규 월간 위험성평가 생성 열기" className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
                    <Plus size={14}/>
                 </button>
              </div>
@@ -695,8 +715,8 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                       className="w-full text-sm font-bold border border-slate-300 rounded-lg p-2 mb-2 outline-none focus:border-blue-500"
                    />
                    <div className="flex gap-2">
-                      <button onClick={handleCreateMonth} className="flex-1 bg-blue-600 text-white text-xs font-bold py-2 rounded-lg hover:bg-blue-700">생성</button>
-                      <button onClick={() => setNewMonthMode(false)} className="flex-1 bg-white border border-slate-300 text-slate-600 text-xs font-bold py-2 rounded-lg hover:bg-slate-50">취소</button>
+                             <button onClick={handleCreateMonth} aria-label={`${targetMonth} 월간 평가 생성`} className="flex-1 bg-blue-600 text-white text-xs font-bold py-2 rounded-lg hover:bg-blue-700">생성</button>
+                             <button onClick={() => setNewMonthMode(false)} aria-label="월간 평가 생성 취소" className="flex-1 bg-white border border-slate-300 text-slate-600 text-xs font-bold py-2 rounded-lg hover:bg-slate-50">취소</button>
                    </div>
                 </div>
              )}
@@ -706,6 +726,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                    <button
                       key={month.id}
                       onClick={() => setSelectedMonthId(month.id)}
+                             aria-label={`${month.month}월 월간 위험성평가 선택`}
                       className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
                          selectedMonthId === month.id 
                          ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200' 
@@ -760,25 +781,32 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                        </div>
                        
                        <div className="flex items-center gap-2">
-                          <button onClick={() => handleUploadClick(activeAssessment.type === 'INITIAL' ? 'INITIAL' : 'MONTHLY')} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
+                          <button onClick={() => handleUploadClick(activeAssessment.type === 'INITIAL' ? 'INITIAL' : 'MONTHLY')} aria-label={activeAssessment.type === 'INITIAL' ? '최초 위험성평가 문서 분석 또는 추가' : `${activeAssessment.month} 위험성평가 문서 분석 또는 추가`} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
                              <FileJson size={18}/>
                              <span>문서 분석/추가</span>
                           </button>
                           <div className="flex flex-col gap-1">
                               <div className="flex gap-1">
-                                  <button onClick={handleExportBackup} className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold" title="데이터 백업 (다운로드)">
+                                  <button onClick={handleExportBackup} aria-label="위험성평가 데이터 백업 다운로드" className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold" title="데이터 백업 (다운로드)">
                                       <Download size={16}/>
                                   </button>
-                                  <button onClick={() => backupInputRef.current?.click()} className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold" title="데이터 복구 (업로드)">
+                                  <button onClick={() => backupInputRef.current?.click()} aria-label="위험성평가 데이터 복구 파일 업로드" className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold" title="데이터 복구 (업로드)">
                                       <Upload size={16}/>
                                   </button>
                               </div>
-                              <button onClick={handleDeleteMonth} className="p-2 bg-white border border-slate-200 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors text-xs font-bold flex justify-center" title="현재 월 삭제">
+                              <button onClick={handleDeleteMonth} aria-label={`현재 선택된 ${activeAssessment.month} 위험성평가 삭제`} className="p-2 bg-white border border-slate-200 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors text-xs font-bold flex justify-center" title="현재 월 삭제">
                                   <Trash2 size={16}/>
                               </button>
                           </div>
                        </div>
                    </div>
+                   {backupStatusMessage && (
+                      <div className="-mt-2">
+                          <p className="text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" aria-live="polite">
+                              {backupStatusMessage}
+                          </p>
+                      </div>
+                   )}
 
                    {stats && (
                        <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
@@ -939,10 +967,10 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                                        />
                                                    </div>
                                                    <div className="flex gap-1">
-                                                       <button onClick={saveEditing} className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1 text-xs font-bold px-3">
+                                                       <button onClick={saveEditing} aria-label="위험요소 수정 저장" className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1 text-xs font-bold px-3">
                                                            <Save size={14}/> 저장
                                                        </button>
-                                                       <button onClick={cancelEditing} className="p-1.5 bg-white border border-slate-300 text-slate-600 rounded hover:bg-slate-50 flex items-center gap-1 text-xs font-bold px-3">
+                                                       <button onClick={cancelEditing} aria-label="위험요소 수정 취소" className="p-1.5 bg-white border border-slate-300 text-slate-600 rounded hover:bg-slate-50 flex items-center gap-1 text-xs font-bold px-3">
                                                            <X size={14}/> 취소
                                                        </button>
                                                    </div>
@@ -977,10 +1005,10 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                          </div>
 
                                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                             <button onClick={() => startEditing(originalIndex, item)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="수정">
+                                                            <button onClick={() => startEditing(originalIndex, item)} aria-label={`${item.content} 항목 수정`} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="수정">
                                                 <Edit2 size={16}/>
                                              </button>
-                                             <button onClick={() => removeFromFinal(originalIndex)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="삭제">
+                                                            <button onClick={() => removeFromFinal(originalIndex)} aria-label={`${item.content} 항목 삭제`} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="삭제">
                                                 <Trash2 size={16}/>
                                              </button>
                                          </div>
@@ -1007,12 +1035,14 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                 <div className="flex gap-4">
                    <button 
                       onClick={() => handleUploadClick('INITIAL')} 
+                             aria-label="최초 위험성평가 문서 등록 시작"
                       className="px-6 py-4 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-200 flex items-center gap-3 transition-transform hover:scale-105"
                    >
                       <Plus size={18}/> 최초 위험성평가 등록 (Standard)
                    </button>
                    <button 
                       onClick={() => backupInputRef.current?.click()} 
+                             aria-label="기존 위험성평가 데이터 복구 파일 업로드"
                       className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-50 hover:border-slate-300 flex items-center gap-3 transition-colors"
                    >
                       <Upload size={18}/> 기존 데이터 복구
@@ -1038,7 +1068,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                <h2 className="text-2xl font-black">정기 위험성평가 수립 마법사</h2>
                                <p className="text-sm text-indigo-200 mt-1 opacity-80">최초평가(전체) + 월간평가(추가분) = 차기 정기평가(통합)</p>
                            </div>
-                           <button onClick={() => setShowRegularBuilder(false)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"><X size={20}/></button>
+                           <button onClick={() => setShowRegularBuilder(false)} aria-label="정기 위험성평가 수립 마법사 닫기" className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"><X size={20}/></button>
                        </div>
                    </div>
 
@@ -1098,6 +1128,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
                                <button 
                                    onClick={handleAnalyzeRegular}
+                                   aria-label="기초 데이터와 월간 데이터를 병합 분석 시작"
                                    className="w-full bg-indigo-600 text-white font-bold rounded-xl py-4 hover:bg-indigo-700 shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-3 text-lg"
                                >
                                    <GitMerge size={24} /> 데이터 병합 및 분석 시작
@@ -1162,7 +1193,8 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                             </div>
 
                                             <button 
-                                                onClick={() => handleRemoveAggregatedItem(idx)}
+                                                    onClick={() => handleRemoveAggregatedItem(idx)}
+                                                    aria-label={`${risk.content} 항목 제외`}
                                                 className="p-2 text-slate-300 hover:text-red-500 transition-colors"
                                                 title="목록에서 제외"
                                             >
@@ -1180,12 +1212,14 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                        <div className="p-4 bg-white border-t border-slate-100 flex justify-end gap-3 shrink-0">
                            <button 
                                onClick={() => setRegularStep('SELECT')}
+                               aria-label="정기평가 설정 단계로 돌아가기"
                                className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition-colors"
                            >
                                뒤로가기
                            </button>
                            <button 
                                onClick={handleCreateRegularAssessment}
+                               aria-label="정기 위험성평가 확정 및 저장"
                                className="px-8 py-3 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-colors flex items-center gap-2"
                            >
                                <Save size={18} /> 정기평가 확정 및 저장
