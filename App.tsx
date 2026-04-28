@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, Suspense, useRef } from 'react';
+import React, { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Navigation } from './components/Navigation';
 import { Dashboard } from './components/Dashboard';
@@ -535,7 +535,22 @@ const App = () => {
       setCurrentView('new');
   };
 
-  const monthlyGuidelines: SafetyGuideline[] = assessments.length > 0 ? assessments[0].priorities : [];
+  const monthlyGuidelines: SafetyGuideline[] = useMemo(() => {
+      const latestAssessment = [...assessments]
+          .filter(a => Array.isArray(a.priorities) && a.priorities.length > 0)
+          .sort((a, b) => {
+              const monthlyWeightA = a.type === 'MONTHLY' ? 1 : 0;
+              const monthlyWeightB = b.type === 'MONTHLY' ? 1 : 0;
+
+              if (monthlyWeightA !== monthlyWeightB) {
+                  return monthlyWeightB - monthlyWeightA;
+              }
+
+              return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+          })[0];
+
+      return latestAssessment?.priorities ?? [];
+  }, [assessments]);
 
   return (
     <div className="flex bg-slate-50 min-h-screen font-sans text-slate-900">
@@ -544,6 +559,7 @@ const App = () => {
       <Navigation 
         currentView={currentView} 
         setCurrentView={setCurrentView}
+                managerName={siteConfig.managerName}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onShowHistory={() => setShowHistory(true)}
         onShowIdentity={() => setShowIdentity(true)} 

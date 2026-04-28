@@ -5,6 +5,7 @@ import { LayoutDashboard, PlusCircle, FileText, ShieldCheck, ChevronRight, Setti
 interface NavigationProps {
   currentView: string;
   setCurrentView: (view: string) => void;
+  managerName: string;
   onOpenSettings: () => void;
   onShowHistory: () => void; 
   onShowIdentity: () => void;
@@ -23,7 +24,7 @@ const BrandLogo = () => (
   </div>
 );
 
-export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentView, onOpenSettings, onShowHistory, onShowIdentity, onNewEntryClick }) => {
+export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentView, managerName, onOpenSettings, onShowHistory, onShowIdentity, onNewEntryClick }) => {
   const navItems = [
     { id: 'dashboard', label: '통합 관제 대시보드', sub: 'Control Center', icon: <LayoutDashboard size={20} /> },
     { id: 'new', label: '스마트 TBM 지휘', sub: 'Operation', icon: <PlusCircle size={20} /> },
@@ -148,7 +149,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
                 <div className="absolute -bottom-0.5 -right-0.5 bg-emerald-500 w-3 h-3 rounded-full border-2 border-[#0B1120]"></div>
              </div>
              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-white truncate">박성훈 부장</p>
+               <p className="text-xs font-bold text-white truncate">{managerName || '현장 관리자'}</p>
                 <p className="text-[10px] text-slate-500 truncate">안전관리팀 / Head</p>
              </div>
              <Settings size={16} className="text-slate-600 group-hover:text-slate-300 transition-colors"/>

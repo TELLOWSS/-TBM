@@ -182,6 +182,7 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
             if (error.name === 'AbortError') return;
             console.error("Failed to fetch weather:", error);
             setWeather(prev => ({ ...prev, temp: 20, condition: 'Sun' }));
+            setIsLoaded(true);
         } finally {
             setIsRefreshing(false);
         }

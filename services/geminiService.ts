@@ -15,6 +15,8 @@ export interface MonthlyExtractionResult {
   items: ExtractedPriority[];
 }
 
+const GEMINI_MODEL = 'gemini-2.5-flash';
+
 // [UPDATED] Smart API Key Resolution Strategy
 const getApiKey = () => {
   try {
@@ -118,7 +120,7 @@ export const validateGeminiConnection = async (apiKey: string): Promise<boolean>
         }
 
         const response = await testClient.models.generateContent({
-            model: 'gemini-3-flash-preview',
+      model: GEMINI_MODEL,
             contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
         });
         
@@ -247,7 +249,7 @@ export const generateGeneralInsight = async (prompt: string): Promise<string> =>
     try {
         const ai = getAiClient();
         const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+      model: GEMINI_MODEL,
             contents: [{ role: 'user', parts: [{ text: prompt }] }]
         }));
         return response.text || "분석 결과가 없습니다.";
@@ -286,7 +288,7 @@ export const generateSafetyFeedback = async (
         `;
 
         const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+      model: GEMINI_MODEL,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 responseMimeType: "application/json",
@@ -363,7 +365,7 @@ export const evaluateTBMVideo = async (
     `;
 
     const apiCall = () => ai.models.generateContent({
-      model: "gemini-3-flash-preview", 
+      model: GEMINI_MODEL,
       contents: [{ role: "user", parts: [{ inlineData: { mimeType: cleanMimeType, data: base64Video } }, { text: prompt }] }],
       config: {
         temperature: 0.6, 
@@ -510,7 +512,7 @@ export const evaluateTBMVideo = async (
         `;
 
         const textResponse = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+      model: GEMINI_MODEL,
             contents: [{ role: 'user', parts: [{ text: textPrompt }] }],
             config: { responseMimeType: "application/json" }
         });
@@ -585,7 +587,7 @@ export const extractMonthlyPriorities = async (
       }
     `;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+      model: GEMINI_MODEL,
         contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: base64Data } }, { text: prompt }] }],
         config: {
             temperature: 0.1,
@@ -680,7 +682,7 @@ export const analyzeMasterLog = async (
       `;
   
       const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview", 
+        model: GEMINI_MODEL,
         contents: [{ role: "user", parts: [{ inlineData: { mimeType: mimeType, data: base64Data } }, { text: prompt }] }],
         config: {
           temperature: 0.0,
