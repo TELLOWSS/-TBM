@@ -41,6 +41,11 @@ export const compressVideo = (file: File): Promise<Blob> => {
       if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
       if (source) try { source.disconnect(); } catch(e) {}
       if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+      // [FIX] Stop all media stream tracks to release camera/mic resources
+      if (stream) {
+          try { stream.getTracks().forEach((t) => t.stop()); } catch(e) {}
+          stream = null;
+      }
       video.pause();
       video.removeAttribute('src');
       video.remove();

@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { TBMEntry } from '../types';
 import { Calendar, Users, AlertCircle, FileText, BarChart2, TrendingUp, ShieldAlert, Trash2, Radio, CloudRain, Sun, CloudSnow, MapPin, ArrowRight, ShieldCheck, Zap, Activity, Microscope, Clock, Siren, Megaphone, CheckCircle2, AlertTriangle, Wind, Droplets, HardHat, RefreshCw, CloudLightning, Cloud, Medal, Eye, Mic, Shield, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -141,11 +141,20 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
     const [weather, setWeather] = useState({ temp: 0, condition: 'Sun', wind: 0, humidity: 0 });
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isLoaded, setIsLoaded] = useState(false);
+    // [FIX] AbortController ref to cancel in-flight requests on unmount or new request
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     const fetchRealWeather = async () => {
+        // Cancel any previous in-flight request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
         setIsRefreshing(true);
         try {
-            const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.241&longitude=127.178&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=Asia%2FSeoul');
+            const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.241&longitude=127.178&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=Asia%2FSeoul', { signal: controller.signal });
             if (!response.ok) throw new Error("Weather API Error");
             
             const data = await response.json();
@@ -166,7 +175,9 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
                 condition: condition
             });
             setIsLoaded(true);
-        } catch (error) {
+        } catch (error: any) {
+            // [FIX] Ignore AbortError — it's intentional cancellation, not a real error
+            if (error.name === 'AbortError') return;
             console.error("Failed to fetch weather:", error);
             setWeather(prev => ({ ...prev, temp: 20, condition: 'Sun' }));
         } finally {
@@ -177,7 +188,13 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
     useEffect(() => {
         fetchRealWeather();
         const interval = setInterval(fetchRealWeather, 15 * 60 * 1000);
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            // [FIX] Abort any pending fetch on unmount
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
     }, []);
     
     const riskLevel = useMemo(() => {

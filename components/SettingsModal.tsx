@@ -51,12 +51,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const [newTeamCategory, setNewTeamCategory] = useState<string>(TeamCategory.FORMWORK);
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const verifyInputRef = useRef<HTMLInputElement>(null);
+    // [FIX] Mounted ref to prevent state update on unmounted component from delayed async handlers
+    const mountedRef = useRef(true);
 
     // [FIX] Sync form with props when modal opens
     useEffect(() => {
+        mountedRef.current = true;
         if (isOpen && siteConfig) {
             setConfigForm(siteConfig);
         }
+        return () => { mountedRef.current = false; };
     }, [isOpen, siteConfig]);
 
     if (!isOpen) return null;
@@ -78,7 +82,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         setIsBackingUp(true);
         setTimeout(() => {
             onBackupData(scope);
-            setIsBackingUp(false);
+            if (mountedRef.current) setIsBackingUp(false);
         }, 500); 
     };
 
@@ -98,7 +102,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             setIsOptimizing(true);
             setTimeout(() => {
                 onOptimizeData();
-                setIsOptimizing(false);
+                if (mountedRef.current) setIsOptimizing(false);
             }, 800);
         }
     };
@@ -193,7 +197,7 @@ ${validFiles > 0 ? "데이터가 정상입니다. [데이터 복구] 버튼을 �
                 console.error(err);
                 alert(`❌ 검사 중 시스템 오류: ${err.message}`);
             } finally {
-                setIsVerifying(false);
+                if (mountedRef.current) setIsVerifying(false);
             }
         }, 300);
     };

@@ -303,6 +303,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               document.body.appendChild(link);
               link.click();
               document.body.removeChild(link);
+              // [FIX] Revoke object URL to release memory after download
+              URL.revokeObjectURL(url);
           } else if (singleImageData) {
               const resolvedTeam = teams.find(t => t.id === entries[0].teamId);
               const safeTeamName = resolvedTeam ? resolvedTeam.name : (entries[0].teamName || 'Team');

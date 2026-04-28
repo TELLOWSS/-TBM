@@ -514,6 +514,8 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           const msg = err.message || "문서 분석 중 오류가 발생했습니다.";
           alert(msg.includes('429') || msg.includes('제한') || msg.includes('Quota') ? msg : "문서 분석 중 오류가 발생했습니다.");
         } finally {
+          // [FIX] Always clear interval in finally to prevent orphaned timers
+          clearInterval(timer);
           setIsAnalyzing(false);
           if (fileInputRef.current) fileInputRef.current.value = '';
         }

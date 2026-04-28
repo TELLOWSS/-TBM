@@ -75,6 +75,18 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const photoInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // [FIX] Track blob URL to revoke on change/unmount (memory leak prevention)
+  const videoBlobUrlRef = useRef<string | null>(null);
+
+  // [FIX] Revoke video blob URL on component unmount
+  useEffect(() => {
+      return () => {
+          if (videoBlobUrlRef.current) {
+              URL.revokeObjectURL(videoBlobUrlRef.current);
+              videoBlobUrlRef.current = null;
+          }
+      };
+  }, []);
 
   useEffect(() => {
       if (initialData) {
@@ -202,12 +214,20 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   // 3. TBM Video
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
+          // [FIX] Revoke previous blob URL before creating a new one
+          if (videoBlobUrlRef.current) {
+              URL.revokeObjectURL(videoBlobUrlRef.current);
+              videoBlobUrlRef.current = null;
+          }
           const file = e.target.files[0];
           setTbmVideoFile(file);
           setTbmVideoFileName(file.name);
           const url = URL.createObjectURL(file);
+          videoBlobUrlRef.current = url;
           setTbmVideoPreview(url);
-          updateActiveItem({ tbmVideoUrl: url, tbmVideoFileName: file.name });
+          // [FIX] Do NOT persist blob URL to storage — blob URLs are session-only.
+          // Store only the filename as evidence; the video content is analysed on upload.
+          updateActiveItem({ tbmVideoUrl: null, tbmVideoFileName: file.name });
       }
   };
 

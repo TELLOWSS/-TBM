@@ -194,7 +194,9 @@ const App = () => {
       if (scope === 'ALL') {
           backupData.teams = teams;
           backupData.signatures = signatures;
-          backupData.siteConfig = siteConfig; // Include Config in Backup
+          // [SECURITY FIX] Exclude API key from backup file to prevent credential leakage
+          const { userApiKey: _stripped, ...siteConfigSafe } = siteConfig;
+          backupData.siteConfig = siteConfigSafe;
       }
 
       const suffix = scope === 'ALL' ? 'FULL' : scope === 'TBM' ? 'TBM_LOGS' : 'RISK_DATA';
@@ -212,6 +214,19 @@ const App = () => {
 
   // [FIXED] Soft-Refresh Restore Logic (No Page Reload)
   const handleRestoreData = async (files: FileList) => {
+      // [FIX] Guard against oversized or excessive files to prevent OOM
+      const MAX_FILE_SIZE_MB = 50;
+      const MAX_FILE_COUNT = 20;
+      if (files.length > MAX_FILE_COUNT) {
+          alert(`⚠️ 한 번에 최대 ${MAX_FILE_COUNT}개의 파일만 처리할 수 있습니다.`);
+          return;
+      }
+      for (let i = 0; i < files.length; i++) {
+          if (files[i].size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+              alert(`⚠️ 파일 크기 제한 초과: "${files[i].name}"\n최대 ${MAX_FILE_SIZE_MB}MB 파일만 복구 가능합니다.`);
+              return;
+          }
+      }
       setIsRestoring(true);
       setRestoreProgress(0);
 
