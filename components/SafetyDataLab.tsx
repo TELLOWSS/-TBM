@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { TBMEntry, TeamOption } from '../types';
-import { BarChart2, TrendingUp, BrainCircuit, Activity, Database, Info, Hexagon, Radar, ShieldCheck, Upload, HardDrive, Search, AlertTriangle, Users, Zap, Layers, FileText, Download, Share2, Target, CheckCircle2, XCircle, Filter } from 'lucide-react';
+import { TBMEntry, TeamOption, CommandTask as SmartCommandTask, CommandPriority as SmartCommandPriority, CommandStatus as SmartCommandStatus, CommandStatusHistoryItem } from '../types';
+import { BarChart2, TrendingUp, BrainCircuit, Activity, Database, Info, Hexagon, Radar, ShieldCheck, Upload, HardDrive, Search, AlertTriangle, Users, Zap, Layers, FileText, Download, Share2, Target, CheckCircle2, XCircle, Filter, ClipboardList, Plus, Trash2 } from 'lucide-react';
 import { generateGeneralInsight } from '../services/geminiService';
 
 interface SafetyDataLabProps {
@@ -189,6 +189,7 @@ interface LabSnapshot {
 }
 
 const SNAPSHOT_STORAGE_KEY = 'safetylab_snapshots_v1';
+const COMMAND_TASK_STORAGE_KEY = 'smart_tbm_command_tasks_v1';
 
 // ============================================================
 // [Phase 3] AI 지시 카드 스키마
@@ -248,6 +249,19 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         try { return JSON.parse(localStorage.getItem(SNAPSHOT_STORAGE_KEY) || '[]'); } catch { return []; }
     });
     const [copyDone, setCopyDone] = useState(false);
+    const [commandShareDone, setCommandShareDone] = useState(false);
+    const [commandTasks, setCommandTasks] = useState<SmartCommandTask[]>(() => {
+        try { return JSON.parse(localStorage.getItem(COMMAND_TASK_STORAGE_KEY) || '[]'); } catch { return []; }
+    });
+    const [commandForm, setCommandForm] = useState({
+        title: '',
+        instruction: '',
+        assigneeTeamId: '',
+        priority: 'HIGH' as SmartCommandPriority,
+        dueAt: '',
+        rationale: '',
+        kpi: '',
+    });
     const [filter, setFilter] = useState<LabFilterState>({
         teamId: null,
         riskLabel: null,
@@ -373,6 +387,85 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
 
         return { totalEntries, totalPeople, avgScore, trendData, maxTrendCount, filteredEntries };
     }, [periodEntries, filter.teamId, filter.riskLabel]);
+
+    // --- [Smart TBM Command] 지휘브리핑 스켈레톤 데이터 ---
+    const commandBriefingDraft = useMemo(() => {
+        const teamName = filter.teamId ? (teams.find(t => t.id === filter.teamId)?.name || filter.teamId) : '전 팀';
+        const risks = globalAnalysis.riskSpectrum.slice(0, 3);
+        return risks.map((risk, idx) => ({
+            rank: idx + 1,
+            label: risk.label,
+            count: risk.count,
+            instruction: `${teamName} 대상 ${risk.label} 위험요인 사전 점검 및 즉시 시정조치 실행`,
+            kpi: `${risk.label} 관련 지적건수 0건 유지`,
+        }));
+    }, [globalAnalysis.riskSpectrum, filter.teamId, teams]);
+
+    const visibleCommandTasks = useMemo(() => {
+        let target = [...commandTasks];
+        if (filter.teamId) {
+            target = target.filter(task => task.assigneeTeamId === filter.teamId);
+        }
+        return target.sort((prevTask, nextTask) => (nextTask.updatedAt || 0) - (prevTask.updatedAt || 0));
+    }, [commandTasks, filter.teamId]);
+
+    const commandReport = useMemo(() => {
+        const totalCommands = visibleCommandTasks.length;
+        const completedCommands = visibleCommandTasks.filter(task => task.status === 'DONE').length;
+        const delayedCommands = visibleCommandTasks.filter(task => task.status === 'DELAYED').length;
+        const completionRate = totalCommands > 0 ? Math.round((completedCommands / totalCommands) * 100) : 0;
+        const delayRate = totalCommands > 0 ? Math.round((delayedCommands / totalCommands) * 100) : 0;
+
+        const delayReasonCounts = {
+            MATERIAL: 0,
+            MANPOWER: 0,
+            WEATHER: 0,
+            OTHER: 0,
+        } as Record<'MATERIAL' | 'MANPOWER' | 'WEATHER' | 'OTHER', number>;
+
+        visibleCommandTasks.forEach(task => {
+            if (task.status === 'DELAYED' && task.delayReason) {
+                delayReasonCounts[task.delayReason] += 1;
+            }
+        });
+
+        const topDelayReasons = Object.entries(delayReasonCounts)
+            .sort((left, right) => right[1] - left[1])
+            .filter(([, count]) => count > 0)
+            .map(([reason, count]) => ({ reason, count }));
+
+        const topRisks = globalAnalysis.riskSpectrum.slice(0, 3).map(risk => risk.label);
+
+        const delayedTasks = visibleCommandTasks.filter(task => task.status === 'DELAYED');
+        const delayedWithRiskKeyword = delayedTasks.filter(task =>
+            topRisks.some(risk => task.title.includes(risk) || task.instruction.includes(risk))
+        ).length;
+        const recurrenceRiskScore = delayedTasks.length > 0
+            ? Math.min(100, Math.round((delayedWithRiskKeyword / delayedTasks.length) * 100))
+            : 0;
+        const recurrenceRiskLevel = recurrenceRiskScore >= 70 ? 'HIGH' : recurrenceRiskScore >= 40 ? 'MEDIUM' : 'LOW';
+
+        const totalStatusTransitions = visibleCommandTasks.reduce(
+            (sum, task) => sum + Math.max((task.statusHistory?.length || 0) - 1, 0),
+            0
+        );
+        const statusHistoryValidationPassed = totalStatusTransitions >= 10;
+
+        return {
+            date: new Date().toISOString().slice(0, 10),
+            totalCommands,
+            completedCommands,
+            delayedCommands,
+            completionRate,
+            delayRate,
+            recurrenceRiskScore,
+            recurrenceRiskLevel,
+            totalStatusTransitions,
+            statusHistoryValidationPassed,
+            topDelayReasons,
+            topRisks,
+        };
+    }, [visibleCommandTasks, globalAnalysis.riskSpectrum]);
 
     // --- [Phase 4] 비교 지표: 전주 대비 ---
     const compareAnalysis = useMemo(() => {
@@ -567,6 +660,321 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         });
     };
 
+    const handleCopyCommandReport = () => {
+        const reasonLabelMap: Record<string, string> = {
+            MATERIAL: '자재',
+            MANPOWER: '인원',
+            WEATHER: '기상',
+            OTHER: '기타',
+        };
+
+        const delayReasonText = commandReport.topDelayReasons.length > 0
+            ? commandReport.topDelayReasons.map(item => `${reasonLabelMap[item.reason] || item.reason}:${item.count}`).join(', ')
+            : '없음';
+
+        const scopeTeam = filter.teamId ? (teams.find(team => team.id === filter.teamId)?.name || filter.teamId) : '전체';
+        const text = `[스마트TBM 지휘 리포트] ${new Date().toLocaleDateString('ko-KR')}
+대상팀: ${scopeTeam}
+지시 총계: ${commandReport.totalCommands}건
+완료: ${commandReport.completedCommands}건 (${commandReport.completionRate}%)
+지연: ${commandReport.delayedCommands}건 (${commandReport.delayRate}%)
+    재발위험: ${commandReport.recurrenceRiskScore}% (${commandReport.recurrenceRiskLevel})
+지연 사유: ${delayReasonText}
+주요 위험요인: ${(commandReport.topRisks.length > 0 ? commandReport.topRisks.join(', ') : '없음')}`;
+
+        navigator.clipboard.writeText(text).then(() => {
+            setCommandShareDone(true);
+            announceStatus('지휘 리포트 요약이 클립보드에 복사되었습니다.');
+            setTimeout(() => setCommandShareDone(false), 2000);
+        });
+    };
+
+    const persistCommandTasks = (nextTasks: SmartCommandTask[]) => {
+        setCommandTasks(nextTasks);
+        localStorage.setItem(COMMAND_TASK_STORAGE_KEY, JSON.stringify(nextTasks));
+    };
+
+    const handleCreateCommandTask = () => {
+        const title = commandForm.title.trim();
+        const instruction = commandForm.instruction.trim();
+        const rationale = commandForm.rationale.trim();
+        if (!title || !instruction || !rationale) {
+            announceStatus('지시 제목/내용/근거는 필수입니다.');
+            return;
+        }
+
+        const now = Date.now();
+        const assigneeTeam = teams.find(team => team.id === commandForm.assigneeTeamId);
+        const today = new Date().toISOString().slice(0, 10);
+
+        const newTask: SmartCommandTask = {
+            id: `CMD-${now}`,
+            date: today,
+            title,
+            instruction,
+            assigneeTeamId: commandForm.assigneeTeamId || undefined,
+            assigneeTeamName: assigneeTeam?.name,
+            dueAt: commandForm.dueAt ? new Date(commandForm.dueAt).toISOString() : undefined,
+            priority: commandForm.priority,
+            status: 'NOT_STARTED',
+            rationale,
+            kpi: commandForm.kpi.trim() || undefined,
+            sourceEntryIds: filteredAnalysis.filteredEntries.slice(0, 5).map(entry => entry.id),
+            statusHistory: [
+                { from: 'NOT_STARTED', to: 'NOT_STARTED', changedAt: now, note: '생성' },
+            ],
+            createdAt: now,
+            updatedAt: now,
+        };
+
+        persistCommandTasks([newTask, ...commandTasks]);
+        setCommandForm({
+            title: '',
+            instruction: '',
+            assigneeTeamId: commandForm.assigneeTeamId,
+            priority: commandForm.priority,
+            dueAt: '',
+            rationale: '',
+            kpi: '',
+        });
+        announceStatus('스마트TBM 지시가 생성되었습니다.');
+    };
+
+    const handleCommandStatusChange = (taskId: string, status: SmartCommandStatus) => {
+        const updatedTasks = commandTasks.map(task => {
+            if (task.id !== taskId) return task;
+            if (task.status === status) return task;
+
+            const nextHistory: CommandStatusHistoryItem[] = [
+                ...(task.statusHistory || []),
+                {
+                    from: task.status,
+                    to: status,
+                    changedAt: Date.now(),
+                },
+            ].slice(-50);
+
+            return { ...task, status, statusHistory: nextHistory, updatedAt: Date.now() };
+        });
+        persistCommandTasks(updatedTasks);
+    };
+
+    const handleDeleteCommandTask = (taskId: string) => {
+        const updatedTasks = commandTasks.filter(task => task.id !== taskId);
+        persistCommandTasks(updatedTasks);
+        announceStatus('지시 항목이 삭제되었습니다.');
+    };
+
+    const updateCommandTask = (taskId: string, updater: (task: SmartCommandTask) => SmartCommandTask) => {
+        const updatedTasks = commandTasks.map(task => {
+            if (task.id !== taskId) return task;
+            const nextTask = updater(task);
+            return { ...nextTask, updatedAt: Date.now() };
+        });
+        persistCommandTasks(updatedTasks);
+    };
+
+    const handleCommandEvidenceCommentChange = (taskId: string, value: string) => {
+        updateCommandTask(taskId, task => ({ ...task, evidenceComment: value }));
+    };
+
+    const handleCommandDelayReasonChange = (taskId: string, value: string) => {
+        const delayReason = value ? (value as SmartCommandTask['delayReason']) : undefined;
+        updateCommandTask(taskId, task => ({ ...task, delayReason }));
+    };
+
+    const handleCommandDelayCommentChange = (taskId: string, value: string) => {
+        updateCommandTask(taskId, task => ({ ...task, delayComment: value }));
+    };
+
+    const handleCommandEvidenceFileChange = (taskId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            announceStatus('증빙은 이미지 파일만 첨부할 수 있습니다.');
+            event.target.value = '';
+            return;
+        }
+        if (file.size > 3 * 1024 * 1024) {
+            announceStatus('증빙 이미지는 3MB 이하만 첨부할 수 있습니다.');
+            event.target.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = reader.result;
+            if (typeof result !== 'string') return;
+            updateCommandTask(taskId, task => {
+                const prevImages = task.evidenceImageUrls || [];
+                const nextImages = [result, ...prevImages].slice(0, 3);
+                return { ...task, evidenceImageUrls: nextImages };
+            });
+            announceStatus('증빙 이미지가 첨부되었습니다.');
+        };
+        reader.readAsDataURL(file);
+        event.target.value = '';
+    };
+
+    const handleRemoveEvidenceImage = (taskId: string, targetIndex: number) => {
+        updateCommandTask(taskId, task => {
+            const nextImages = (task.evidenceImageUrls || []).filter((_, index) => index !== targetIndex);
+            return { ...task, evidenceImageUrls: nextImages };
+        });
+        announceStatus('증빙 이미지가 삭제되었습니다.');
+    };
+
+    const resolveDueAtFromDeadline = (deadline: string): string | undefined => {
+        const keyword = (deadline || '').toLowerCase();
+        const now = new Date();
+        const dueDate = new Date(now);
+
+        if (keyword.includes('즉시')) {
+            dueDate.setHours(now.getHours() + 1);
+            return dueDate.toISOString();
+        }
+        if (keyword.includes('24시간')) {
+            dueDate.setHours(now.getHours() + 24);
+            return dueDate.toISOString();
+        }
+        if (keyword.includes('금주')) {
+            const day = now.getDay();
+            const diffToSunday = 7 - day;
+            dueDate.setDate(now.getDate() + diffToSunday);
+            dueDate.setHours(18, 0, 0, 0);
+            return dueDate.toISOString();
+        }
+        if (keyword.includes('1주일')) {
+            dueDate.setDate(now.getDate() + 7);
+            return dueDate.toISOString();
+        }
+        return undefined;
+    };
+
+    const handleImportAiCardsToCommandTasks = () => {
+        if (!aiCards || aiCards.length === 0) {
+            announceStatus('가져올 AI 지시 카드가 없습니다.');
+            return;
+        }
+
+        const now = Date.now();
+        const today = new Date().toISOString().slice(0, 10);
+
+        const importedTasks: SmartCommandTask[] = aiCards.map((order, index) => {
+            const matchedTeam = teams.find(team => team.name.trim() === order.team.trim());
+            const dueAt = resolveDueAtFromDeadline(order.deadline);
+            return {
+                id: `AICMD-${now}-${index + 1}`,
+                date: today,
+                title: `[AI] ${order.action.slice(0, 30)}`,
+                instruction: order.action,
+                assigneeTeamId: matchedTeam?.id,
+                assigneeTeamName: matchedTeam?.name || order.team,
+                dueAt,
+                priority: order.priority,
+                status: 'NOT_STARTED',
+                rationale: order.rationale,
+                kpi: order.kpi,
+                statusHistory: [
+                    { from: 'NOT_STARTED', to: 'NOT_STARTED', changedAt: now + index, note: 'AI 가져오기 생성' },
+                ],
+                sourceEntryIds: filteredAnalysis.filteredEntries.slice(0, 5).map(entry => entry.id),
+                createdAt: now + index,
+                updatedAt: now + index,
+            };
+        });
+
+        const dedupeSet = new Set(commandTasks.map(task => `${task.title}::${task.instruction}`));
+        const dedupedImports = importedTasks.filter(task => !dedupeSet.has(`${task.title}::${task.instruction}`));
+        if (dedupedImports.length === 0) {
+            announceStatus('이미 동일한 지시가 있어 가져오기를 건너뜁니다.');
+            return;
+        }
+
+        persistCommandTasks([...dedupedImports, ...commandTasks]);
+        announceStatus(`AI 지시 ${dedupedImports.length}건을 워크플로우로 가져왔습니다.`);
+    };
+
+    const handleGenerateValidationCommands = () => {
+        const now = Date.now();
+        const today = new Date().toISOString().slice(0, 10);
+        const defaultTeam = teams[0];
+
+        const samples: SmartCommandTask[] = Array.from({ length: 5 }, (_, index) => {
+            const createdAt = now + index;
+            return {
+                id: `VALCMD-${createdAt}`,
+                date: today,
+                title: `[검증용] 지시 ${index + 1}`,
+                instruction: `검증용 상태 전이 테스트 지시 ${index + 1}`,
+                assigneeTeamId: defaultTeam?.id,
+                assigneeTeamName: defaultTeam?.name,
+                priority: index % 2 === 0 ? 'HIGH' : 'MEDIUM',
+                status: 'NOT_STARTED',
+                rationale: '상태 이력 검증 자동 생성',
+                kpi: '이력 누적 확인',
+                statusHistory: [
+                    { from: 'NOT_STARTED', to: 'NOT_STARTED', changedAt: createdAt, note: '검증용 생성' },
+                ],
+                createdAt,
+                updatedAt: createdAt,
+            };
+        });
+
+        persistCommandTasks([...samples, ...commandTasks]);
+        announceStatus('검증용 지시 5건이 생성되었습니다.');
+    };
+
+    const handleRunValidationTransitions = () => {
+        if (commandTasks.length === 0) {
+            announceStatus('먼저 지시를 생성한 후 상태전이 검증을 실행하세요.');
+            return;
+        }
+
+        const statusFlow: SmartCommandStatus[] = ['IN_PROGRESS', 'DONE', 'DELAYED', 'IN_PROGRESS', 'DONE'];
+        let transitionCount = 0;
+
+        const updatedTasks = commandTasks.map((task, taskIndex) => {
+            const nextStatus = statusFlow[taskIndex % statusFlow.length];
+            if (task.status === nextStatus) return task;
+
+            transitionCount += 1;
+            const nextHistory: CommandStatusHistoryItem[] = [
+                ...(task.statusHistory || []),
+                {
+                    from: task.status,
+                    to: nextStatus,
+                    changedAt: Date.now() + taskIndex,
+                    note: '검증용 자동 전이',
+                },
+            ].slice(-50);
+
+            return {
+                ...task,
+                status: nextStatus,
+                statusHistory: nextHistory,
+                updatedAt: Date.now() + taskIndex,
+            };
+        });
+
+        persistCommandTasks(updatedTasks);
+        announceStatus(`검증용 상태전이 ${transitionCount}건이 반영되었습니다.`);
+    };
+
+    const commandStatusStyle: Record<SmartCommandStatus, string> = {
+        NOT_STARTED: 'bg-slate-700 text-slate-200 border-slate-600',
+        IN_PROGRESS: 'bg-blue-600/30 text-blue-300 border-blue-500/50',
+        DONE: 'bg-emerald-600/30 text-emerald-300 border-emerald-500/50',
+        DELAYED: 'bg-red-600/30 text-red-300 border-red-500/50',
+    };
+
+    const commandStatusLabel: Record<SmartCommandStatus, string> = {
+        NOT_STARTED: '미착수',
+        IN_PROGRESS: '진행중',
+        DONE: '완료',
+        DELAYED: '지연',
+    };
+
     const liveStatusMessage = isAnalyzing
         ? 'AI 지시 카드를 생성 중입니다.'
         : analyzeError
@@ -631,9 +1039,9 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                         </div>
                     )}
                 </div>
-                <div className="flex gap-3 items-center">
+                <div className="flex w-full md:w-auto flex-col sm:flex-row gap-3 items-stretch sm:items-center">
                     {(filter.teamId || filter.riskLabel || filter.period !== '30D') && (
-                        <div className="flex items-center gap-2 bg-indigo-900/50 border border-indigo-500 text-indigo-200 px-4 py-2 rounded-xl animate-fade-in">
+                        <div className="flex flex-wrap items-center gap-2 bg-indigo-900/50 border border-indigo-500 text-indigo-200 px-4 py-2 rounded-xl animate-fade-in max-w-full">
                             <Filter size={14} />
                             <span className="text-xs font-bold">필터 적용중</span>
                             {filter.teamId && <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-950 border border-indigo-700">팀: {teams.find(t => t.id === filter.teamId)?.name}</span>}
@@ -645,7 +1053,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     <button 
                         onClick={generateDeepInsight}
                         disabled={isAnalyzing}
-                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] disabled:opacity-50 border border-indigo-500"
+                        className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] disabled:opacity-50 border border-indigo-500 min-h-[44px]"
                     >
                         {isAnalyzing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <BrainCircuit size={18} />}
                         <span>AI 전략 분석</span>
@@ -830,11 +1238,19 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                 <span className="text-xs font-black text-slate-400 uppercase tracking-widest">AI Command Orders</span>
                                 <span className="text-[10px] text-indigo-400 font-mono">({aiCards.length} issued)</span>
                             </div>
-                            <button
-                                onClick={() => { setAiCards(null); setAiRawFallback(null); setAnalyzeError(false); }}
-                                aria-label="AI 지시 카드 닫기"
-                                className="text-slate-600 hover:text-slate-400 transition-colors"
-                            ><XCircle size={16}/></button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleImportAiCardsToCommandTasks}
+                                    className="px-3 py-2 text-[11px] font-bold rounded-lg border border-indigo-500/40 bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 min-h-[40px]"
+                                >
+                                    지시 워크플로우로 가져오기
+                                </button>
+                                <button
+                                    onClick={() => { setAiCards(null); setAiRawFallback(null); setAnalyzeError(false); }}
+                                    aria-label="AI 지시 카드 닫기"
+                                    className="text-slate-600 hover:text-slate-400 transition-colors p-2 border border-slate-700 rounded-lg"
+                                ><XCircle size={16}/></button>
+                            </div>
                         </div>
                         <div className="flex flex-col gap-3">
                             {aiCards.map((order, idx) => <CommandOrderCard key={order.id} order={order} index={idx} />)}
@@ -857,7 +1273,332 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     </div>
                 )}
 
-                {/* 6. [Phase 4] 비교 지표 + 스냅샷 + 내보내기 + 공유 */}
+                {/* 6. [Smart TBM Command] 지휘브리핑 스켈레톤 */}
+                <div className="col-span-12 bg-slate-800/40 rounded-3xl p-6 border border-cyan-500/30 shadow-xl">
+                    <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2">
+                            <ShieldCheck size={16} className="text-cyan-400"/>
+                            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Smart TBM Command Briefing (Draft)</h3>
+                        </div>
+                        <span className="text-[10px] font-bold text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2 py-1 rounded-full">Command Phase 1</span>
+                    </div>
+
+                    {commandBriefingDraft.length === 0 ? (
+                        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/50 p-4 text-xs text-slate-400">
+                            브리핑 데이터가 없습니다. 기간/팀 필터를 조정한 뒤 다시 확인하세요.
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            {commandBriefingDraft.map(item => (
+                                <div key={item.rank} className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 flex flex-col gap-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400">Top {item.rank}</span>
+                                        <span className="text-[10px] text-slate-500 font-mono">{item.count} cases</span>
+                                    </div>
+                                    <p className="text-sm font-bold text-white">{item.label}</p>
+                                    <p className="text-xs text-slate-300 leading-relaxed">{item.instruction}</p>
+                                    <p className="text-[11px] text-emerald-400 font-semibold">KPI: {item.kpi}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="col-span-12 bg-slate-800/40 rounded-3xl p-4 md:p-6 border border-indigo-500/30 shadow-xl">
+                    <div className="flex items-center justify-between mb-4 gap-3">
+                        <div className="flex items-center gap-2">
+                            <ClipboardList size={16} className="text-indigo-400"/>
+                            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Smart TBM Command Workflow (Phase 2)</h3>
+                        </div>
+                        <span className="text-[10px] font-bold text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-2 py-1 rounded-full">{visibleCommandTasks.length} Tasks</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+                        <div className="xl:col-span-2 bg-slate-900/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col gap-3">
+                            <p className="text-xs font-bold text-slate-300">지시 발령</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <button
+                                    onClick={handleGenerateValidationCommands}
+                                    className="px-3 py-2 text-[11px] font-bold rounded-lg border border-cyan-500/40 bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 min-h-[40px]"
+                                >
+                                    검증용 5건 생성
+                                </button>
+                                <button
+                                    onClick={handleRunValidationTransitions}
+                                    className="px-3 py-2 text-[11px] font-bold rounded-lg border border-amber-500/40 bg-amber-600/20 text-amber-300 hover:bg-amber-600/30 min-h-[40px]"
+                                >
+                                    상태전이 자동 검증
+                                </button>
+                            </div>
+                            <input
+                                value={commandForm.title}
+                                onChange={(event) => setCommandForm(prev => ({ ...prev, title: event.target.value }))}
+                                placeholder="지시 제목"
+                                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 min-h-[42px]"
+                            />
+                            <textarea
+                                value={commandForm.instruction}
+                                onChange={(event) => setCommandForm(prev => ({ ...prev, instruction: event.target.value }))}
+                                placeholder="실행 지시 내용"
+                                rows={3}
+                                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100"
+                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <select
+                                    value={commandForm.assigneeTeamId}
+                                    onChange={(event) => setCommandForm(prev => ({ ...prev, assigneeTeamId: event.target.value }))}
+                                    className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 min-h-[42px]"
+                                >
+                                    <option value="">담당팀(선택)</option>
+                                    {teams.map(team => (
+                                        <option key={team.id} value={team.id}>{team.name}</option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={commandForm.priority}
+                                    onChange={(event) => setCommandForm(prev => ({ ...prev, priority: event.target.value as SmartCommandPriority }))}
+                                    className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 min-h-[42px]"
+                                >
+                                    <option value="CRITICAL">우선순위: CRITICAL</option>
+                                    <option value="HIGH">우선순위: HIGH</option>
+                                    <option value="MEDIUM">우선순위: MEDIUM</option>
+                                    <option value="LOW">우선순위: LOW</option>
+                                </select>
+                            </div>
+                            <input
+                                type="datetime-local"
+                                value={commandForm.dueAt}
+                                onChange={(event) => setCommandForm(prev => ({ ...prev, dueAt: event.target.value }))}
+                                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 min-h-[42px]"
+                            />
+                            <input
+                                value={commandForm.rationale}
+                                onChange={(event) => setCommandForm(prev => ({ ...prev, rationale: event.target.value }))}
+                                placeholder="근거 데이터 요약 (필수)"
+                                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 min-h-[42px]"
+                            />
+                            <input
+                                value={commandForm.kpi}
+                                onChange={(event) => setCommandForm(prev => ({ ...prev, kpi: event.target.value }))}
+                                placeholder="KPI (선택)"
+                                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 min-h-[42px]"
+                            />
+                            <button
+                                onClick={handleCreateCommandTask}
+                                className="mt-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 text-white rounded-lg text-sm font-bold min-h-[44px]"
+                            >
+                                <Plus size={16}/> 지시 생성
+                            </button>
+                        </div>
+
+                        <div className="xl:col-span-3 bg-slate-900/40 border border-slate-700/50 rounded-2xl p-4">
+                            {visibleCommandTasks.length === 0 ? (
+                                <div className="h-full min-h-[220px] flex items-center justify-center text-xs text-slate-500">
+                                    생성된 지시가 없습니다. 좌측에서 지시를 발령하세요.
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-3 max-h-[560px] overflow-y-auto pr-1">
+                                    {visibleCommandTasks.map(task => (
+                                        <div key={task.id} className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-3 md:p-4">
+                                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-bold text-white truncate">{task.title}</p>
+                                                    <p className="text-xs text-slate-300 mt-1 break-words">{task.instruction}</p>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleDeleteCommandTask(task.id)}
+                                                    className="self-start p-2 text-slate-500 hover:text-red-400 border border-slate-700 hover:border-red-500/40 rounded-lg"
+                                                    aria-label={`${task.title} 지시 삭제`}
+                                                >
+                                                    <Trash2 size={14}/>
+                                                </button>
+                                            </div>
+                                            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                                                <span className={`px-2 py-1 rounded border ${commandStatusStyle[task.status]}`}>{task.status}</span>
+                                                <span className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-slate-300">{task.priority}</span>
+                                                <span className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-slate-300">{task.assigneeTeamName || '담당팀 미지정'}</span>
+                                                {task.dueAt && <span className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-slate-300">마감: {new Date(task.dueAt).toLocaleString('ko-KR')}</span>}
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                <button onClick={() => handleCommandStatusChange(task.id, 'NOT_STARTED')} className="px-2 py-2 text-[11px] font-bold rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 min-h-[40px]">미착수</button>
+                                                <button onClick={() => handleCommandStatusChange(task.id, 'IN_PROGRESS')} className="px-2 py-2 text-[11px] font-bold rounded-lg border border-blue-500/40 bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 min-h-[40px]">진행중</button>
+                                                <button onClick={() => handleCommandStatusChange(task.id, 'DONE')} className="px-2 py-2 text-[11px] font-bold rounded-lg border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 min-h-[40px]">완료</button>
+                                                <button onClick={() => handleCommandStatusChange(task.id, 'DELAYED')} className="px-2 py-2 text-[11px] font-bold rounded-lg border border-red-500/40 bg-red-600/20 text-red-300 hover:bg-red-600/30 min-h-[40px]">지연</button>
+                                            </div>
+
+                                            <div className="mt-3 rounded-lg border border-slate-700/60 bg-slate-900/40 p-3">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <p className="text-[11px] font-bold text-slate-400">상태 변경 이력</p>
+                                                    <span className="text-[10px] text-slate-500">총 {(task.statusHistory || []).length}건</span>
+                                                </div>
+                                                {(task.statusHistory && task.statusHistory.length > 0) ? (
+                                                    <div className="flex flex-col gap-1.5 max-h-24 overflow-y-auto pr-1">
+                                                        {task.statusHistory.slice().reverse().map((history, index) => (
+                                                            <div key={`${task.id}-history-${history.changedAt}-${index}`} className="text-[10px] text-slate-400 flex items-center gap-2">
+                                                                <span className="text-slate-500 font-mono">{new Date(history.changedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                                                                <span>{commandStatusLabel[history.from]} → {commandStatusLabel[history.to]}</span>
+                                                                {history.note && <span className="text-slate-500">({history.note})</span>}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-[10px] text-slate-500">아직 상태 변경 이력이 없습니다.</p>
+                                                )}
+                                            </div>
+
+                                            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div className="rounded-lg border border-slate-700/60 bg-slate-900/50 p-3">
+                                                    <p className="text-[11px] font-bold text-slate-400 mb-2">이행 증빙</p>
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <label className="px-3 py-2 text-[11px] font-bold rounded-lg border border-cyan-500/40 bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 min-h-[40px] cursor-pointer inline-flex items-center">
+                                                            사진 첨부
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={(event) => handleCommandEvidenceFileChange(task.id, event)}
+                                                            />
+                                                        </label>
+                                                        <span className="text-[10px] text-slate-500">최대 3장 / 각 3MB</span>
+                                                    </div>
+                                                    <textarea
+                                                        value={task.evidenceComment || ''}
+                                                        onChange={(event) => handleCommandEvidenceCommentChange(task.id, event.target.value)}
+                                                        placeholder="이행 코멘트(조치 내용/완료 시간 등)"
+                                                        rows={2}
+                                                        className="mt-2 w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200"
+                                                    />
+                                                    {(task.evidenceImageUrls && task.evidenceImageUrls.length > 0) && (
+                                                        <div className="mt-2 grid grid-cols-3 gap-2">
+                                                            {task.evidenceImageUrls.map((imageUrl, index) => (
+                                                                <div key={`${task.id}-evidence-${index}`} className="relative rounded-lg overflow-hidden border border-slate-700">
+                                                                    <img src={imageUrl} className="w-full h-20 object-cover" />
+                                                                    <button
+                                                                        onClick={() => handleRemoveEvidenceImage(task.id, index)}
+                                                                        className="absolute top-1 right-1 p-1 rounded bg-black/60 text-white"
+                                                                        aria-label="증빙 이미지 삭제"
+                                                                    >
+                                                                        <XCircle size={12}/>
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="rounded-lg border border-slate-700/60 bg-slate-900/50 p-3">
+                                                    <p className="text-[11px] font-bold text-slate-400 mb-2">지연 사유 코드</p>
+                                                    <select
+                                                        value={task.delayReason || ''}
+                                                        onChange={(event) => handleCommandDelayReasonChange(task.id, event.target.value)}
+                                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 min-h-[40px]"
+                                                    >
+                                                        <option value="">선택 안함</option>
+                                                        <option value="MATERIAL">자재</option>
+                                                        <option value="MANPOWER">인원</option>
+                                                        <option value="WEATHER">기상</option>
+                                                        <option value="OTHER">기타</option>
+                                                    </select>
+                                                    <textarea
+                                                        value={task.delayComment || ''}
+                                                        onChange={(event) => handleCommandDelayCommentChange(task.id, event.target.value)}
+                                                        placeholder="지연 상세 사유"
+                                                        rows={2}
+                                                        className="mt-2 w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="col-span-12 bg-slate-800/40 rounded-3xl p-4 md:p-6 border border-violet-500/30 shadow-xl">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-2">
+                            <BarChart2 size={16} className="text-violet-400"/>
+                            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Smart TBM Command Daily Report (Phase 4 Draft)</h3>
+                        </div>
+                        <button
+                            onClick={handleCopyCommandReport}
+                            className={`px-3 py-2 rounded-lg text-[11px] font-bold border min-h-[40px] ${commandShareDone ? 'bg-violet-600 text-white border-violet-500' : 'bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border-violet-500/40'}`}
+                        >
+                            {commandShareDone ? '복사됨!' : '지휘 리포트 복사'}
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-2 md:gap-3">
+                        <div className="rounded-xl border border-slate-700/60 bg-slate-900/60 p-3">
+                            <p className="text-[10px] text-slate-500 font-bold uppercase">총 지시</p>
+                            <p className="text-lg font-black text-white mt-1">{commandReport.totalCommands}<span className="text-xs text-slate-500 ml-1">건</span></p>
+                        </div>
+                        <div className="rounded-xl border border-emerald-500/30 bg-emerald-600/10 p-3">
+                            <p className="text-[10px] text-emerald-300 font-bold uppercase">완료</p>
+                            <p className="text-lg font-black text-emerald-300 mt-1">{commandReport.completedCommands}<span className="text-xs text-emerald-200 ml-1">건</span></p>
+                        </div>
+                        <div className="rounded-xl border border-red-500/30 bg-red-600/10 p-3">
+                            <p className="text-[10px] text-red-300 font-bold uppercase">지연</p>
+                            <p className="text-lg font-black text-red-300 mt-1">{commandReport.delayedCommands}<span className="text-xs text-red-200 ml-1">건</span></p>
+                        </div>
+                        <div className="rounded-xl border border-blue-500/30 bg-blue-600/10 p-3">
+                            <p className="text-[10px] text-blue-300 font-bold uppercase">완료율</p>
+                            <p className="text-lg font-black text-blue-300 mt-1">{commandReport.completionRate}<span className="text-xs text-blue-200 ml-1">%</span></p>
+                        </div>
+                        <div className="rounded-xl border border-amber-500/30 bg-amber-600/10 p-3">
+                            <p className="text-[10px] text-amber-300 font-bold uppercase">지연율</p>
+                            <p className="text-lg font-black text-amber-300 mt-1">{commandReport.delayRate}<span className="text-xs text-amber-200 ml-1">%</span></p>
+                        </div>
+                        <div className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-600/10 p-3">
+                            <p className="text-[10px] text-fuchsia-300 font-bold uppercase">재발위험</p>
+                            <p className="text-lg font-black text-fuchsia-300 mt-1">{commandReport.recurrenceRiskScore}<span className="text-xs text-fuchsia-200 ml-1">%</span></p>
+                        </div>
+                    </div>
+
+                    <div className="mt-3 rounded-xl border border-slate-700/60 bg-slate-900/60 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="text-xs text-slate-300">
+                            상태전이 누적: <span className="font-black text-white">{commandReport.totalStatusTransitions}</span>건
+                        </div>
+                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandReport.statusHistoryValidationPassed ? 'border-emerald-500/40 bg-emerald-600/20 text-emerald-300' : 'border-amber-500/40 bg-amber-600/20 text-amber-300'}`}>
+                            {commandReport.statusHistoryValidationPassed ? 'Phase3 이력검증 기준 충족(10건+)' : 'Phase3 이력검증 진행중(10건 미만)'}
+                        </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
+                            <p className="text-[11px] font-bold text-slate-400 mb-2">지연 사유 Top</p>
+                            {commandReport.topDelayReasons.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {commandReport.topDelayReasons.map(item => (
+                                        <span key={`delay-${item.reason}`} className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-[11px] text-slate-300">
+                                            {item.reason} {item.count}건
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-[11px] text-slate-500">지연 사유 데이터가 없습니다.</p>
+                            )}
+                        </div>
+                        <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
+                            <p className="text-[11px] font-bold text-slate-400 mb-2">주요 위험요인 Top3</p>
+                            {commandReport.topRisks.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {commandReport.topRisks.map((risk, index) => (
+                                        <span key={`risk-${risk}-${index}`} className="px-2 py-1 rounded border border-indigo-500/40 bg-indigo-600/20 text-[11px] text-indigo-300">
+                                            {risk}
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-[11px] text-slate-500">위험요인 데이터가 없습니다.</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* 7. [Phase 4] 비교 지표 + 스냅샷 + 내보내기 + 공유 */}
                 <div className="col-span-12 grid grid-cols-1 md:grid-cols-2 gap-6">
 
                     {/* 6-a. 비교 지표 카드 */}
@@ -956,7 +1697,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     </div>
                 </div>
 
-                {/* 7. Data Management Strip */}
+                {/* 8. Data Management Strip */}
                 <div className="col-span-12 flex flex-col md:flex-row gap-4 bg-slate-800/80 p-6 rounded-3xl border border-slate-700 items-center justify-between">
                     <div className="flex items-center gap-4">
                         <div className="p-3 bg-slate-700 rounded-xl text-slate-400">

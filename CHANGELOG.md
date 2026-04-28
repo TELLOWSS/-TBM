@@ -4,6 +4,70 @@
 
 ## 2026-04-29
 
+### ✅ 스마트TBM지휘 카테고리 계획 추가
+- `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`
+  - 확장 카테고리 `스마트TBM지휘` 신규 정의
+  - Command Phase 1~4(지휘브리핑/지시발령/이행체크/지휘리포트)와 Clear 기준 추가
+  - 즉시 착수 항목(`types.ts`, `SafetyDataLab.tsx`, 트래커 보드) 명시
+- `SAFETY_DATALAB_V2_TRACKER.md`
+  - 스마트TBM지휘 상태 보드 및 운영 체크리스트 추가
+  - 작업 로그에 카테고리 확장 반영
+
+### ✅ 스마트TBM지휘 초기 스키마 구현 착수
+- `types.ts`
+  - 지시 카테고리용 타입 추가: `CommandTask`, `CommandBriefingItem`, `CommandDailyReport`
+  - 상태/우선순위/지연사유 타입(`CommandStatus`, `CommandPriority`, `CommandDelayReason`) 추가
+- `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
+  - 즉시 착수 항목 1번 완료 처리 및 작업 로그 반영
+
+### ✅ 스마트TBM지휘 지휘브리핑 스켈레톤 반영
+- `components/SafetyDataLab.tsx`
+  - `Smart TBM Command Briefing (Draft)` 섹션 추가
+  - 기존 위험 스펙트럼 상위 3건 기반 브리핑 카드(위험명/건수/즉시조치/KPI) 표시
+  - 데이터 없음 fallback 메시지 추가
+- `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
+  - 즉시 착수 항목 2번 완료 처리 및 작업 로그 반영
+
+### ✅ 스마트TBM지휘 Command Phase 2 착수 + 모바일 최적화
+- `components/SafetyDataLab.tsx`
+  - Command Workflow 섹션 추가(지시 생성/상태변경/삭제)
+  - 지시 데이터 localStorage 저장(`smart_tbm_command_tasks_v1`)
+  - 팀 필터와 연동된 지시 목록 표시
+  - 모바일 반응형 개선: 헤더 액션 스택/폼 그리드/목록 레이아웃 최적화, 터치 타겟 높이 보강
+- `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
+  - Command Phase 1 Cleared 반영
+  - Command Phase 2를 In Progress로 상태 업데이트
+
+### ✅ AI 추천 지시-워크플로우 병합
+- `components/SafetyDataLab.tsx`
+  - AI 지시 카드 영역에 `지시 워크플로우로 가져오기` 액션 추가
+  - AI 카드 → Command Task 변환 시 우선순위/담당팀/기한(dueAt) 매핑 적용
+  - 동일 제목+지시내용 기준 중복 방지 후 저장
+- `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
+  - Command Phase 2 Cleared(2026-04-29) 반영
+
+### ✅ 스마트TBM지휘 Command Phase 3 착수
+- `components/SafetyDataLab.tsx`
+  - 지시 카드별 이행 증빙 이미지 첨부/삭제(최대 3장) 및 코멘트 입력 추가
+  - 지연 사유 코드(`MATERIAL/MANPOWER/WEATHER/OTHER`) 및 상세 사유 입력 추가
+  - 입력값을 Command Task 저장소(localStorage)와 동기화
+  - 상태 변경 시 `statusHistory` 누적 저장 및 카드 내 이력 조회 UI 추가
+- `types.ts`
+  - `CommandStatusHistoryItem` 타입 및 `CommandTask.statusHistory` 필드 추가
+- `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
+  - Command Phase 3 진행 상태(In Progress) 반영
+
+### ✅ 스마트TBM지휘 Command Phase 4 초안 반영
+- `components/SafetyDataLab.tsx`
+  - `Smart TBM Command Daily Report (Phase 4 Draft)` 섹션 추가
+  - 지표 카드(총지시/완료/지연/완료율/지연율) 및 지연사유 Top/위험요인 Top3 요약 추가
+  - `지휘 리포트 복사` 액션 추가(클립보드 공유 텍스트)
+  - 재발위험 지표(`recurrenceRiskScore`, `recurrenceRiskLevel`) 및 공유 텍스트 반영
+  - 상태전이 누적 건수(`totalStatusTransitions`) 및 Phase3 기준 충족 배지(10건+) 추가
+  - 검증 지원 액션 추가: `검증용 5건 생성`, `상태전이 자동 검증`
+- `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
+  - Command Phase 4 진행 상태(In Progress) 반영
+
 ### ✅ 전일 기록 확인 검증 및 후속 진행 착수
 - `SAFETY_DATALAB_V2_TRACKER.md`
   - 전일(2026-04-28) 구현 항목의 코드 교차검증 결과를 작업 로그에 추가

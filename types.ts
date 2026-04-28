@@ -153,3 +153,62 @@ export interface WeatherData {
   temp: number;
   condition: string;
 }
+
+// Smart TBM Command Category (v1)
+export type CommandPriority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+export type CommandStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'DONE' | 'DELAYED';
+export type CommandDelayReason = 'MATERIAL' | 'MANPOWER' | 'WEATHER' | 'OTHER';
+
+export interface CommandStatusHistoryItem {
+  from: CommandStatus;
+  to: CommandStatus;
+  changedAt: number;
+  note?: string;
+}
+
+export interface CommandBriefingItem {
+  id: string;
+  date: string; // YYYY-MM-DD
+  riskTitle: string;
+  impact: string;
+  immediateAction: string;
+  teamId?: string;
+  teamName?: string;
+  sourceEntryIds: string[];
+  createdAt: number;
+}
+
+export interface CommandTask {
+  id: string;
+  date: string; // YYYY-MM-DD
+  title: string;
+  instruction: string;
+  assigneeTeamId?: string;
+  assigneeTeamName?: string;
+  assigneeName?: string;
+  dueAt?: string; // ISO datetime
+  priority: CommandPriority;
+  status: CommandStatus;
+  rationale: string;
+  kpi?: string;
+  evidenceImageUrls?: string[];
+  evidenceComment?: string;
+  delayReason?: CommandDelayReason;
+  delayComment?: string;
+  statusHistory?: CommandStatusHistoryItem[];
+  sourceAnalysisSnapshotId?: string;
+  sourceEntryIds?: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CommandDailyReport {
+  date: string; // YYYY-MM-DD
+  totalCommands: number;
+  completedCommands: number;
+  delayedCommands: number;
+  completionRate: number; // 0-100
+  delayRate: number; // 0-100
+  topRisks: string[];
+  summary: string;
+}
