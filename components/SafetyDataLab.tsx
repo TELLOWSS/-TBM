@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TBMEntry, TeamOption } from '../types';
 import { BarChart2, TrendingUp, BrainCircuit, Activity, Database, Info, Hexagon, Radar, ShieldCheck, Upload, HardDrive, Search, AlertTriangle, Users, Zap, Layers, FileText, Download, Share2, Target, CheckCircle2, XCircle, Filter } from 'lucide-react';
 import { generateGeneralInsight } from '../services/geminiService';
@@ -57,6 +57,16 @@ const RiskSpectrumBar: React.FC<RiskSpectrumBarProps> = ({ label, count, max, co
     return (
         <div 
             onClick={onClick}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onClick();
+                }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-pressed={isActive}
+            aria-label={`${label} 위험요인 필터 ${isActive ? '해제' : '적용'}`}
             className={`flex items-center gap-3 mb-3 group cursor-pointer transition-all duration-300 ${isDimmed ? 'opacity-30 blur-[1px]' : 'opacity-100'}`}
         >
             <div className={`w-16 text-right text-xs font-bold transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>{label}</div>
@@ -89,6 +99,16 @@ const TeamHeatmapCell: React.FC<TeamHeatmapCellProps> = ({ name, activity, score
     return (
         <div 
             onClick={onClick}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onClick();
+                }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-pressed={isActive}
+            aria-label={`${name} 팀 필터 ${isActive ? '해제' : '적용'}`}
             className={`rounded-xl border p-3 flex flex-col justify-between transition-all duration-300 relative overflow-hidden group cursor-pointer
                 ${isActive ? 'scale-105 z-10 ring-2 ring-white shadow-2xl' : 'hover:scale-105 hover:z-10'}
                 ${isDimmed ? 'opacity-30 blur-[1px] scale-95' : 'opacity-100'}
@@ -118,11 +138,22 @@ const TeamHeatmapCell: React.FC<TeamHeatmapCellProps> = ({ name, activity, score
 export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, onBackupData, onRestoreData }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiReport, setAiReport] = useState<string | null>(null);
+    const [announceMessage, setAnnounceMessage] = useState('');
     const [filter, setFilter] = useState<{ type: 'TEAM' | 'RISK' | 'NONE', value: string }>({ type: 'NONE', value: '' });
     const restoreInputRef = useRef<HTMLInputElement>(null);
     // [FIX] 컴포넌트 언마운트 후 setState 방지
     const mountedRef = useRef(true);
     useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
+    const announceStatus = (message: string) => {
+        if (!mountedRef.current) return;
+        setAnnounceMessage('');
+        requestAnimationFrame(() => {
+            if (mountedRef.current) {
+                setAnnounceMessage(message);
+            }
+        });
+    };
 
     // --- 1. Global Analysis (Always calculated from FULL dataset) ---
     // Needed to display the "Menu" (Full list of teams, full list of risks) even when filtered
@@ -226,9 +257,12 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                 Tone: Professional, direct, authoritative.
             `;
             const result = await generateGeneralInsight(prompt);
-            if (mountedRef.current) setAiReport(result);
+            if (mountedRef.current) {
+                setAiReport(result);
+                announceStatus('AI 전략 분석 결과가 준비되었습니다.');
+            }
         } catch (e) {
-            if (mountedRef.current) alert("AI 분석 실패");
+            if (mountedRef.current) announceStatus('AI 분석에 실패했습니다. 잠시 후 다시 시도해주세요.');
         } finally {
             if (mountedRef.current) setIsAnalyzing(false);
         }
@@ -246,8 +280,15 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         setAiReport(null);
     };
 
+    const liveStatusMessage = isAnalyzing
+        ? 'AI 전략 분석을 진행 중입니다.'
+        : aiReport
+            ? 'AI 전략 분석 결과가 준비되었습니다.'
+            : (announceMessage || '');
+
     return (
         <div className="bg-[#0F172A] min-h-screen p-4 md:p-8 animate-fade-in pb-24 font-sans text-slate-100 overflow-x-hidden selection:bg-indigo-500 selection:text-white">
+            <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{liveStatusMessage}</p>
             
             {/* Header Section */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 border-b border-slate-800 pb-6">
@@ -270,7 +311,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                             <span className="text-xs font-bold">
                                 {filter.type === 'TEAM' ? teams.find(t=>t.id===filter.value)?.name : filter.value} 필터 적용중
                             </span>
-                            <button onClick={handleResetFilter} className="ml-2 hover:text-white transition-colors"><XCircle size={16}/></button>
+                            <button onClick={handleResetFilter} aria-label="적용된 필터 해제" className="ml-2 hover:text-white transition-colors"><XCircle size={16}/></button>
                         </div>
                     )}
                     <button 

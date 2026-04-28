@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Cpu, ShieldCheck, Zap, Server, Activity, Lock, Globe, Database, Layers } from 'lucide-react';
 
@@ -8,9 +8,64 @@ interface SystemIdentityModalProps {
 }
 
 export const SystemIdentityModal: React.FC<SystemIdentityModalProps> = ({ onClose }) => {
+    const systemIdentityDialogRef = useRef<HTMLDivElement>(null);
+    const systemIdentityCloseButtonRef = useRef<HTMLButtonElement>(null);
+    const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+
+    useEffect(() => {
+        previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
+        window.setTimeout(() => {
+            systemIdentityCloseButtonRef.current?.focus();
+        }, 0);
+
+        const handleEscClose = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+
+        window.addEventListener('keydown', handleEscClose);
+        return () => {
+            window.removeEventListener('keydown', handleEscClose);
+            window.setTimeout(() => {
+                previouslyFocusedElementRef.current?.focus();
+            }, 0);
+        };
+    }, [onClose]);
+
+    const handleSystemIdentityDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key !== 'Tab') return;
+
+        const dialogNode = systemIdentityDialogRef.current;
+        if (!dialogNode) return;
+
+        const focusableElements = dialogNode.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+
+        if (focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+        const activeElement = document.activeElement as HTMLElement | null;
+
+        if (event.shiftKey) {
+            if (activeElement === firstElement || !dialogNode.contains(activeElement)) {
+                event.preventDefault();
+                lastElement.focus();
+            }
+            return;
+        }
+
+        if (activeElement === lastElement) {
+            event.preventDefault();
+            firstElement.focus();
+        }
+    };
+
   return createPortal(
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-[#0F172A]/80 backdrop-blur-md p-4 animate-fade-in" onClick={onClose}>
-        <div className="bg-slate-900 border border-slate-700 rounded-[32px] w-full max-w-2xl overflow-hidden shadow-2xl relative" onClick={e => e.stopPropagation()}>
+                <div ref={systemIdentityDialogRef} role="dialog" aria-modal="true" aria-labelledby="system-identity-modal-title" aria-describedby="system-identity-modal-description" onKeyDown={handleSystemIdentityDialogKeyDown} className="bg-slate-900 border border-slate-700 rounded-[32px] w-full max-w-2xl overflow-hidden shadow-2xl relative" onClick={e => e.stopPropagation()}>
             
             {/* Ambient Background */}
             <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/20 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
@@ -23,10 +78,10 @@ export const SystemIdentityModal: React.FC<SystemIdentityModalProps> = ({ onClos
                         <span className="px-2 py-1 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-bold border border-indigo-500/30 uppercase tracking-widest">System Identity</span>
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10B981]"></span>
                     </div>
-                    <h2 className="text-3xl font-black text-white tracking-tight">HUIGANG <span className="text-slate-500">OS</span></h2>
-                    <p className="text-slate-400 text-xs font-medium mt-1">스마트 안전 관리 플랫폼 v4.0.0</p>
+                    <h2 id="system-identity-modal-title" className="text-3xl font-black text-white tracking-tight">HUIGANG <span className="text-slate-500">OS</span></h2>
+                    <p id="system-identity-modal-description" className="text-slate-400 text-xs font-medium mt-1">스마트 안전 관리 플랫폼 v4.0.0</p>
                 </div>
-                <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors">
+                <button ref={systemIdentityCloseButtonRef} onClick={onClose} aria-label="시스템 아이덴티티 닫기" className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors">
                     <X size={20} />
                 </button>
             </div>

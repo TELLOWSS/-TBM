@@ -75,7 +75,12 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
         
         {/* 1. Header */}
         <div className="p-8 relative z-10">
-          <div className="flex items-center gap-4 mb-2 cursor-pointer" onClick={onShowIdentity}>
+          <div className="flex items-center gap-4 mb-2 cursor-pointer" onClick={onShowIdentity} onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onShowIdentity();
+            }
+          }} role="button" tabIndex={0} aria-label="시스템 아이덴티티 열기">
              <BrandLogo />
              <div>
                <h1 className="font-black text-xl leading-none text-white tracking-tight mb-1 font-sans">HUIGANG</h1>
@@ -141,7 +146,12 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
         
         {/* 3. Footer Profile - UPGRADED DESIGN */}
         <div className="p-4 relative z-10 border-t border-slate-800/50 bg-[#0B1120]">
-          <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group mb-1" onClick={onOpenSettings}>
+          <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group mb-1" onClick={onOpenSettings} onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onOpenSettings();
+            }
+          }} role="button" tabIndex={0} aria-label="환경 설정 열기">
              <div className="relative shrink-0">
                 <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 text-slate-400 font-bold text-xs overflow-hidden bg-gradient-to-br from-slate-700 to-slate-800 shadow-inner">
                    <User size={18} className="text-slate-300"/>

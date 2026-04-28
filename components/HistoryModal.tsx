@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Rocket, Shield, BrainCircuit, LayoutDashboard, FileText, Video, Sparkles, History, GitCommit, Zap, Minimize2, Edit2, ListOrdered, Save, FileVideo, Presentation, CalendarRange, FolderInput, GraduationCap, Lock, Database, Compass, TrendingUp, Grid, Layers, Monitor, HardDrive } from 'lucide-react';
 
@@ -195,9 +195,70 @@ const milestones = [
 ];
 
 export const HistoryModal: React.FC<HistoryModalProps> = ({ onClose }) => {
+  const historyDialogRef = useRef<HTMLDivElement>(null);
+  const historyCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
+    window.setTimeout(() => {
+      historyCloseButtonRef.current?.focus();
+    }, 0);
+
+    const handleEscClose = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscClose);
+    return () => {
+      window.removeEventListener('keydown', handleEscClose);
+      window.setTimeout(() => {
+        previouslyFocusedElementRef.current?.focus();
+      }, 0);
+    };
+  }, [onClose]);
+
+  const handleHistoryDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab') return;
+
+    const dialogNode = historyDialogRef.current;
+    if (!dialogNode) return;
+
+    const focusableElements = dialogNode.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+
+    if (focusableElements.length === 0) return;
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    const activeElement = document.activeElement as HTMLElement | null;
+
+    if (event.shiftKey) {
+      if (activeElement === firstElement || !dialogNode.contains(activeElement)) {
+        event.preventDefault();
+        lastElement.focus();
+      }
+      return;
+    }
+
+    if (activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
+    }
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
       <div 
+        ref={historyDialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="history-modal-title"
+        aria-describedby="history-modal-description"
+        onKeyDown={handleHistoryDialogKeyDown}
         className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up relative flex flex-col max-h-[85vh]" 
         onClick={(e) => e.stopPropagation()}
       >
@@ -210,12 +271,12 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ onClose }) => {
                     <History size={16} />
                     <span className="text-xs font-bold uppercase tracking-widest">Devlog</span>
                  </div>
-                 <h2 className="text-2xl font-black leading-tight">System<br/>Evolution History</h2>
-                 <p className="text-slate-400 text-xs font-medium mt-2">
+                  <h2 id="history-modal-title" className="text-2xl font-black leading-tight">System<br/>Evolution History</h2>
+                  <p id="history-modal-description" className="text-slate-400 text-xs font-medium mt-2">
                     단기간에 혁신적으로 진화한<br/>스마트 안전 시스템의 기록입니다.
                  </p>
               </div>
-              <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors text-white">
+                <button ref={historyCloseButtonRef} onClick={onClose} aria-label="시스템 진화 히스토리 닫기" className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors text-white">
                  <X size={20} />
               </button>
            </div>

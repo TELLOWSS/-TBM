@@ -3,6 +3,8 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { MonthlyRiskAssessment, SafetyGuideline } from '../types';
 import { extractMonthlyPriorities, ExtractedPriority, MonthlyExtractionResult } from '../services/geminiService';
 import { Upload, Loader2, Trash2, ShieldCheck, Plus, RefreshCcw, Calendar, TrendingUp, Search, Edit2, Save, X, Download, FileJson, Layers, ArrowRight, BarChart3, AlertTriangle, CheckCircle2, ChevronDown, GitMerge, Scale, BookOpen, AlertOctagon, FileText, PieChart, Activity, FileStack, Sparkles, BrainCircuit, Clock } from 'lucide-react';
+import { ConfirmDialog } from './common/ConfirmDialog';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
 
 interface RiskAssessmentManagerProps {
   assessments: MonthlyRiskAssessment[];
@@ -180,16 +182,26 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
   const [searchTerm, setSearchTerm] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-    const [backupStatusMessage, setBackupStatusMessage] = useState('');
+  const [backupStatusMessage, setBackupStatusMessage] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
   const [editForm, setEditForm] = useState<{content: string, level: string, category: string}>({
       content: '', level: 'GENERAL', category: '공통'
   });
+  const { confirmDialogState, requestConfirm, closeConfirmDialog } = useConfirmDialog();
+
+  const announceStatus = (message: string) => {
+      setStatusMessage('');
+      requestAnimationFrame(() => {
+          setStatusMessage(message);
+      });
+  };
 
   useEffect(() => {
       if (!showRegularBuilder) return;
 
       const handleEscClose = (event: KeyboardEvent) => {
           if (event.key === 'Escape') {
+              if (confirmDialogState.isOpen) return;
               setShowRegularBuilder(false);
               window.setTimeout(() => {
                   regularBuilderTriggerRef.current?.focus();
@@ -199,7 +211,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
       window.addEventListener('keydown', handleEscClose);
       return () => window.removeEventListener('keydown', handleEscClose);
-  }, [showRegularBuilder]);
+    }, [showRegularBuilder, confirmDialogState.isOpen]);
 
   useEffect(() => {
       if (showRegularBuilder) {
@@ -252,7 +264,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   const handleExportBackup = () => {
     if (assessments.length === 0) {
             setBackupStatusMessage("백업할 위험성평가 데이터가 없습니다.");
-      alert("백업할 데이터가 없습니다.");
+            announceStatus('백업할 데이터가 없습니다.');
       return;
     }
     const backupData = {
@@ -334,7 +346,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       const targetAssessments = monthlyAssessments.filter(a => a.month.startsWith(regularTargetYear));
       
       if (!baseAssessment && targetAssessments.length === 0) {
-          alert("분석할 데이터가 없습니다.\n\n1. '기초 데이터(최초 위험성평가)'를 선택하거나\n2. '분석 연도'에 해당하는 월간 데이터가 있어야 합니다.");
+          announceStatus("분석할 데이터가 없습니다. 기초 데이터(최초 위험성평가) 또는 선택한 연도의 월간 데이터가 필요합니다.");
           return;
       }
 
@@ -412,7 +424,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       setSelectedMonthId(newAssessment.id);
       handleCloseRegularBuilder();
       setRegularStep('SELECT');
-      alert(`✅ ${title}가 생성되었습니다.\n\n[법적 사항 충족]\n- 최초 평가 반영: ${aggregatedRisks.filter(r=>r.source==='INITIAL').length}건\n- 근로자 참여(빈도분석): ${aggregatedRisks.filter(r=>r.source==='ADDED').length}건 반영`);
+      announceStatus(`${title}가 생성되었습니다. 최초 평가 ${aggregatedRisks.filter(r=>r.source==='INITIAL').length}건, 근로자 참여 분석 ${aggregatedRisks.filter(r=>r.source==='ADDED').length}건이 반영되었습니다.`);
   };
 
   const handleRemoveAggregatedItem = (index: number) => {
@@ -423,7 +435,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
   const handleCreateMonth = () => {
      if (assessments.some(a => a.month === targetMonth && a.type !== 'INITIAL' && a.type !== 'REGULAR')) {
-        alert("이미 해당 월의 평가가 존재합니다.");
+          announceStatus('이미 해당 월의 평가가 존재합니다.');
         return;
      }
 
@@ -502,7 +514,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
               isNewCreated = true;
           } else {
               if (detectedMonth && activeAssessment && detectedMonth !== activeAssessment.month && activeAssessment.type !== 'INITIAL') {
-                 if (confirm(`📄 문서 분석: [${detectedMonth}월] 자료입니다.\n\n해당 월로 등록하시겠습니까?`)) {
+                 const isConfirmed = await requestConfirm(`📄 문서 분석: [${detectedMonth}월] 자료입니다.\n\n해당 월로 등록하시겠습니까?`, {
+                     title: '월간 평가 등록',
+                     confirmLabel: '등록',
+                     variant: 'warning'
+                 });
+                 if (isConfirmed) {
                     const existingTarget = monthlyAssessments.find(a => a.month === detectedMonth);
                     if (existingTarget) {
                        targetAssessment = existingTarget;
@@ -531,7 +548,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           }
 
           if (!targetAssessment) {
-             alert("평가 데이터를 저장할 대상을 선택하거나 새로 생성해주세요.");
+                 announceStatus('평가 데이터를 저장할 대상을 선택하거나 새로 생성해주세요.');
              setIsAnalyzing(false);
              return;
           }
@@ -575,12 +592,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           }
 
           setCandidates([]);
-          alert(`${addedCount}건의 항목이 등록되었습니다.`);
+                    announceStatus(`${addedCount}건의 항목이 등록되었습니다.`);
           
         } catch (err: any) {
           console.error(err);
           const msg = err.message || "문서 분석 중 오류가 발생했습니다.";
-          alert(msg.includes('429') || msg.includes('제한') || msg.includes('Quota') ? msg : "문서 분석 중 오류가 발생했습니다.");
+                    announceStatus(msg.includes('429') || msg.includes('제한') || msg.includes('Quota') ? msg : '문서 분석 중 오류가 발생했습니다.');
         } finally {
           // [FIX] Always clear interval in finally to prevent orphaned timers
           clearInterval(timer);
@@ -611,10 +628,11 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
         const confirmMessage = targetItem
             ? `선택한 위험요소를 삭제하시겠습니까?\n\n[${targetItem.category}] ${targetItem.content}`
             : "정말 삭제하시겠습니까?";
-        if (confirm(confirmMessage)) {
+        requestConfirm(confirmMessage, { title: '위험요소 삭제', confirmLabel: '삭제', variant: 'danger' }).then((isConfirmed) => {
+            if (!isConfirmed) return;
         const newPriorities = activeAssessment.priorities.filter((_, i) => i !== indexToRemove);
         updateActiveAssessment(newPriorities);
-    }
+        });
   };
 
   const addManualPriority = () => {
@@ -630,7 +648,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   };
 
   // [FIXED] Robust Deletion Handler
-  const handleDeleteMonth = () => {
+    const handleDeleteMonth = async () => {
      if (!selectedMonthId) return;
       const selectedAssessment = assessments.find(a => a.id === selectedMonthId);
       const targetLabel = selectedAssessment?.type === 'INITIAL'
@@ -639,11 +657,16 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           ? `정기 위험성평가 (${selectedAssessment.month})`
           : `월간 위험성평가 (${selectedAssessment?.month || '미지정'})`;
      
-      if (confirm(`${targetLabel}를 삭제하시겠습니까?\n\n삭제 후 복구할 수 없습니다.`)) {
-        const updated = assessments.filter(a => a.id !== selectedMonthId);
-        onSave(updated); // Sync with Parent State & DB
-        setSelectedMonthId(''); // Clear selection to force UI update
-     }
+            const isConfirmed = await requestConfirm(`${targetLabel}를 삭제하시겠습니까?\n\n삭제 후 복구할 수 없습니다.`, {
+                    title: '평가 삭제',
+                    confirmLabel: '삭제',
+                    variant: 'danger'
+            });
+            if (!isConfirmed) return;
+
+            const updated = assessments.filter(a => a.id !== selectedMonthId);
+            onSave(updated); // Sync with Parent State & DB
+            setSelectedMonthId(''); // Clear selection to force UI update
   }
 
   // --- Edit Logic ---
@@ -695,6 +718,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
   return (
     <div className="bg-slate-50 min-h-[calc(100vh-140px)] flex gap-6 relative">
+             <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{statusMessage}</p>
        {isAnalyzing && <AnalysisOverlay progress={loadingProgress} />}
 
        <input type="file" ref={backupInputRef} className="hidden" accept=".json" onChange={handleImportBackup} multiple/>
@@ -870,7 +894,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                    </div>
                    {backupStatusMessage && (
                       <div className="-mt-2">
-                          <p className="text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" aria-live="polite">
+                          <p className="text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" role="status" aria-live="polite" aria-atomic="true">
                               {backupStatusMessage}
                           </p>
                       </div>
@@ -1299,6 +1323,17 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                </div>
            </div>
        )}
+
+       <ConfirmDialog
+           isOpen={confirmDialogState.isOpen}
+           title={confirmDialogState.title}
+           message={confirmDialogState.message}
+           confirmLabel={confirmDialogState.confirmLabel}
+           cancelLabel={confirmDialogState.cancelLabel}
+           variant={confirmDialogState.variant}
+           onConfirm={() => closeConfirmDialog(true)}
+           onCancel={() => closeConfirmDialog(false)}
+       />
     </div>
   );
 };

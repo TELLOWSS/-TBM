@@ -63,6 +63,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   
   const [videoAnalysis, setVideoAnalysis] = useState<TBMAnalysisResult | null>(null);
   const [videoStatusMessage, setVideoStatusMessage] = useState<string>(''); 
+    const [announceMessage, setAnnounceMessage] = useState('');
   const [isVideoAnalyzing, setIsVideoAnalyzing] = useState(false);
   const [isDocAnalyzing, setIsDocAnalyzing] = useState(false);
 
@@ -70,6 +71,13 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const [tempFeedbackText, setTempFeedbackText] = useState("");
   const [newFeedbackInput, setNewFeedbackInput] = useState("");
   const [isFeedbackGenerating, setIsFeedbackGenerating] = useState(false);
+
+  const announceStatus = (message: string) => {
+      setAnnounceMessage('');
+      requestAnimationFrame(() => {
+          setAnnounceMessage(message);
+      });
+  };
 
   const logInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -197,7 +205,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           const file = e.target.files[0];
           // [FIX] 이미지 파일 크기 제한 — 10MB 초과 시 IndexedDB OOM 방지
           if (file.size > 10 * 1024 * 1024) {
-              alert('이미지 파일이 너무 큽니다. (최대 10MB)\n사진 크기를 줄인 후 다시 업로드해주세요.');
+              announceStatus('이미지 파일이 너무 큽니다. 최대 10MB까지 업로드할 수 있습니다.');
               e.target.value = '';
               return;
           }
@@ -213,7 +221,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           const file = e.target.files[0];
           // [FIX] 이미지 파일 크기 제한 — 10MB 초과 시 IndexedDB OOM 방지
           if (file.size > 10 * 1024 * 1024) {
-              alert('이미지 파일이 너무 큽니다. (최대 10MB)\n사진 크기를 줄인 후 다시 업로드해주세요.');
+              announceStatus('이미지 파일이 너무 큽니다. 최대 10MB까지 업로드할 수 있습니다.');
               e.target.value = '';
               return;
           }
@@ -234,7 +242,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           const file = e.target.files[0];
           // [FIX] 영상 파일 크기 제한 — 500MB 초과 시 메모리 압박 방지
           if (file.size > 500 * 1024 * 1024) {
-              alert('영상 파일이 너무 큽니다. (최대 500MB)\n압축 후 다시 업로드해주세요.');
+              announceStatus('영상 파일이 너무 큽니다. 최대 500MB까지 업로드할 수 있습니다.');
               e.target.value = '';
               return;
           }
@@ -319,7 +327,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
 
   const handleAnalyzeDocument = async () => {
     if (!originalLogPreview) {
-        alert("분석할 수기 일지 사진이 없습니다.");
+                announceStatus('분석할 수기 일지 사진이 없습니다.');
         return;
     }
     
@@ -365,14 +373,14 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                 safetyFeedback: data.safetyFeedback
             });
 
-            alert("✅ 수기 일지 내용이 자동으로 입력되었습니다.");
+            announceStatus('수기 일지 내용이 자동으로 입력되었습니다.');
         } else {
-            alert("⚠️ 텍스트를 인식하지 못했습니다. 사진을 확인해주세요.");
+            announceStatus('텍스트를 인식하지 못했습니다. 사진을 확인해주세요.');
         }
     } catch (e: any) {
         console.error(e);
         const msg = e.message || '';
-        alert(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : "분석 중 오류가 발생했습니다.");
+        announceStatus(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : '분석 중 오류가 발생했습니다.');
     } finally {
         setIsDocAnalyzing(false);
     }
@@ -380,7 +388,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
 
   const handleTextGapAnalysis = async () => {
     if (!workDescription) {
-        alert("작업 내용을 먼저 입력해주세요.");
+                announceStatus('작업 내용을 먼저 입력해주세요.');
         return;
     }
     setIsFeedbackGenerating(true);
@@ -391,14 +399,14 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
             const merged = Array.from(new Set([...safetyFeedback, ...newFeedback]));
             setSafetyFeedback(merged);
             updateActiveItem({ safetyFeedback: merged });
-            alert(`✅ ${newFeedback.length}개의 안전 코멘트가 생성되었습니다.`);
+            announceStatus(`${newFeedback.length}개의 안전 코멘트가 생성되었습니다.`);
         } else {
-            alert("⚠️ 생성된 코멘트가 없습니다. 작업 내용을 더 자세히 입력해보세요.");
+            announceStatus('생성된 코멘트가 없습니다. 작업 내용을 더 자세히 입력해보세요.');
         }
     } catch (e: any) {
         console.error(e);
         const msg = e.message || '';
-        alert(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : "AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+        announceStatus(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : 'AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
         setIsFeedbackGenerating(false);
     }
@@ -431,11 +439,11 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
             setSafetyFeedback(currentFeedback);
             updateActiveItem({ safetyFeedback: currentFeedback });
         }
-        alert("AI 분석이 완료되었습니다. 내용을 확인하고 수정해주세요.");
+        announceStatus('AI 분석이 완료되었습니다. 내용을 확인하고 수정해주세요.');
     } catch (e: any) {
         console.error(e);
         const msg = e.message || '';
-        alert(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : "AI 분석에 실패했습니다.");
+        announceStatus(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : 'AI 분석에 실패했습니다.');
     } finally {
         setIsVideoAnalyzing(false);
         setVideoStatusMessage("");
@@ -478,7 +486,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       const validEntries = entriesToSave.filter(e => e.teamName !== 'Unknown' || e.tbmPhotoUrl || e.originalLogImageUrl);
 
       if (validEntries.length === 0) {
-          alert("저장할 유효한 데이터가 없습니다.");
+          announceStatus('저장할 유효한 데이터가 없습니다.');
           return;
       }
 
@@ -489,6 +497,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-[#F8FAFC] flex flex-col animate-fade-in text-slate-800 font-sans">
+        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {isDocAnalyzing
+                ? '수기 일지 내용을 분석 중입니다.'
+                : isVideoAnalyzing
+                    ? (videoStatusMessage || '동영상 AI 분석을 진행 중입니다.')
+                    : isFeedbackGenerating
+                        ? '안전 코멘트를 생성 중입니다.'
+                        : (announceMessage || '')}
+        </p>
         {/* Header */}
         <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm shrink-0 z-50">
            <div className="flex items-center gap-4">
@@ -529,6 +546,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                         <div 
                             key={item.tempId}
                             onClick={() => setActiveId(item.tempId)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    setActiveId(item.tempId);
+                                }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${item.teamName || `항목 ${idx + 1}`} 선택`}
                             className={`p-3 rounded-2xl cursor-pointer border-2 transition-all flex gap-3 items-center group relative ${activeId === item.tempId ? 'bg-indigo-50 border-indigo-500 shadow-md ring-2 ring-indigo-100' : 'bg-white border-transparent hover:border-slate-200 hover:bg-slate-50'}`}
                         >
                             <div className="w-12 h-12 rounded-xl bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center border border-slate-300">
@@ -544,15 +570,22 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                 </p>
                             </div>
                             <button 
+                                type="button"
+                                aria-label={`${item.teamName || `항목 ${idx + 1}`} 대기열에서 제거`}
                                 onClick={(e) => { e.stopPropagation(); setQueue(queue.filter(q => q.tempId !== item.tempId)); }}
-                                className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 p-1 bg-white border border-red-100 shadow-sm rounded-full text-red-500 hover:bg-red-50 transition-all hover:scale-110"
+                                className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 p-1 bg-white border border-red-100 shadow-sm rounded-full text-red-500 hover:bg-red-50 transition-all hover:scale-110"
                             >
                                 <X size={14}/>
                             </button>
                         </div>
                     ))}
                     
-                    <div onClick={() => fileInputRef.current?.click()} className="p-4 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center text-slate-400 gap-2 cursor-pointer hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all min-h-[100px] group">
+                    <div onClick={() => fileInputRef.current?.click()} onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            fileInputRef.current?.click();
+                        }
+                    }} role="button" tabIndex={0} aria-label="사진 추가 또는 새 항목 생성" className="p-4 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center text-slate-400 gap-2 cursor-pointer hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all min-h-[100px] group">
                         <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center transition-colors">
                             <Plus size={20}/>
                         </div>
@@ -584,6 +617,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                             
                             <div 
                                 onClick={()=>!originalLogPreview && logInputRef.current?.click()}
+                                onKeyDown={(e) => {
+                                    if ((e.key === 'Enter' || e.key === ' ') && !originalLogPreview) {
+                                        e.preventDefault();
+                                        logInputRef.current?.click();
+                                    }
+                                }}
+                                role="button"
+                                tabIndex={0}
+                                aria-label="수기 일지 원본 첨부"
                                 className={`aspect-[3/4] rounded-xl border-2 overflow-hidden relative group transition-all ${originalLogPreview ? 'border-indigo-200 bg-slate-50' : 'border-dashed border-slate-300 bg-slate-50 hover:bg-indigo-50 cursor-pointer'}`}
                             >
                                 {originalLogPreview ? (
@@ -622,6 +664,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                             </div>
                             <div 
                                 onClick={()=>!tbmPhotoPreview && photoInputRef.current?.click()}
+                                onKeyDown={(e) => {
+                                    if ((e.key === 'Enter' || e.key === ' ') && !tbmPhotoPreview) {
+                                        e.preventDefault();
+                                        photoInputRef.current?.click();
+                                    }
+                                }}
+                                role="button"
+                                tabIndex={0}
+                                aria-label="TBM 활동 사진 첨부"
                                 className={`aspect-video rounded-xl border-2 overflow-hidden relative group transition-all ${tbmPhotoPreview ? 'border-emerald-200 bg-slate-50' : 'border-dashed border-slate-300 bg-slate-50 hover:bg-emerald-50 cursor-pointer'}`}
                             >
                                 {tbmPhotoPreview ? (
@@ -645,7 +696,12 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                 <button onClick={()=>videoInputRef.current?.click()} className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded hover:bg-rose-100">변경</button>
                             </div>
                             
-                            <div onClick={()=>videoInputRef.current?.click()} className={`aspect-video rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center cursor-pointer hover:border-rose-300 hover:bg-rose-50 transition-all ${tbmVideoPreview ? 'bg-black border-none' : 'bg-slate-50'}`}>
+                            <div onClick={()=>videoInputRef.current?.click()} onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    videoInputRef.current?.click();
+                                }
+                            }} role="button" tabIndex={0} aria-label="TBM 동영상 업로드" className={`aspect-video rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center cursor-pointer hover:border-rose-300 hover:bg-rose-50 transition-all ${tbmVideoPreview ? 'bg-black border-none' : 'bg-slate-50'}`}>
                                 {tbmVideoPreview ? (
                                     <div className="relative w-full h-full flex items-center justify-center">
                                         <video src={tbmVideoPreview} className="w-full h-full object-contain" controls/>
@@ -840,7 +896,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                                  <input value={r.measure} onChange={(e)=>handleRiskChange(i,'measure',e.target.value)} placeholder="안전 대책 입력" className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600 outline-none flex-1 focus:bg-white focus:border-indigo-300 transition-colors"/>
                                              </div>
                                          </div>
-                                         <button onClick={() => removeRiskFactor(i)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors mt-2"><X size={16}/></button>
+                                         <button onClick={() => removeRiskFactor(i)} aria-label={`${i + 1}번 위험요인 항목 삭제`} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors mt-2"><X size={16}/></button>
                                      </div>
                                  ))}
                                  {riskFactors.length === 0 && (
@@ -870,15 +926,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                         {editingFeedbackIndex === idx ? (
                                             <div className="flex-1 flex gap-2">
                                                 <input value={tempFeedbackText} onChange={(e) => setTempFeedbackText(e.target.value)} className="flex-1 text-xs border rounded px-2 py-1 outline-none focus:ring-2 focus:ring-emerald-500"/>
-                                                <button onClick={handleSaveEditFeedback} className="text-emerald-600 text-xs font-bold px-2">저장</button>
+                                                <button type="button" onClick={handleSaveEditFeedback} className="text-emerald-600 text-xs font-bold px-2">저장</button>
                                             </div>
                                         ) : (
                                             <>
                                                 <div className="mt-0.5"><CheckCircle2 size={14} className="text-emerald-500"/></div>
                                                 <span className="text-xs text-slate-700 flex-1 leading-snug font-medium">{fb}</span>
-                                                <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => handleStartEditFeedback(idx)} className="text-slate-400 hover:text-blue-500 p-1"><FileText size={14}/></button>
-                                                    <button onClick={() => handleDeleteFeedback(idx)} className="text-slate-400 hover:text-red-500 p-1"><X size={14}/></button>
+                                                <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                                    <button type="button" onClick={() => handleStartEditFeedback(idx)} aria-label={`코멘트 ${idx + 1} 수정`} className="text-slate-400 hover:text-blue-500 p-1"><FileText size={14}/></button>
+                                                    <button type="button" onClick={() => handleDeleteFeedback(idx)} aria-label={`코멘트 ${idx + 1} 삭제`} className="text-slate-400 hover:text-red-500 p-1"><X size={14}/></button>
                                                 </div>
                                             </>
                                         )}
@@ -890,7 +946,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                         onChange={(e) => setNewFeedbackInput(e.target.value)}
                                         placeholder="코멘트 직접 입력..."
                                         className="flex-1 text-xs border border-emerald-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-sm"
-                                        onKeyPress={(e) => e.key === 'Enter' && handleAddFeedback()}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddFeedback()}
                                     />
                                     <button onClick={handleAddFeedback} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-md shadow-emerald-100">추가</button>
                                 </div>

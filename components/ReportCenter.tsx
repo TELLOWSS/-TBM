@@ -3,6 +3,8 @@ import React, { useMemo, useState } from 'react';
 import { TBMEntry, TeamOption } from '../types';
 import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity, Database, BrainCircuit, Microscope, Trash2, CheckSquare, Square, XCircle } from 'lucide-react';
 import JSZip from 'jszip';
+import { ConfirmDialog } from './common/ConfirmDialog';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
 
 const sanitizeFileName = (value: string) => value.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_');
 
@@ -44,8 +46,18 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [selectedDate, setSelectedDate] = useState(''); // Date Filter
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set()); // Multi-select
+    const [statusMessage, setStatusMessage] = useState('');
   
   const [isZipping, setIsZipping] = useState(false);
+  const { confirmDialogState, requestConfirm, closeConfirmDialog } = useConfirmDialog();
+
+  const announceStatus = (message: string) => {
+      setStatusMessage('');
+      requestAnimationFrame(() => {
+          setStatusMessage(message);
+      });
+  };
+
   
   const stats = useMemo(() => {
     return {
@@ -97,7 +109,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
 
   // --- Handlers ---
 
-  const handlePrintClick = () => {
+    const handlePrintClick = async () => {
       if (selectedIds.size > 0) {
           // Print Selected
           const targets = entries.filter(e => selectedIds.has(e.id));
@@ -105,11 +117,16 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
       } else {
           // Print Filtered View
           if (filteredEntries.length === 0) {
-              alert("출력할 문서가 없습니다.");
+              announceStatus('출력할 문서가 없습니다.');
               return;
           }
-          if (filteredEntries.length > 50 && !confirm(`${filteredEntries.length}건의 문서를 한 번에 처리하시겠습니까? (시간이 소요될 수 있습니다)`)) {
-              return;
+          if (filteredEntries.length > 50) {
+              const isConfirmed = await requestConfirm(`${filteredEntries.length}건의 문서를 한 번에 처리하시겠습니까? (시간이 소요될 수 있습니다)`, {
+                  title: '대량 문서 출력',
+                  confirmLabel: '진행',
+                  variant: 'warning'
+              });
+              if (!isConfirmed) return;
           }
           onOpenPrintModal(filteredEntries);
       }
@@ -144,7 +161,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
           : filteredEntries;
 
       if (targetEntries.length === 0) {
-          alert('내보낼 데이터가 없습니다.');
+          announceStatus('내보낼 데이터가 없습니다.');
           return;
       }
 
@@ -208,7 +225,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
           URL.revokeObjectURL(url);
       } catch (error) {
           console.error('Data package export failed:', error);
-          alert('데이터 패키지 생성 중 오류가 발생했습니다.');
+          announceStatus('데이터 패키지 생성 중 오류가 발생했습니다.');
       } finally {
           setIsZipping(false);
       }
@@ -216,6 +233,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
 
   return (
     <div className="space-y-6 animate-fade-in pb-24 relative">
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{statusMessage}</p>
       {isZipping && <SimpleLoadingOverlay text="데이터 처리 중..." />}
       
       {/* Header */}
@@ -364,11 +382,22 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
                       <Trash2 size={16}/> 일괄 삭제
                   </button>
               </div>
-              <button onClick={() => setSelectedIds(new Set())} aria-label="선택 해제" className="ml-2 bg-slate-800 rounded-full p-1 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+              <button onClick={() => setSelectedIds(new Set())} aria-label="선택 항목 해제" className="ml-2 bg-slate-800 rounded-full p-1 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
                   <XCircle size={16}/>
               </button>
           </div>
       )}
+
+      <ConfirmDialog
+          isOpen={confirmDialogState.isOpen}
+          title={confirmDialogState.title}
+          message={confirmDialogState.message}
+          confirmLabel={confirmDialogState.confirmLabel}
+          cancelLabel={confirmDialogState.cancelLabel}
+          variant={confirmDialogState.variant}
+          onConfirm={() => closeConfirmDialog(true)}
+          onCancel={() => closeConfirmDialog(false)}
+      />
     </div>
   );
 };

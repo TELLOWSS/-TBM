@@ -11,17 +11,19 @@ import { SafetyDataLab } from './components/SafetyDataLab';
 import { HistoryModal } from './components/HistoryModal';
 import { SettingsModal } from './components/SettingsModal'; 
 import { SystemIdentityModal } from './components/SystemIdentityModal';
+import { ConfirmDialog } from './components/common/ConfirmDialog';
 import { TEAMS } from './constants';
 import { hasSupportedBackupShape, validateBackupPayload, MAX_BACKUP_FILE_COUNT, MAX_BACKUP_FILE_SIZE, type BackupPayload } from './utils/backupValidation';
 import { loadStoredSiteConfig, persistSiteConfig } from './utils/siteConfigStorage';
 import { StorageDB } from './utils/storageDB';
+import { useConfirmDialog } from './hooks/useConfirmDialog';
 import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig } from './types';
-import { Database, Loader2 } from 'lucide-react';
+import { Database } from 'lucide-react';
 
 // [UPDATED] Restore Progress Overlay Component
 const RestoreOverlay = ({ progress }: { progress: number }) => {
     return createPortal(
-        <div className="fixed inset-0 z-[999999] bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in text-white">
+        <div className="fixed inset-0 z-[999999] bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in text-white" role="status" aria-live="polite" aria-atomic="true">
             <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-2xl flex flex-col items-center max-w-sm w-full mx-4 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-[60px] pointer-events-none"></div>
                 
@@ -33,12 +35,13 @@ const RestoreOverlay = ({ progress }: { progress: number }) => {
                     <h3 className="text-xl font-black mb-2">System Restoring...</h3>
                     <p className="text-sm text-slate-400 mb-6 text-center">데이터베이스 트랜잭션 기록 중...<br/>안전한 저장을 위해 브라우저를 닫지 마세요.</p>
                     
-                    <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden mb-2">
+                    <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden mb-2" role="progressbar" aria-label="데이터 복구 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
                         <div 
                             className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300"
                             style={{ width: `${progress}%` }}
                         ></div>
                     </div>
+                    <p className="sr-only">데이터 복구 진행률 {progress}%</p>
                     <span className="text-xs font-mono text-emerald-400 font-bold flex justify-between w-full">
                         <span>Serializing & Saving...</span>
                         <span>{progress}% Complete</span>
@@ -104,10 +107,22 @@ const App = () => {
   
   const [isRestoring, setIsRestoring] = useState(false); 
   const [restoreProgress, setRestoreProgress] = useState(0); 
+    const [appStatusMessage, setAppStatusMessage] = useState('');
 
   const [editingEntry, setEditingEntry] = useState<TBMEntry | null>(null);
   const [entryMode, setEntryMode] = useState<'ROUTINE' | 'BATCH'>('ROUTINE');
   const mountedRef = useRef(true);
+    const { confirmDialogState, requestConfirm, closeConfirmDialog } = useConfirmDialog();
+
+  const announceStatus = (message: string) => {
+      if (!mountedRef.current) return;
+      setAppStatusMessage('');
+      requestAnimationFrame(() => {
+          if (mountedRef.current) {
+              setAppStatusMessage(message);
+          }
+      });
+  };
 
   useEffect(() => {
     mountedRef.current = true;
@@ -139,7 +154,7 @@ const App = () => {
         }
     };
     loadData();
-    return () => { mountedRef.current = false; };
+        return () => { mountedRef.current = false; };
   }, []);
 
   const handleSaveEntry = async (data: TBMEntry | TBMEntry[], shouldExit = true) => {
@@ -164,20 +179,28 @@ const App = () => {
   };
 
   const handleRequestDelete = async (id: string) => {
-      if (confirm('정말 삭제하시겠습니까?')) {
-          const updated = entries.filter(e => e.id !== id);
-          setEntries(updated);
-          await StorageDB.set('entries', updated);
-      }
+      const isConfirmed = await requestConfirm('정말 삭제하시겠습니까?', { title: '기록 삭제', variant: 'danger' });
+      if (!isConfirmed) return;
+
+      const updated = entries.filter(e => e.id !== id);
+      setEntries(updated);
+      await StorageDB.set('entries', updated);
+      announceStatus('기록이 삭제되었습니다.');
   };
 
   const handleBulkDelete = async (ids: string[]) => {
       if (ids.length === 0) return;
-      if (confirm(`선택한 ${ids.length}건의 데이터를 영구 삭제하시겠습니까?\n(이 작업은 되돌릴 수 없습니다)`)) {
-          const updated = entries.filter(e => !ids.includes(e.id));
-          setEntries(updated);
-          await StorageDB.set('entries', updated);
-      }
+      const isConfirmed = await requestConfirm(`선택한 ${ids.length}건의 데이터를 영구 삭제하시겠습니까?\n(이 작업은 되돌릴 수 없습니다)`, {
+          title: '일괄 삭제',
+          confirmLabel: '삭제',
+          variant: 'danger'
+      });
+      if (!isConfirmed) return;
+
+      const updated = entries.filter(e => !ids.includes(e.id));
+      setEntries(updated);
+      await StorageDB.set('entries', updated);
+      announceStatus(`${ids.length}건의 기록이 삭제되었습니다.`);
   };
 
   const handleSaveAssessment = async (data: MonthlyRiskAssessment[]) => {
@@ -213,51 +236,60 @@ const App = () => {
   };
 
   const handleDeleteTeam = async (id: string) => {
-      if (!confirm("팀을 삭제하시겠습니까? (기존 일지 데이터는 유지됩니다)")) return;
+      const isConfirmed = await requestConfirm('팀을 삭제하시겠습니까? (기존 일지 데이터는 유지됩니다)', { title: '팀 삭제', confirmLabel: '삭제', variant: 'danger' });
+      if (!isConfirmed) return;
+
       const updatedTeams = teams.filter(t => t.id !== id);
       setTeams(updatedTeams);
       await StorageDB.set('teams', updatedTeams);
+      announceStatus('팀 정보가 삭제되었습니다.');
   };
 
   const handleBackupData = (scope: 'ALL' | 'TBM' | 'RISK') => {
-      const backupData: BackupPayload = {
-          version: '3.1.0',
-          backupDate: new Date().toISOString(),
-          scope: scope
-      };
+      try {
+          const backupData: BackupPayload = {
+              version: '3.1.0',
+              backupDate: new Date().toISOString(),
+              scope: scope
+          };
 
-      if (scope === 'ALL' || scope === 'TBM') {
-          backupData.entries = entries;
-      }
-      if (scope === 'ALL' || scope === 'RISK') {
-          backupData.assessments = assessments;
-      }
-      if (scope === 'ALL') {
-          backupData.teams = teams;
-          backupData.signatures = signatures;
-          // [SECURITY FIX] Exclude API key from backup file to prevent credential leakage
-          const { userApiKey: _stripped, ...siteConfigSafe } = siteConfig;
-          backupData.siteConfig = siteConfigSafe;
-      }
+          if (scope === 'ALL' || scope === 'TBM') {
+              backupData.entries = entries;
+          }
+          if (scope === 'ALL' || scope === 'RISK') {
+              backupData.assessments = assessments;
+          }
+          if (scope === 'ALL') {
+              backupData.teams = teams;
+              backupData.signatures = signatures;
+              // [SECURITY FIX] Exclude API key from backup file to prevent credential leakage
+              const { userApiKey: _stripped, ...siteConfigSafe } = siteConfig;
+              backupData.siteConfig = siteConfigSafe;
+          }
 
-      const suffix = scope === 'ALL' ? 'FULL' : scope === 'TBM' ? 'TBM_LOGS' : 'RISK_DATA';
-      const dataStr = JSON.stringify(backupData, null, 2);
-      const blob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `SAPA_${suffix}_BACKUP_${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+          const suffix = scope === 'ALL' ? 'FULL' : scope === 'TBM' ? 'TBM_LOGS' : 'RISK_DATA';
+          const dataStr = JSON.stringify(backupData, null, 2);
+          const blob = new Blob([dataStr], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `SAPA_${suffix}_BACKUP_${new Date().toISOString().slice(0, 10)}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          announceStatus(`백업 파일 생성 완료: ${suffix} 범위 데이터를 저장했습니다.`);
+      } catch (error) {
+          console.error('Backup export failed:', error);
+          announceStatus(`백업 파일 생성 중 오류가 발생했습니다: ${getErrorMessage(error)}`);
+      }
   };
 
   // [FIXED] Soft-Refresh Restore Logic (No Page Reload)
   const handleRestoreData = async (files: FileList) => {
       // [FIX] Guard against oversized or excessive files to prevent OOM
       if (files.length > MAX_BACKUP_FILE_COUNT) {
-          alert(`⚠️ 한 번에 최대 ${MAX_BACKUP_FILE_COUNT}개의 파일만 처리할 수 있습니다.`);
+          announceStatus(`복구 중단: 한 번에 최대 ${MAX_BACKUP_FILE_COUNT}개의 파일만 처리할 수 있습니다.`);
           return;
       }
 
@@ -266,13 +298,13 @@ const App = () => {
       let totalInputSize = 0;
       for (let i = 0; i < files.length; i++) {
           if (files[i].size > MAX_BACKUP_FILE_SIZE) {
-              alert(`⚠️ 파일 크기 제한 초과: "${files[i].name}"\n최대 50MB 파일만 복구 가능합니다.`);
+              announceStatus(`복구 중단: ${files[i].name} 파일이 크기 제한을 초과했습니다. 최대 50MB 파일만 복구 가능합니다.`);
               return;
           }
           totalInputSize += files[i].size;
       }
       if (totalInputSize > TOTAL_SIZE_BUDGET) {
-          alert(`⚠️ 총 파일 용량(${(totalInputSize / 1024 / 1024).toFixed(1)} MB)이 너무 큽니다.\n한 번에 200 MB 이하로 처리해 주세요.`);
+          announceStatus(`복구 중단: 총 파일 용량 ${(totalInputSize / 1024 / 1024).toFixed(1)}MB가 너무 큽니다. 한 번에 200MB 이하로 처리해 주세요.`);
           return;
       }
 
@@ -283,6 +315,7 @@ const App = () => {
       }
       setIsRestoring(true);
       setRestoreProgress(0);
+    announceStatus('데이터 복구를 시작했습니다.');
 
       // Temporary storage for merge
       let mergedEntries = [...entries];
@@ -398,7 +431,7 @@ const App = () => {
 
           if (totalFound === 0) {
               if (mountedRef.current) {
-                  alert("⚠️ 복구할 유효한 데이터가 파일에 없습니다.");
+                  announceStatus('복구할 유효한 데이터가 파일에 없습니다.');
                   setIsRestoring(false);
               }
               return;
@@ -455,14 +488,14 @@ const App = () => {
           }
           
           if (mountedRef.current) {
-              alert(`✅ 데이터 복구 완료!\n총 ${totalFound}건의 데이터가 처리되었습니다.`);
+              announceStatus(`데이터 복구 완료: 총 ${totalFound}건의 데이터가 처리되었습니다.`);
               setCurrentView('dashboard'); // Navigate to home
           }
 
       } catch (err) {
           console.error("Critical Restore Error:", err);
           if (mountedRef.current) {
-              alert(`복구 중 치명적 오류 발생: ${getErrorMessage(err)}`);
+              announceStatus(`복구 중 치명적 오류가 발생했습니다: ${getErrorMessage(err)}`);
               setIsRestoring(false);
           }
       }
@@ -536,7 +569,7 @@ const App = () => {
       const optimizedAssessments = Array.from(uniqueAssMap.values());
 
       if (duplicatesCount === 0 && duplicatesAss === 0) {
-          alert("삭제할 중복 데이터가 없습니다. 이미 최적화된 상태입니다.");
+          announceStatus('삭제할 중복 데이터가 없습니다. 이미 최적화된 상태입니다.');
           return;
       }
       
@@ -548,7 +581,7 @@ const App = () => {
       setEntries(optimizedEntries);
       setAssessments(optimizedAssessments);
       
-      alert(`✅ 최적화 완료!\n\n- TBM 일지 중복 제거: ${duplicatesCount}건\n- 위험성평가 중복 제거: ${duplicatesAss}건\n\n데이터베이스가 정리되었습니다.`);
+      announceStatus(`최적화 완료: TBM 일지 중복 ${duplicatesCount}건, 위험성평가 중복 ${duplicatesAss}건을 제거했습니다.`);
   };
 
   const handleEditEntry = (entry: TBMEntry) => {
@@ -573,7 +606,8 @@ const App = () => {
       return latestAssessment?.priorities ?? [];
   }, [assessments]);
   return (
-    <div className="flex bg-slate-50 min-h-screen font-sans text-slate-900">
+    <div className="flex bg-slate-50 min-h-screen font-sans text-slate-900" aria-busy={isRestoring}>
+            <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{appStatusMessage}</p>
       {isRestoring && <RestoreOverlay progress={restoreProgress} />}
       
       <Navigation 
@@ -671,6 +705,17 @@ const App = () => {
          siteConfig={siteConfig} // [NEW] Pass Config
          onUpdateSiteConfig={handleUpdateSiteConfig} // [NEW] Handler
       />
+
+        <ConfirmDialog
+            isOpen={confirmDialogState.isOpen}
+            title={confirmDialogState.title}
+            message={confirmDialogState.message}
+            confirmLabel={confirmDialogState.confirmLabel}
+            cancelLabel={confirmDialogState.cancelLabel}
+            variant={confirmDialogState.variant}
+            onConfirm={() => closeConfirmDialog(true)}
+            onCancel={() => closeConfirmDialog(false)}
+        />
     </div>
   );
 };

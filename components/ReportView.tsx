@@ -21,10 +21,18 @@ interface ReportViewProps {
 export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName, onClose, signatures, onUpdateSignature, onEdit, onDelete }) => {
   const [generatingMode, setGeneratingMode] = useState<'PDF' | 'IMAGE' | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
+    const [announceMessage, setAnnounceMessage] = useState('');
   const [scale, setScale] = useState(1);
   const reportDialogRef = useRef<HTMLDivElement>(null);
   const reportCloseButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+
+  const announceStatus = (message: string) => {
+      setAnnounceMessage('');
+      requestAnimationFrame(() => {
+          setAnnounceMessage(message);
+      });
+  };
 
   useEffect(() => {
       previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
@@ -373,7 +381,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
     } catch (error) {
       console.error("Generation failed", error);
-      alert("변환 중 오류가 발생했습니다. (메모리 부족 또는 이미지 처리 실패)");
+            announceStatus('변환 중 오류가 발생했습니다. 메모리 부족 또는 이미지 처리 실패일 수 있습니다.');
     } finally {
       if (document.body.contains(ghostContainer)) {
           document.body.removeChild(ghostContainer);
@@ -389,12 +397,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       const file = e.target.files[0];
       // [FIX] 파일 타입 및 크기 검증 — 서명 이미지에만 허용
       if (!file.type.startsWith('image/')) {
-          alert('이미지 파일만 업로드 가능합니다.');
+          announceStatus('이미지 파일만 업로드 가능합니다.');
           e.target.value = '';
           return;
       }
       if (file.size > 2 * 1024 * 1024) {
-          alert('서명 이미지는 최대 2MB까지 가능합니다.');
+          announceStatus('서명 이미지는 최대 2MB까지 가능합니다.');
           e.target.value = '';
           return;
       }
@@ -423,6 +431,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
   return createPortal(
         <div ref={reportDialogRef} role="dialog" aria-modal="true" aria-labelledby="report-view-title" aria-describedby="report-view-description" onKeyDown={handleReportDialogKeyDown} className="fixed inset-0 bg-slate-900/95 z-50 overflow-y-auto flex flex-col items-center report-container-wrapper">
+            <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                {generatingMode
+                    ? (statusMessage || (generatingMode === 'PDF' ? 'PDF를 생성 중입니다.' : '이미지를 생성 중입니다.'))
+                    : (announceMessage || '')}
+            </p>
       <style>{`
         .report-page {
             width: 794px;
@@ -811,8 +824,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                 
                 {/* Edit Controls */}
                 <div className="edit-overlay absolute top-0 right-0 p-4 no-print-ui z-[1000] flex gap-2">
-                    <button onClick={() => onEdit(entry)} className="bg-white text-blue-600 p-2 rounded shadow border hover:bg-blue-50 hover:border-blue-300 transition-colors"><Edit3 size={16}/></button>
-                    <button onClick={() => onDelete(String(entry.id))} className="bg-white text-red-600 p-2 rounded shadow border hover:bg-red-50 hover:border-red-300 transition-colors"><Trash2 size={16}/></button>
+                    <button onClick={() => onEdit(entry)} aria-label={`${safeTeamName} ${entry.date} 기록 수정`} className="bg-white text-blue-600 p-2 rounded shadow border hover:bg-blue-50 hover:border-blue-300 transition-colors"><Edit3 size={16}/></button>
+                    <button onClick={() => onDelete(String(entry.id))} aria-label={`${safeTeamName} ${entry.date} 기록 삭제`} className="bg-white text-red-600 p-2 rounded shadow border hover:bg-red-50 hover:border-red-300 transition-colors"><Trash2 size={16}/></button>
                 </div>
               </div>
             );

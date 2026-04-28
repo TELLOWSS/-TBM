@@ -86,7 +86,7 @@ const LiveClock = () => {
     const timeStr = time.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     return (
-        <div className="flex flex-col items-end" role="status" aria-live="polite" aria-label="현재 한국 표준시 시계">
+        <div className="flex flex-col items-end" role="timer" aria-live="off" aria-label="현재 한국 표준시 시계">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> KST (한국 표준시)
             </div>
