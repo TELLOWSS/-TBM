@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const MAX_BACKUP_FILE_SIZE = 50 * 1024 * 1024;
 export const MAX_BACKUP_FILE_COUNT = 20;
-export const KNOWN_BACKUP_KEYS = ['version', 'backupDate', 'scope', 'entries', 'assessments', 'teams', 'signatures', 'siteConfig'] as const;
+export const KNOWN_BACKUP_KEYS = ['version', 'backupDate', 'scope', 'entries', 'assessments', 'teams', 'signatures', 'siteConfig', 'teamNormalizationLogs'] as const;
 
 // ============================================
 // Zod Schemas for Runtime Backup Validation
@@ -62,6 +62,17 @@ const SignaturesSchema = z.object({
   site: z.string().nullable().optional(),
 }).passthrough();
 
+const TeamNormalizationLogSchema = z.object({
+  id: z.string(),
+  actedAt: z.number(),
+  actor: z.string(),
+  sourceLabel: z.string(),
+  action: z.enum(['MAP_TO_EXISTING', 'PROMOTE_AND_MAP']),
+  targetTeamId: z.string(),
+  targetTeamName: z.string(),
+  affectedCount: z.number(),
+}).passthrough();
+
 /** Full typed backup payload schema */
 export const BackupPayloadSchema = z.object({
   version: z.string().optional(),
@@ -72,6 +83,7 @@ export const BackupPayloadSchema = z.object({
   teams: z.array(TeamOptionSchema).optional(),
   signatures: SignaturesSchema.optional(),
   siteConfig: SiteConfigSchema.optional(),
+  teamNormalizationLogs: z.array(TeamNormalizationLogSchema).optional(),
 }).passthrough();
 
 export type BackupPayload = z.infer<typeof BackupPayloadSchema>;

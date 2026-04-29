@@ -4,6 +4,34 @@
 
 ## 2026-04-29
 
+### ✅ 보관소 초기필터 원터치 해제 + 심층연구소 다중팀 필터 확장
+- `components/ReportCenter.tsx`
+  - 대시보드 전달 초기필터 배지에 `초기필터 해제` 액션 추가
+  - 원터치 해제 시 팀/연계상태/보정필요 프리필터를 기본값으로 즉시 복귀
+- `components/SafetyDataLab.tsx`
+  - 팀 필터를 단일 선택에서 다중 선택으로 확장(`teamIds`)
+  - 팀 열지도 선택을 토글 누적으로 변경해 여러 팀 동시 Drill-Down 지원
+  - 마스터 팀 목록에 없는 팀도 엔트리 기반으로 필터 대상에 자동 포함
+  - `미지정 팀` 버킷을 추가해 팀 누락 데이터도 분석 범위에서 제외되지 않도록 보정
+  - 공유 요약/지휘 리포트/AI 분석 컨텍스트에 다중 팀 범위를 반영
+- `components/SafetyDataLab.tsx`, `App.tsx`
+  - `Unknown Team Normalization Queue` 추가(기존팀 치환 / 신규팀 등록+치환)
+  - 미등록 팀 발생 건수/최근일자 기준 큐를 제공해 평가자 승인·실무자 정규화 동선을 분리
+  - 정규화 실행 시 `entries`/`teams`를 앱 상태 및 저장소에 즉시 반영
+  - 정규화 작업 이력(누가/언제/무엇/몇건)을 저장하고 심층연구소 내 최근 이력 카드로 표시
+- `utils/backupValidation.ts`, `App.tsx`
+  - 전체 백업/복구 범위에 `teamNormalizationLogs`를 포함해 운영 이력의 연속성 보장
+- `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
+  - 운영 로그 및 구현 메모 동기화
+
+### ✅ 모바일 대시보드 긴 팀명 overflow 안정화
+- `components/Dashboard.tsx`
+  - `팀별 보정 우선순위` 카드의 팀명 표시를 `truncate` 중심에서 `break-words` 기반으로 전환해 긴 팀명도 카드 내에서 안정적으로 표시
+  - `실시간 활동(금일)` 헤더의 선택 팀 배지에 모바일 최대 폭/말줄임 처리를 추가해 상단 레이아웃 깨짐 방지
+  - 실시간 목록 팀명/시각 행에 폭 제한을 추가해 긴 팀명에서도 시각 정보가 밀리지 않도록 보정
+- `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
+  - 후속 모바일 미세조정 항목 및 작업 로그 동기화
+
 ### ✅ 스마트TBM지휘 카테고리 계획 추가
 - `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`
   - 확장 카테고리 `스마트TBM지휘` 신규 정의
@@ -172,6 +200,37 @@
   - 연계율 목표값을 설정 화면에서 전역 관리하고 연구소 차트와 동기화
 - `components/ReportCenter.tsx`
   - 보정 요약 배너에 `미연계만`, `미일치만` 원클릭 액션 추가
+
+### ✅ 대시보드→보관소 팀 필터 컨텍스트 전달
+- `components/Dashboard.tsx`, `App.tsx`, `components/ReportCenter.tsx`
+  - 대시보드에서 선택한 이슈 팀을 보관소 이동 시 함께 전달
+  - 보관소 진입 시 해당 팀 필터가 자동 적용되도록 연동
+
+### ✅ 대시보드→보관소 세부 보정 필터 컨텍스트 전달
+- `components/Dashboard.tsx`, `App.tsx`, `components/ReportCenter.tsx`
+  - 대시보드 경보 카드에서 `미연계만 보기`, `미일치만 보기` 액션 추가
+  - 보관소 진입 시 팀 + 링크 상태(`all/unlinked/mismatched`)를 함께 자동 적용
+
+### ✅ 모바일 상단 UX/기준치/초기필터 가시화 보강
+- `components/Dashboard.tsx`
+  - 모바일 메인 상단 헤더 정렬 개선(`items-start`, 상단 여백 보정)
+  - 기상 경보 기준에서 타워크레인 풍속 임계값을 `15m/s 이상`으로 상향
+- `components/ReportCenter.tsx`
+  - 보관소 상단에 초기 필터 상태 배지 추가(예: `대시보드 전달: 미연계`)
+
+### ✅ 통합대시보드 모바일 최상단 간격 미세 조정
+- `components/Dashboard.tsx`
+  - 모바일에서 헤더/배너/첫 카드 구간 간격을 1단계 축소(`space-y`, `gap`, `pb`, `mb`)
+
+### ✅ 통합대시보드 모바일 경보카드 터치 개선
+- `components/Dashboard.tsx`
+  - 연계 점검 경보 카드 액션 버튼을 모바일 그리드로 재배치
+  - 버튼 최소 높이(`44px`) 적용으로 터치 오동작 감소
+
+### ✅ 통합대시보드 모바일 팀우선순위 터치 개선
+- `components/Dashboard.tsx`
+  - 팀별 보정 우선순위 카드 버튼에 최소 높이(`44px`) 적용
+  - `전체 보기` 버튼도 모바일 터치 기준에 맞춰 높이/패딩 보강
 
 ### ✅ 전일 기록 확인 검증 및 후속 진행 착수
 - `SAFETY_DATALAB_V2_TRACKER.md`

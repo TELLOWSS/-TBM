@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { TBMEntry, TeamOption } from '../types';
 import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity, Database, BrainCircuit, Microscope, Trash2, CheckSquare, Square, XCircle } from 'lucide-react';
 import JSZip from 'jszip';
@@ -31,6 +31,8 @@ interface ReportCenterProps {
   onOpenPrintModal: (targetEntries: TBMEntry[]) => void;
   signatures: { safety: string | null; site: string | null };
   teams: TeamOption[];
+    initialTeamName?: string | null;
+    initialLinkStatus?: 'all' | 'unlinked' | 'mismatched';
   onDelete: (id: string) => void;
   onBulkDelete: (ids: string[]) => void;
 }
@@ -42,11 +44,12 @@ const SimpleLoadingOverlay = ({ text }: { text: string }) => (
     </div>
 );
 
-export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrintModal, signatures, teams, onDelete, onBulkDelete }) => {
+export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrintModal, signatures, teams, initialTeamName, initialLinkStatus = 'all', onDelete, onBulkDelete }) => {
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [selectedDate, setSelectedDate] = useState(''); // Date Filter
     const [selectedLinkStatus, setSelectedLinkStatus] = useState<'all' | 'linked' | 'matched' | 'mismatched' | 'unlinked'>('all');
     const [showRemediationOnly, setShowRemediationOnly] = useState(false);
+    const [showInitialFilterBadge, setShowInitialFilterBadge] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set()); // Multi-select
     const [statusMessage, setStatusMessage] = useState('');
   
@@ -70,6 +73,19 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
     };
   }, [entries, signatures]);
 
+  const initialFilterBadgeLabels = useMemo(() => {
+      const labels: string[] = [];
+      if (initialTeamName) {
+          labels.push(`대시보드 전달: 팀 ${initialTeamName}`);
+      }
+      if (initialLinkStatus === 'unlinked') {
+          labels.push('대시보드 전달: 미연계');
+      } else if (initialLinkStatus === 'mismatched') {
+          labels.push('대시보드 전달: 미일치');
+      }
+      return labels;
+  }, [initialTeamName, initialLinkStatus]);
+
   const uniqueTeams = useMemo(() => {
       const uniqueNames = new Set<string>();
       const result: { id: string; name: string }[] = [];
@@ -89,6 +105,23 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
       });
       return result.sort((a, b) => a.name.localeCompare(b.name));
   }, [teams, entries]);
+
+  useEffect(() => {
+      if (!initialTeamName) return;
+      const matchedTeam = uniqueTeams.find(team => team.name === initialTeamName);
+      if (matchedTeam) {
+          setSelectedTeam(matchedTeam.id);
+      }
+  }, [initialTeamName, uniqueTeams]);
+
+  useEffect(() => {
+      setSelectedLinkStatus(initialLinkStatus === 'all' ? 'all' : initialLinkStatus);
+      setShowRemediationOnly(initialLinkStatus === 'unlinked' || initialLinkStatus === 'mismatched');
+  }, [initialLinkStatus]);
+
+  useEffect(() => {
+      setShowInitialFilterBadge(true);
+  }, [initialTeamName, initialLinkStatus]);
 
   const filteredEntries = useMemo(() => {
       let result = entries;
@@ -149,6 +182,14 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
   const handleFilterMismatchedOnly = () => {
       setSelectedLinkStatus('mismatched');
       setShowRemediationOnly(true);
+  };
+
+  const handleClearInitialPrefill = () => {
+      setSelectedTeam('all');
+      setSelectedLinkStatus('all');
+      setShowRemediationOnly(false);
+      setShowInitialFilterBadge(false);
+      announceStatus('대시보드 전달 초기 필터를 해제했습니다.');
   };
 
   // --- Handlers ---
@@ -307,6 +348,23 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
            </button>
         </div>
       </div>
+
+      {showInitialFilterBadge && initialFilterBadgeLabels.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+              {initialFilterBadgeLabels.map(label => (
+                  <span key={label} className="text-[10px] font-black px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      {label}
+                  </span>
+              ))}
+              <button
+                  onClick={handleClearInitialPrefill}
+                  className="text-[10px] font-black px-2.5 py-1 rounded-full bg-white text-slate-600 border border-slate-300 hover:border-indigo-300 hover:text-indigo-600"
+                  aria-label="대시보드 전달 초기 필터 즉시 해제"
+              >
+                  초기필터 해제
+              </button>
+          </div>
+      )}
 
       <div className={`rounded-2xl border p-4 shadow-sm ${remediationSummary.remediation > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">

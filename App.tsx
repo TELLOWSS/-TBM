@@ -17,7 +17,7 @@ import { hasSupportedBackupShape, validateBackupPayload, MAX_BACKUP_FILE_COUNT, 
 import { loadStoredSiteConfig, persistSiteConfig } from './utils/siteConfigStorage';
 import { StorageDB } from './utils/storageDB';
 import { useConfirmDialog } from './hooks/useConfirmDialog';
-import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig } from './types';
+import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig, TeamNormalizationLog } from './types';
 import { Database } from 'lucide-react';
 
 // [UPDATED] Restore Progress Overlay Component
@@ -91,6 +91,7 @@ const App = () => {
   const [teams, setTeams] = useState<TeamOption[]>(TEAMS);
   const [assessments, setAssessments] = useState<MonthlyRiskAssessment[]>([]);
   const [signatures, setSignatures] = useState<{ safety: string | null; site: string | null }>({ safety: null, site: null });
+    const [teamNormalizationLogs, setTeamNormalizationLogs] = useState<TeamNormalizationLog[]>([]);
   
   // [NEW] Site Config State
   const [siteConfig, setSiteConfig] = useState<SiteConfig>({
@@ -101,6 +102,8 @@ const App = () => {
   });
   
   const [reportTargetEntries, setReportTargetEntries] = useState<TBMEntry[]>([]);
+    const [reportPrefillTeamName, setReportPrefillTeamName] = useState<string | null>(null);
+    const [reportPrefillLinkStatus, setReportPrefillLinkStatus] = useState<'all' | 'unlinked' | 'mismatched'>('all');
   const [showReportModal, setShowReportModal] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -153,6 +156,11 @@ const App = () => {
         } else {
             await StorageDB.set('teams', TEAMS);
             if (mountedRef.current) setTeams(TEAMS);
+        }
+
+        const storedNormalizationLogs = await StorageDB.get<TeamNormalizationLog[]>('teamNormalizationLogs');
+        if (storedNormalizationLogs && mountedRef.current) {
+            setTeamNormalizationLogs(storedNormalizationLogs);
         }
     };
     loadData();
@@ -247,6 +255,107 @@ const App = () => {
       announceStatus('팀 정보가 삭제되었습니다.');
   };
 
+  const resolveEntryTeamLabel = (entry: TBMEntry) => {
+      return (entry.teamName || entry.teamId || '미지정 팀').trim() || '미지정 팀';
+  };
+
+  const appendTeamNormalizationLog = async (payload: Omit<TeamNormalizationLog, 'id' | 'actedAt' | 'actor'>) => {
+      const newLog: TeamNormalizationLog = {
+          id: `tnl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          actedAt: Date.now(),
+          actor: siteConfig.managerName || '관리자',
+          ...payload,
+      };
+      const updatedLogs = [newLog, ...teamNormalizationLogs].slice(0, 200);
+      setTeamNormalizationLogs(updatedLogs);
+      await StorageDB.set('teamNormalizationLogs', updatedLogs);
+  };
+
+  const handleNormalizeUnknownTeam = async (sourceLabel: string, targetTeamId: string) => {
+      const targetTeam = teams.find(team => team.id === targetTeamId);
+      if (!targetTeam) {
+          announceStatus('선택한 대상 팀을 찾을 수 없습니다.');
+          return;
+      }
+
+      let affectedCount = 0;
+      const updatedEntries = entries.map(entry => {
+          const label = resolveEntryTeamLabel(entry);
+          if (label !== sourceLabel) return entry;
+          affectedCount += 1;
+          return {
+              ...entry,
+              teamId: targetTeam.id,
+              teamName: targetTeam.name,
+          };
+      });
+
+      if (affectedCount === 0) {
+          announceStatus('정규화 대상 기록이 없습니다.');
+          return;
+      }
+
+      setEntries(updatedEntries);
+      await Promise.all([
+          StorageDB.set('entries', updatedEntries),
+          appendTeamNormalizationLog({
+              sourceLabel,
+              action: 'MAP_TO_EXISTING',
+              targetTeamId: targetTeam.id,
+              targetTeamName: targetTeam.name,
+              affectedCount,
+          })
+      ]);
+      announceStatus(`${sourceLabel} 항목을 ${targetTeam.name} 팀으로 정규화했습니다.`);
+  };
+
+  const handlePromoteUnknownTeam = async (sourceLabel: string) => {
+      const cleanLabel = sourceLabel.trim();
+      if (!cleanLabel || cleanLabel === '미지정 팀') {
+          announceStatus('미지정 팀은 신규 등록 대신 기존 팀으로 치환해 주세요.');
+          return;
+      }
+
+      const existingTeam = teams.find(team => team.name.trim() === cleanLabel);
+      if (existingTeam) {
+          await handleNormalizeUnknownTeam(cleanLabel, existingTeam.id);
+          return;
+      }
+
+      const newTeam: TeamOption = {
+          id: `team-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name: cleanLabel,
+          category: '미분류',
+      };
+      const updatedTeams = [...teams, newTeam];
+      let affectedCount = 0;
+      const updatedEntries = entries.map(entry => {
+          const label = resolveEntryTeamLabel(entry);
+          if (label !== cleanLabel) return entry;
+          affectedCount += 1;
+          return {
+              ...entry,
+              teamId: newTeam.id,
+              teamName: newTeam.name,
+          };
+      });
+
+      setTeams(updatedTeams);
+      setEntries(updatedEntries);
+      await Promise.all([
+          StorageDB.set('teams', updatedTeams),
+          StorageDB.set('entries', updatedEntries),
+          appendTeamNormalizationLog({
+              sourceLabel: cleanLabel,
+              action: 'PROMOTE_AND_MAP',
+              targetTeamId: newTeam.id,
+              targetTeamName: newTeam.name,
+              affectedCount,
+          })
+      ]);
+      announceStatus(`${cleanLabel} 팀을 신규 등록하고 기존 기록을 정규화했습니다.`);
+  };
+
   const handleBackupData = (scope: 'ALL' | 'TBM' | 'RISK') => {
       try {
           const backupData: BackupPayload = {
@@ -264,6 +373,7 @@ const App = () => {
           if (scope === 'ALL') {
               backupData.teams = teams;
               backupData.signatures = signatures;
+              backupData.teamNormalizationLogs = teamNormalizationLogs;
               // [SECURITY FIX] Exclude API key from backup file to prevent credential leakage
               const { userApiKey: _stripped, ...siteConfigSafe } = siteConfig;
               backupData.siteConfig = siteConfigSafe;
@@ -325,6 +435,7 @@ const App = () => {
       let mergedTeams = [...teams];
       let mergedSignatures = { ...signatures };
       let mergedConfig = { ...siteConfig };
+    let mergedTeamNormalizationLogs = [...teamNormalizationLogs];
       
       let totalFound = 0;
 
@@ -373,6 +484,18 @@ const App = () => {
                                   totalFound++;
                               }
                           });
+                          fileFound = true;
+                      }
+                      if (Array.isArray(payloadObject.teamNormalizationLogs)) {
+                          const validLogs = payloadObject.teamNormalizationLogs.filter((log): log is TeamNormalizationLog => {
+                              return !!log && typeof log === 'object'
+                                  && typeof (log as TeamNormalizationLog).id === 'string'
+                                  && typeof (log as TeamNormalizationLog).actedAt === 'number'
+                                  && typeof (log as TeamNormalizationLog).sourceLabel === 'string'
+                                  && typeof (log as TeamNormalizationLog).targetTeamId === 'string';
+                          });
+                          mergedTeamNormalizationLogs = [...validLogs, ...mergedTeamNormalizationLogs];
+                          totalFound += validLogs.length;
                           fileFound = true;
                       }
                       if (isRecord(payloadObject.signatures)) {
@@ -454,6 +577,15 @@ const App = () => {
           mergedAssessments.forEach(a => uniqueAssMap.set(a.id, a));
           const finalAssessments = Array.from(uniqueAssMap.values());
 
+          const uniqueLogMap = new Map<string, TeamNormalizationLog>();
+          mergedTeamNormalizationLogs.forEach(log => {
+              if (!log?.id) return;
+              uniqueLogMap.set(log.id, log);
+          });
+          const finalNormalizationLogs = Array.from(uniqueLogMap.values())
+              .sort((a, b) => b.actedAt - a.actedAt)
+              .slice(0, 200);
+
           if (mountedRef.current) setRestoreProgress(70);
 
           // Save to DB
@@ -461,6 +593,7 @@ const App = () => {
           await StorageDB.set('assessments', finalAssessments);
           await StorageDB.set('teams', mergedTeams);
           await StorageDB.set('signatures', mergedSignatures);
+          await StorageDB.set('teamNormalizationLogs', finalNormalizationLogs);
           // [SECURITY FIX] API 키는 sessionStorage에만 보관
           persistSiteConfig(mergedConfig);
 
@@ -474,6 +607,7 @@ const App = () => {
               setTeams(mergedTeams);
               setSignatures(mergedSignatures);
               setSiteConfig(mergedConfig);
+              setTeamNormalizationLogs(finalNormalizationLogs);
           }
           
           if (mountedRef.current) {
@@ -616,7 +750,13 @@ const App = () => {
       
       <Navigation 
         currentView={currentView} 
-        setCurrentView={setCurrentView}
+                setCurrentView={(view) => {
+                        if (view === 'reports') {
+                                setReportPrefillTeamName(null);
+                        setReportPrefillLinkStatus('all');
+                        }
+                        setCurrentView(view);
+                }}
                 managerName={siteConfig.managerName}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onShowHistory={() => setShowHistory(true)}
@@ -663,6 +803,8 @@ const App = () => {
                         onOpenPrintModal={(targetEntries) => { setReportTargetEntries(targetEntries); setShowReportModal(true); }}
                         signatures={signatures}
                         teams={teams}
+                        initialTeamName={reportPrefillTeamName}
+                        initialLinkStatus={reportPrefillLinkStatus}
                         onDelete={handleRequestDelete} 
                         onBulkDelete={handleBulkDelete}
                     />;
@@ -673,13 +815,20 @@ const App = () => {
                         onBackupData={handleBackupData} 
                         onRestoreData={handleRestoreData}
                         siteConfig={siteConfig}
+                                                onNormalizeUnknownTeam={handleNormalizeUnknownTeam}
+                                                onPromoteUnknownTeam={handlePromoteUnknownTeam}
+                        normalizationLogs={teamNormalizationLogs}
                     />;
                   default:
                     return <Dashboard 
                         entries={entries}
                         siteName={siteConfig.siteName} // [NEW] Pass Config
                         onViewReport={() => { setReportTargetEntries(entries); setShowReportModal(true); }} 
-                        onNavigateToReports={()=>setCurrentView('reports')} 
+                        onNavigateToReports={(options) => {
+                            setReportPrefillTeamName(options?.teamName?.trim() || null);
+                            setReportPrefillLinkStatus(options?.linkStatus || 'all');
+                            setCurrentView('reports');
+                        }} 
                         onNavigateToDataLab={()=>setCurrentView('data-lab')}
                         onNewEntry={()=>{setEditingEntry(null); setEntryMode('ROUTINE'); setCurrentView('new')}} 
                         onEdit={handleEditEntry} 

@@ -7,7 +7,7 @@ interface DashboardProps {
   entries: TBMEntry[];
   siteName: string; // [NEW] Dynamic Site Name
   onViewReport: () => void;
-  onNavigateToReports: () => void;
+    onNavigateToReports: (options?: { teamName?: string | null; linkStatus?: 'all' | 'unlinked' | 'mismatched' }) => void;
   onNavigateToDataLab: () => void; 
   onNewEntry: () => void; 
   onEdit: (entry: TBMEntry) => void;
@@ -45,23 +45,23 @@ const DailyBarChart = ({
                         
                         {/* Bar */}
                         <div 
-                            tabIndex={0}
+                            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                             role="img"
                             aria-label={`${labels[i] || `${i + 1}일`} 점수 ${val > 0 ? `${Math.round(val)}점` : '미실시'}`}
-                            className={`w-full rounded-t-sm transition-all duration-500 relative ${val > 0 ? '' : 'bg-slate-100'}`}
+                                    className="flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
                             style={{ 
                                 height: val > 0 ? `${(val / maxVal) * 100}%` : '4px',
                                 backgroundColor: val > 0 ? color : undefined
                             }}
                         >
-                            {val === 0 && <div className="w-full h-full bg-slate-100"></div>}
+                                    className="flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-2xl bg-white text-slate-700 border border-slate-200 text-xs font-bold hover:border-amber-300 hover:bg-amber-50 transition-colors"
                         </div>
                     </div>
                 ))}
             </div>
             {/* X-Axis Labels */}
             <div className="flex justify-between mt-1 border-t border-slate-200 pt-1">
-                {labels.map((lbl, i) => (
+                                        className="flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-2xl bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold hover:bg-amber-200 transition-colors"
                     <span key={i} className="text-[8px] text-slate-400 font-bold text-center flex-1">{lbl}</span>
                 ))}
             </div>
@@ -69,7 +69,7 @@ const DailyBarChart = ({
     );
 };
 
-// --- [Component 1] Live Field Clock ---
+                                        className="flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-2xl bg-violet-100 text-violet-700 border border-violet-200 text-xs font-bold hover:bg-violet-200 transition-colors"
 const LiveClock = () => {
     const [time, setTime] = useState<Date>(new Date());
 
@@ -86,7 +86,7 @@ const LiveClock = () => {
     const timeStr = time.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     return (
-        <div className="flex flex-col items-end" role="timer" aria-live="off" aria-label="현재 한국 표준시 시계">
+        <div className="flex flex-col items-start md:items-end" role="timer" aria-live="off" aria-label="현재 한국 표준시 시계">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> KST (한국 표준시)
             </div>
@@ -119,7 +119,7 @@ const SafetyCampaignBanner = () => {
     }, []);
 
     return (
-        <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-3 shadow-lg shadow-orange-200 text-white flex items-center justify-between overflow-hidden relative mb-6">
+        <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-2.5 md:p-3 shadow-lg shadow-orange-200 text-white flex items-center justify-between overflow-hidden relative mb-4 md:mb-6">
             <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.45) 0.8px, transparent 0.8px)', backgroundSize: '12px 12px' }}></div>
             <div className="flex items-center gap-3 relative z-10 px-2">
                 <div className="bg-white/20 p-2 rounded-full backdrop-blur-sm animate-pulse">
@@ -234,7 +234,7 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
         if (weather.temp >= 33) return { level: 'WARNING', msg: '온열 질환 주의 (휴식)' };
         if (weather.condition === 'Rain') return { level: 'WARNING', msg: '미끄럼/감전 주의' };
         if (weather.condition === 'Snow') return { level: 'WARNING', msg: '결빙/미끄럼 주의' };
-        if (weather.wind >= 10) return { level: 'CRITICAL', msg: '타워크레인 작업 중지' };
+        if (weather.wind >= 15) return { level: 'CRITICAL', msg: '타워크레인 작업 중지' };
         return { level: 'NORMAL', msg: '통상 작업 가능' };
     }, [weather]);
 
@@ -545,8 +545,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
     }, [dailySummary.primaryLinkageIssueEntry, dailySummary.todaysEntries, selectedIssueTeam]);
     
     return (
-        <div className="space-y-6 pb-20 animate-fade-in font-sans text-slate-800">
-            <div className="flex flex-col md:flex-row justify-between items-end border-b border-slate-200 pb-4 gap-4">
+        <div className="space-y-4 md:space-y-6 pb-20 pt-0.5 md:pt-0 animate-fade-in font-sans text-slate-800">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-200 pb-3 md:pb-4 gap-2 md:gap-4">
                 <div>
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                         <Activity className="text-indigo-600" size={24}/>
@@ -561,7 +561,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
 
             <SafetyCampaignBanner />
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-5 h-auto">
                 <div className="lg:col-span-4 h-[320px] lg:h-auto">
                     <WeatherStation siteName={siteName} />
                 </div>
@@ -587,7 +587,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                     </div>
                     
                     <div className="flex-1 grid grid-cols-1 gap-3">
-                        <button onClick={onNavigateToReports} aria-label="문서 보관소로 이동" className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all flex items-center justify-between group">
+                        <button onClick={() => onNavigateToReports({ teamName: selectedIssueTeam, linkStatus: 'all' })} aria-label="문서 보관소로 이동" className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all flex items-center justify-between group">
                             <div className="flex items-center gap-3">
                                 <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                                     <FileText size={20}/>
@@ -661,11 +661,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                                 <FileText size={14} /> {selectedIssueTeam ? `${selectedIssueTeam} 보정 바로가기` : '연계 보정 바로가기'}
                             </button>
                             <button
-                                onClick={onNavigateToReports}
+                                onClick={() => onNavigateToReports({ teamName: selectedIssueTeam, linkStatus: 'all' })}
                                 className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-white text-slate-700 border border-slate-200 text-xs font-bold hover:border-amber-300 hover:bg-amber-50 transition-colors"
                             >
                                 <ArrowRight size={14} /> 문서 보관소에서 전체 확인
                             </button>
+                            {dailySummary.missingLinkedEntries.length > 0 && (
+                                <button
+                                    onClick={() => onNavigateToReports({ teamName: selectedIssueTeam, linkStatus: 'unlinked' })}
+                                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold hover:bg-amber-200 transition-colors"
+                                >
+                                    미연계만 보기
+                                </button>
+                            )}
+                            {dailySummary.mismatchedEntries.length > 0 && (
+                                <button
+                                    onClick={() => onNavigateToReports({ teamName: selectedIssueTeam, linkStatus: 'mismatched' })}
+                                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-violet-100 text-violet-700 border border-violet-200 text-xs font-bold hover:bg-violet-200 transition-colors"
+                                >
+                                    미일치만 보기
+                                </button>
+                            )}
                         </div>
                     )}
                     {dailySummary.issueTeamSummary.length > 0 && (
@@ -676,7 +692,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                                     {selectedIssueTeam && (
                                         <button
                                             onClick={() => setSelectedIssueTeam(null)}
-                                            className="text-[10px] font-bold text-slate-500 px-2 py-1 rounded border border-slate-200 bg-white hover:border-slate-300"
+                                            className="text-[10px] font-bold text-slate-500 px-3 py-2 min-h-[40px] rounded border border-slate-200 bg-white hover:border-slate-300"
                                         >
                                             전체 보기
                                         </button>
@@ -689,10 +705,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                                     <button
                                         key={team.teamName}
                                         onClick={() => setSelectedIssueTeam(prev => prev === team.teamName ? null : team.teamName)}
-                                        className={`w-full flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left ${selectedIssueTeam === team.teamName ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                                        className={`w-full flex items-start justify-between gap-3 rounded-xl border px-3 py-2.5 min-h-[44px] text-left ${selectedIssueTeam === team.teamName ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
                                     >
                                         <div className="min-w-0">
-                                            <p className="text-xs font-bold text-slate-800 truncate">{team.teamName}</p>
+                                            <p className="text-xs font-bold text-slate-800 leading-snug break-words">{team.teamName}</p>
                                             <p className="text-[10px] text-slate-500">총 {team.total}건 · 동일월 연계 {team.matched}건</p>
                                         </div>
                                         <div className="text-right shrink-0">
@@ -826,11 +842,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                 </div>
 
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col h-[300px] lg:h-auto overflow-hidden">
-                    <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-start gap-2 sm:items-center">
                         <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
                             <Radio size={16} className="text-red-500 animate-pulse"/> 실시간 활동 (금일)
                         </h3>
-                        <span className="bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold">{selectedIssueTeam ? `${selectedIssueTeam} ${visibleRealtimeEntries.length}건` : `${dailySummary.todaysEntries.length}건`}</span>
+                        <span className="bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold max-w-[55vw] sm:max-w-none truncate">{selectedIssueTeam ? `${selectedIssueTeam} ${visibleRealtimeEntries.length}건` : `${dailySummary.todaysEntries.length}건`}</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar" role="status" aria-live="polite" aria-label="금일 실시간 활동 목록">
                         {visibleRealtimeEntries.length === 0 ? (
@@ -850,8 +866,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                                         )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between">
-                                            <span className="text-xs font-bold text-slate-700 truncate">{entry.teamName}</span>
+                                        <div className="flex justify-between gap-2">
+                                            <span className="text-xs font-bold text-slate-700 truncate max-w-[58%]">{entry.teamName}</span>
                                             <span className="text-[10px] text-slate-400 font-mono">{entry.time}</span>
                                         </div>
                                         <p className="text-[10px] text-slate-500 truncate">{entry.workDescription || '내용 없음'}</p>

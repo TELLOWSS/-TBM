@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { TBMEntry, TeamOption, CommandTask as SmartCommandTask, CommandPriority as SmartCommandPriority, CommandStatus as SmartCommandStatus, CommandStatusHistoryItem, SiteConfig } from '../types';
+import { TBMEntry, TeamOption, CommandTask as SmartCommandTask, CommandPriority as SmartCommandPriority, CommandStatus as SmartCommandStatus, CommandStatusHistoryItem, SiteConfig, TeamNormalizationLog } from '../types';
 import { BarChart2, TrendingUp, BrainCircuit, Activity, Database, Info, Hexagon, Radar, ShieldCheck, Upload, HardDrive, Search, AlertTriangle, Users, Zap, Layers, FileText, Download, Share2, Target, CheckCircle2, XCircle, Filter, ClipboardList, Plus, Trash2 } from 'lucide-react';
 import { generateGeneralInsight } from '../services/geminiService';
 
@@ -10,16 +10,24 @@ interface SafetyDataLabProps {
     onBackupData: (scope: 'ALL' | 'TBM' | 'RISK') => void;
     onRestoreData: (files: FileList) => void;
     siteConfig?: SiteConfig;
+    onNormalizeUnknownTeam?: (sourceLabel: string, targetTeamId: string) => Promise<void>;
+    onPromoteUnknownTeam?: (sourceLabel: string) => Promise<void>;
+    normalizationLogs?: TeamNormalizationLog[];
 }
 
 type PeriodFilter = '7D' | '30D' | 'THIS_MONTH' | 'CUSTOM' | 'ALL';
 
 type LabFilterState = {
-    teamId: string | null;
+    teamIds: string[];
     riskLabel: string | null;
     period: PeriodFilter;
     customStart: string;
     customEnd: string;
+};
+
+type TeamScopeOption = {
+    id: string;
+    name: string;
 };
 
 // ============================================================
@@ -241,7 +249,7 @@ const CommandOrderCard: React.FC<{ order: CommandOrder; index: number }> = ({ or
     );
 };
 
-export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, onBackupData, onRestoreData, siteConfig }) => {
+export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, onBackupData, onRestoreData, siteConfig, onNormalizeUnknownTeam, onPromoteUnknownTeam, normalizationLogs = [] }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiCards, setAiCards] = useState<CommandOrder[] | null>(null);
     const [aiRawFallback, setAiRawFallback] = useState<string | null>(null);
@@ -256,6 +264,8 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     const [validationLogCopied, setValidationLogCopied] = useState(false);
     const [phaseClearLogCopied, setPhaseClearLogCopied] = useState(false);
     const [commandReportCopiedOnce, setCommandReportCopiedOnce] = useState(false);
+    const [unknownTeamTargetMap, setUnknownTeamTargetMap] = useState<Record<string, string>>({});
+    const [normalizingUnknownLabel, setNormalizingUnknownLabel] = useState<string | null>(null);
     const [commandTasks, setCommandTasks] = useState<SmartCommandTask[]>(() => {
         try { return JSON.parse(localStorage.getItem(COMMAND_TASK_STORAGE_KEY) || '[]'); } catch { return []; }
     });
@@ -278,7 +288,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         return 90;
     });
     const [filter, setFilter] = useState<LabFilterState>({
-        teamId: null,
+        teamIds: [],
         riskLabel: null,
         period: '30D',
         customStart: '',
@@ -305,6 +315,185 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                 setAnnounceMessage(message);
             }
         });
+    };
+
+    const teamScopeOptions = useMemo<TeamScopeOption[]>(() => {
+        const options: TeamScopeOption[] = [];
+        const usedIds = new Set<string>();
+        const usedNames = new Set<string>();
+        let hasUnassigned = false;
+
+        teams.forEach(team => {
+            const id = (team.id || '').trim();
+            const name = (team.name || '').trim();
+            if (!id) return;
+            const resolvedName = name || id;
+            if (!usedIds.has(id)) {
+                options.push({ id, name: resolvedName });
+                usedIds.add(id);
+                usedNames.add(resolvedName);
+            }
+        });
+
+        entries.forEach(entry => {
+            const teamId = (entry.teamId || '').trim();
+            const teamName = (entry.teamName || '').trim();
+            if (teamId) {
+                if (!usedIds.has(teamId)) {
+                    const resolvedName = teamName || teamId;
+                    options.push({ id: teamId, name: resolvedName });
+                    usedIds.add(teamId);
+                    usedNames.add(resolvedName);
+                }
+                return;
+            }
+
+            if (teamName) {
+                if (!usedNames.has(teamName)) {
+                    const syntheticId = `name:${teamName}`;
+                    options.push({ id: syntheticId, name: teamName });
+                    usedIds.add(syntheticId);
+                    usedNames.add(teamName);
+                }
+                return;
+            }
+
+            hasUnassigned = true;
+        });
+
+        if (hasUnassigned) {
+            options.push({ id: '__UNASSIGNED__', name: '미지정 팀' });
+        }
+
+        return options.sort((left, right) => left.name.localeCompare(right.name, 'ko'));
+    }, [teams, entries]);
+
+    const teamScopeMap = useMemo(() => {
+        return new Map(teamScopeOptions.map(option => [option.id, option]));
+    }, [teamScopeOptions]);
+
+    const primaryTeamIdByName = useMemo(() => {
+        const map = new Map<string, string>();
+        teamScopeOptions.forEach(option => {
+            if (!map.has(option.name)) {
+                map.set(option.name, option.id);
+            }
+        });
+        return map;
+    }, [teamScopeOptions]);
+
+    const selectedTeamIdSet = useMemo(() => {
+        return new Set(filter.teamIds);
+    }, [filter.teamIds]);
+
+    const selectedTeamNames = useMemo(() => {
+        return filter.teamIds
+            .map(teamId => teamScopeMap.get(teamId)?.name || teamId)
+            .filter(name => !!name);
+    }, [filter.teamIds, teamScopeMap]);
+
+    const selectedTeamScopeLabel = useMemo(() => {
+        if (selectedTeamNames.length === 0) return '전체';
+        if (selectedTeamNames.length <= 2) return selectedTeamNames.join(', ');
+        return `${selectedTeamNames[0]} 외 ${selectedTeamNames.length - 1}팀`;
+    }, [selectedTeamNames]);
+
+    const selectedTeamNameSet = useMemo(() => {
+        return new Set(selectedTeamNames);
+    }, [selectedTeamNames]);
+
+    const unknownTeamQueue = useMemo(() => {
+        const knownTeamIdSet = new Set(teams.map(team => (team.id || '').trim()).filter(Boolean));
+        const knownTeamNameSet = new Set(teams.map(team => (team.name || '').trim()).filter(Boolean));
+
+        const grouped = entries.reduce((acc, entry) => {
+            const teamId = (entry.teamId || '').trim();
+            const teamName = (entry.teamName || '').trim();
+            const label = (teamName || teamId || '미지정 팀').trim() || '미지정 팀';
+
+            const isKnownById = teamId ? knownTeamIdSet.has(teamId) : false;
+            const isKnownByName = teamName ? knownTeamNameSet.has(teamName) : false;
+            const isUnknown = !isKnownById && !isKnownByName;
+            if (!isUnknown) {
+                return acc;
+            }
+
+            if (!acc[label]) {
+                acc[label] = {
+                    sourceLabel: label,
+                    count: 0,
+                    latestDate: entry.date || '-',
+                    hasUnassigned: label === '미지정 팀',
+                };
+            }
+
+            acc[label].count += 1;
+            if ((entry.date || '') > acc[label].latestDate) {
+                acc[label].latestDate = entry.date || acc[label].latestDate;
+            }
+            return acc;
+        }, {} as Record<string, { sourceLabel: string; count: number; latestDate: string; hasUnassigned: boolean }>);
+
+        return Object.values(grouped).sort((a, b) => b.count - a.count || b.latestDate.localeCompare(a.latestDate));
+    }, [entries, teams]);
+
+    const resolveEntryTeamScopeId = (entry: TBMEntry) => {
+        const teamId = (entry.teamId || '').trim();
+        const teamName = (entry.teamName || '').trim();
+
+        if (teamId && teamScopeMap.has(teamId)) return teamId;
+
+        if (teamName) {
+            const byName = primaryTeamIdByName.get(teamName);
+            if (byName) return byName;
+            const syntheticId = `name:${teamName}`;
+            if (teamScopeMap.has(syntheticId)) return syntheticId;
+            return syntheticId;
+        }
+
+        return '__UNASSIGNED__';
+    };
+
+    const handleUnknownTargetChange = (sourceLabel: string, targetTeamId: string) => {
+        setUnknownTeamTargetMap(prev => ({
+            ...prev,
+            [sourceLabel]: targetTeamId,
+        }));
+    };
+
+    const handleApplyUnknownNormalization = async (sourceLabel: string) => {
+        const targetTeamId = unknownTeamTargetMap[sourceLabel];
+        if (!targetTeamId) {
+            announceStatus('치환할 대상 팀을 먼저 선택하세요.');
+            return;
+        }
+        if (!onNormalizeUnknownTeam) {
+            announceStatus('팀 정규화 기능을 사용할 수 없습니다.');
+            return;
+        }
+
+        try {
+            setNormalizingUnknownLabel(sourceLabel);
+            await onNormalizeUnknownTeam(sourceLabel, targetTeamId);
+            announceStatus(`${sourceLabel} 항목을 선택 팀으로 정규화했습니다.`);
+        } finally {
+            setNormalizingUnknownLabel(null);
+        }
+    };
+
+    const handlePromoteUnknownTeam = async (sourceLabel: string) => {
+        if (!onPromoteUnknownTeam) {
+            announceStatus('신규 팀 승격 기능을 사용할 수 없습니다.');
+            return;
+        }
+
+        try {
+            setNormalizingUnknownLabel(sourceLabel);
+            await onPromoteUnknownTeam(sourceLabel);
+            announceStatus(`${sourceLabel} 팀을 신규 등록 후 정규화했습니다.`);
+        } finally {
+            setNormalizingUnknownLabel(null);
+        }
     };
 
     const periodEntries = useMemo(() => {
@@ -337,10 +526,20 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     // Needed to display the "Menu" (Full list of teams, full list of risks) even when filtered
     const globalAnalysis = useMemo(() => {
         // Team Stats for Heatmap
-        const teamStats = teams.map(team => {
-            const teamEntries = periodEntries.filter(e => e.teamId === team.id);
-            const count = teamEntries.length;
-            const scoreSum = teamEntries.reduce((acc, e) => acc + (e.videoAnalysis?.score || 0), 0);
+        const activityByTeamId = periodEntries.reduce((acc, entry) => {
+            const teamId = resolveEntryTeamScopeId(entry);
+            if (!acc[teamId]) {
+                acc[teamId] = { count: 0, scoreSum: 0 };
+            }
+            acc[teamId].count += 1;
+            acc[teamId].scoreSum += (entry.videoAnalysis?.score || 0);
+            return acc;
+        }, {} as Record<string, { count: number; scoreSum: number }>);
+
+        const teamStats = teamScopeOptions.map(team => {
+            const teamStat = activityByTeamId[team.id];
+            const count = teamStat?.count || 0;
+            const scoreSum = teamStat?.scoreSum || 0;
             const score = count > 0 ? Math.round(scoreSum / count) : 0;
             return { id: team.id, name: team.name, count, score };
         }).sort((a, b) => b.count - a.count);
@@ -367,15 +566,15 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         const maxRiskCount = Math.max(...riskSpectrum.map(r => r.count), 1);
 
         return { teamStats, maxTeamActivity, riskSpectrum, maxRiskCount };
-    }, [periodEntries, teams]);
+    }, [periodEntries, teamScopeOptions]);
 
     // --- 2. Filtered Analysis (Calculated based on Selection) ---
     // Used for Score, Trends, and specific details
     const filteredAnalysis = useMemo(() => {
         let filteredEntries = periodEntries;
 
-        if (filter.teamId) {
-            filteredEntries = filteredEntries.filter(e => e.teamId === filter.teamId);
+        if (filter.teamIds.length > 0) {
+            filteredEntries = filteredEntries.filter(entry => selectedTeamIdSet.has(resolveEntryTeamScopeId(entry)));
         }
 
         if (filter.riskLabel) {
@@ -492,11 +691,11 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
             teamLinkageStats,
             monthlyLinkageTrend,
         };
-    }, [periodEntries, filter.teamId, filter.riskLabel, linkageTrendRange]);
+    }, [periodEntries, filter.teamIds, filter.riskLabel, linkageTrendRange]);
 
     // --- [Smart TBM Command] 지휘브리핑 스켈레톤 데이터 ---
     const commandBriefingDraft = useMemo(() => {
-        const teamName = filter.teamId ? (teams.find(t => t.id === filter.teamId)?.name || filter.teamId) : '전 팀';
+        const teamName = selectedTeamScopeLabel === '전체' ? '전 팀' : selectedTeamScopeLabel;
         const risks = globalAnalysis.riskSpectrum.slice(0, 3);
         return risks.map((risk, idx) => ({
             rank: idx + 1,
@@ -505,15 +704,27 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
             instruction: `${teamName} 대상 ${risk.label} 위험요인 사전 점검 및 즉시 시정조치 실행`,
             kpi: `${risk.label} 관련 지적건수 0건 유지`,
         }));
-    }, [globalAnalysis.riskSpectrum, filter.teamId, teams]);
+    }, [globalAnalysis.riskSpectrum, selectedTeamScopeLabel]);
 
     const visibleCommandTasks = useMemo(() => {
         let target = [...commandTasks];
-        if (filter.teamId) {
-            target = target.filter(task => task.assigneeTeamId === filter.teamId);
+        if (filter.teamIds.length > 0) {
+            target = target.filter(task => {
+                if (task.assigneeTeamId && selectedTeamIdSet.has(task.assigneeTeamId)) {
+                    return true;
+                }
+
+                const taskTeamName = (task.assigneeTeamName || '').trim();
+                if (!taskTeamName) {
+                    return false;
+                }
+
+                const mappedId = primaryTeamIdByName.get(taskTeamName) || `name:${taskTeamName}`;
+                return selectedTeamIdSet.has(mappedId) || selectedTeamNameSet.has(taskTeamName);
+            });
         }
         return target.sort((prevTask, nextTask) => (nextTask.updatedAt || 0) - (prevTask.updatedAt || 0));
-    }, [commandTasks, filter.teamId]);
+    }, [commandTasks, filter.teamIds, selectedTeamIdSet, primaryTeamIdByName, selectedTeamNameSet]);
 
     const commandReport = useMemo(() => {
         const totalCommands = visibleCommandTasks.length;
@@ -617,7 +828,9 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
             const endStr = end.toISOString().slice(0, 10);
             const startStr = start.toISOString().slice(0, 10);
             let subset = entries.filter(e => e.date >= startStr && e.date <= endStr);
-            if (filter.teamId) subset = subset.filter(e => e.teamId === filter.teamId);
+            if (filter.teamIds.length > 0) {
+                subset = subset.filter(entry => selectedTeamIdSet.has(resolveEntryTeamScopeId(entry)));
+            }
             if (filter.riskLabel) subset = subset.filter(e => e.riskFactors?.some(r => (r.risk + r.measure).includes(filter.riskLabel!)));
             const count = subset.length;
             const scores = subset.filter(e => e.videoAnalysis?.score).map(e => e.videoAnalysis!.score);
@@ -644,7 +857,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
             scoreMonthDiff: diff(thisMonth.score, prevMonth.score),
             thisWeek, prevWeek, thisMonth, prevMonth,
         };
-    }, [entries, filter.teamId, filter.riskLabel]);
+    }, [entries, filter.teamIds, filter.riskLabel]);
 
     // --- [Phase 3] AI 지시 카드 생성 Logic ---
     const generateDeepInsight = async () => {
@@ -655,7 +868,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         try {
             const topRisks = globalAnalysis.riskSpectrum.slice(0, 3).map(r => r.label).join(', ') || '없음';
             const focusParts: string[] = [];
-            if (filter.teamId) focusParts.push(`담당팀: ${teams.find(t => t.id === filter.teamId)?.name || filter.teamId}`);
+            if (filter.teamIds.length > 0) focusParts.push(`담당팀: ${selectedTeamScopeLabel}`);
             if (filter.riskLabel) focusParts.push(`집중위험: ${filter.riskLabel}`);
             focusParts.push(`분석기간: ${filter.period}`);
             const context = focusParts.join(' | ');
@@ -726,7 +939,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     const handleResetFilter = () => {
         setFilter(prev => ({
             ...prev,
-            teamId: null,
+            teamIds: [],
             riskLabel: null,
             period: '30D',
             customStart: '',
@@ -784,7 +997,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     // --- [Phase 4] 공유 요약 텍스트 복사 ---
     const handleCopyShareText = () => {
         const topRisk = globalAnalysis.riskSpectrum[0]?.label || '-';
-        const teamName = filter.teamId ? (teams.find(t => t.id === filter.teamId)?.name || filter.teamId) : '전체';
+        const teamName = selectedTeamScopeLabel;
         const text = `[휘강건설 안전현황 요약] ${new Date().toLocaleDateString('ko-KR')}
 분석기간: ${filter.period} | 대상팀: ${teamName}
 평균 안전점수: ${filteredAnalysis.avgScore}/100
@@ -810,7 +1023,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
             ? commandReport.topDelayReasons.map(item => `${reasonLabelMap[item.reason] || item.reason}:${item.count}`).join(', ')
             : '없음';
 
-        const scopeTeam = filter.teamId ? (teams.find(team => team.id === filter.teamId)?.name || filter.teamId) : '전체';
+        const scopeTeam = selectedTeamScopeLabel;
         const text = `[스마트TBM 지휘 리포트] ${new Date().toLocaleDateString('ko-KR')}
 대상팀: ${scopeTeam}
 지시 총계: ${commandReport.totalCommands}건
@@ -1215,11 +1428,11 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     )}
                 </div>
                 <div className="flex w-full md:w-auto flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-                    {(filter.teamId || filter.riskLabel || filter.period !== '30D') && (
+                    {(filter.teamIds.length > 0 || filter.riskLabel || filter.period !== '30D') && (
                         <div className="flex flex-wrap items-center gap-2 bg-indigo-900/50 border border-indigo-500 text-indigo-200 px-4 py-2 rounded-xl animate-fade-in max-w-full">
                             <Filter size={14} />
                             <span className="text-xs font-bold">필터 적용중</span>
-                            {filter.teamId && <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-950 border border-indigo-700">팀: {teams.find(t => t.id === filter.teamId)?.name}</span>}
+                            {filter.teamIds.length > 0 && <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-950 border border-indigo-700">팀: {selectedTeamScopeLabel}</span>}
                             {filter.riskLabel && <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-950 border border-indigo-700">위험: {filter.riskLabel}</span>}
                             <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-950 border border-indigo-700">기간: {filter.period}</span>
                             <button onClick={handleResetFilter} aria-label="적용된 필터 해제" className="ml-2 hover:text-white transition-colors"><XCircle size={16}/></button>
@@ -1424,7 +1637,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                             <TrendingUp size={16} className="text-cyan-400"/> 7-Day Trend
                         </h3>
-                        {(filter.teamId || filter.riskLabel || filter.period !== '30D') && <span className="text-[9px] text-indigo-400 font-bold">필터 적용됨</span>}
+                        {(filter.teamIds.length > 0 || filter.riskLabel || filter.period !== '30D') && <span className="text-[9px] text-indigo-400 font-bold">필터 적용됨</span>}
                     </div>
                     
                     <div className="flex-1 flex items-end justify-between gap-2 h-full min-h-[200px] relative">
@@ -1480,11 +1693,108 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                 activity={team.count} 
                                 score={team.score}
                                 maxActivity={globalAnalysis.maxTeamActivity}
-                                onClick={() => setFilter(prev => ({ ...prev, teamId: prev.teamId === team.id ? null : team.id }))}
-                                isActive={filter.teamId === team.id}
-                                isDimmed={!!filter.teamId && filter.teamId !== team.id}
+                                onClick={() => setFilter(prev => ({
+                                    ...prev,
+                                    teamIds: prev.teamIds.includes(team.id)
+                                        ? prev.teamIds.filter(teamId => teamId !== team.id)
+                                        : [...prev.teamIds, team.id],
+                                }))}
+                                isActive={filter.teamIds.includes(team.id)}
+                                isDimmed={filter.teamIds.length > 0 && !filter.teamIds.includes(team.id)}
                             />
                         ))}
+                    </div>
+                </div>
+
+                <div className="col-span-12 bg-slate-800/30 rounded-3xl p-4 md:p-6 border border-amber-500/30 shadow-xl">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                        <div className="flex items-center gap-2">
+                            <Users size={16} className="text-amber-400"/>
+                            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Unknown Team Normalization Queue</h3>
+                        </div>
+                        <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-full">
+                            미정규 팀 {unknownTeamQueue.length}건
+                        </span>
+                    </div>
+
+                    <div className="mb-3 flex flex-wrap gap-2 text-[11px]">
+                        <span className="px-2 py-1 rounded border border-cyan-500/40 bg-cyan-600/20 text-cyan-300">평가자: 원인 파악 후 치환 승인</span>
+                        <span className="px-2 py-1 rounded border border-indigo-500/40 bg-indigo-600/20 text-indigo-300">실무자: 신규팀 등록 또는 기존팀 치환</span>
+                    </div>
+
+                    {unknownTeamQueue.length === 0 ? (
+                        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/50 p-4 text-xs text-slate-400">
+                            미등록/미지정 팀 항목이 없습니다. 현재 팀 데이터가 정규 상태입니다.
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-3">
+                            {unknownTeamQueue.map(item => {
+                                const isWorking = normalizingUnknownLabel === item.sourceLabel;
+                                return (
+                                    <div key={item.sourceLabel} className="rounded-xl border border-slate-700/60 bg-slate-900/60 p-3 md:p-4">
+                                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-bold text-white break-words">{item.sourceLabel}</p>
+                                                <p className="text-[11px] text-slate-400 mt-1">발생 {item.count}건 · 최근 {item.latestDate}</p>
+                                            </div>
+                                            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                                                <select
+                                                    value={unknownTeamTargetMap[item.sourceLabel] || ''}
+                                                    onChange={(event) => handleUnknownTargetChange(item.sourceLabel, event.target.value)}
+                                                    className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-xs text-slate-100 min-h-[40px]"
+                                                    aria-label={`${item.sourceLabel} 치환 대상 팀 선택`}
+                                                    disabled={isWorking}
+                                                >
+                                                    <option value="">치환 대상 팀 선택</option>
+                                                    {teams.map(team => (
+                                                        <option key={team.id} value={team.id}>{team.name}</option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    onClick={() => handleApplyUnknownNormalization(item.sourceLabel)}
+                                                    className="px-3 py-2 rounded-lg text-[11px] font-bold border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 min-h-[40px]"
+                                                    disabled={isWorking}
+                                                >
+                                                    기존팀으로 치환
+                                                </button>
+                                                {!item.hasUnassigned && (
+                                                    <button
+                                                        onClick={() => handlePromoteUnknownTeam(item.sourceLabel)}
+                                                        className="px-3 py-2 rounded-lg text-[11px] font-bold border border-indigo-500/40 bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 min-h-[40px]"
+                                                        disabled={isWorking}
+                                                    >
+                                                        신규팀 등록+치환
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    <div className="mt-4 rounded-2xl border border-slate-700/60 bg-slate-900/50 p-3 md:p-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs font-bold text-slate-300">정규화 작업 이력 (최근)</p>
+                            <span className="text-[10px] text-slate-500">{normalizationLogs.length}건</span>
+                        </div>
+                        {normalizationLogs.length === 0 ? (
+                            <p className="text-[11px] text-slate-500">아직 정규화 이력이 없습니다.</p>
+                        ) : (
+                            <div className="flex flex-col gap-2 max-h-44 overflow-y-auto pr-1">
+                                {normalizationLogs.slice(0, 10).map(log => (
+                                    <div key={log.id} className="rounded-lg border border-slate-700/60 bg-slate-950/60 px-3 py-2">
+                                        <p className="text-[11px] text-slate-200 break-words">
+                                            <span className="font-bold text-white">{log.sourceLabel}</span> → <span className="font-bold text-emerald-300">{log.targetTeamName}</span>
+                                        </p>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">
+                                            {new Date(log.actedAt).toLocaleString('ko-KR')} · {log.actor} · {log.affectedCount}건 · {log.action === 'PROMOTE_AND_MAP' ? '신규등록+치환' : '기존팀 치환'}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 

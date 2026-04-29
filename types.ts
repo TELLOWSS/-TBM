@@ -219,3 +219,14 @@ export interface CommandDailyReport {
   topRisks: string[];
   summary: string;
 }
+
+export interface TeamNormalizationLog {
+  id: string;
+  actedAt: number;
+  actor: string;
+  sourceLabel: string;
+  action: 'MAP_TO_EXISTING' | 'PROMOTE_AND_MAP';
+  targetTeamId: string;
+  targetTeamName: string;
+  affectedCount: number;
+}
