@@ -172,6 +172,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   };
 
     const normalizeRiskText = (value: string) => value.trim().replace(/\s+/g, ' ');
+  const isLikelyVideoFile = (file: File) => {
+      const mime = (file.type || '').toLowerCase();
+      if (mime.startsWith('video/')) return true;
+
+      const name = (file.name || '').toLowerCase();
+      const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
+      const allowedExt = new Set(['.mp4', '.mov', '.m4v', '.3gp', '.webm', '.avi', '.mkv']);
+      return allowedExt.has(ext);
+  };
 
   const announceStatus = (message: string) => {
       setAnnounceMessage('');
@@ -416,8 +425,13 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
               videoBlobUrlRef.current = null;
           }
           const file = e.target.files[0];
-          if (!file.type.startsWith('video/')) {
-              announceStatus('동영상 파일만 업로드할 수 있습니다.');
+          if (!isLikelyVideoFile(file)) {
+              announceStatus('동영상 파일만 업로드할 수 있습니다. (지원: MP4/MOV/M4V/3GP/WEBM 등)');
+              e.target.value = '';
+              return;
+          }
+          if (!file.size || file.size <= 0) {
+              announceStatus('선택한 영상 파일을 읽을 수 없습니다. 다시 선택해주세요.');
               e.target.value = '';
               return;
           }
@@ -440,6 +454,9 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           // [FIX] Do NOT persist blob URL to storage — blob URLs are session-only.
           // Store only the filename as evidence; the video content is analysed on upload.
           updateActiveItem({ tbmVideoUrl: null, tbmVideoFileName: file.name });
+
+          // 모바일에서 동일 파일 재선택 시 change 이벤트가 누락되는 문제 방지
+          e.target.value = '';
       }
   };
 
@@ -937,7 +954,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                     </div>
                                 )}
                             </div>
-                            <input type="file" ref={videoInputRef} className="hidden" accept="video/*" onChange={handleVideoUpload}/>
+                            <input type="file" ref={videoInputRef} className="hidden" accept="video/*,.mp4,.mov,.m4v,.3gp,.webm,.avi,.mkv" onClick={(e) => { (e.target as HTMLInputElement).value = ''; }} onChange={handleVideoUpload}/>
                             <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
                                 대용량 영상은 자동으로 축소/고속 처리되어 빠른 코칭 분석에 사용됩니다.
                             </p>
