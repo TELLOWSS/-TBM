@@ -292,6 +292,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           
           setOriginalLogPreview(activeItem.originalLogPreview || activeItem.originalLogImageUrl || null);
           setTbmPhotoPreview(activeItem.tbmPhotoPreview || activeItem.tbmPhotoUrl || null);
+          setTbmVideoFile(activeItem.tbmVideoFile || null);
           setTbmVideoPreview(activeItem.tbmVideoPreview || activeItem.tbmVideoUrl || null);
           setTbmVideoFileName(activeItem.tbmVideoFileName || null);
           
@@ -527,7 +528,13 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           setTbmVideoPreview(url);
           // [FIX] Do NOT persist blob URL to storage — blob URLs are session-only.
           // Store only the filename as evidence; the video content is analysed on upload.
-          updateActiveItem({ tbmVideoUrl: null, tbmVideoFileName: file.name });
+          updateActiveItem({
+              tbmVideoFile: file,
+              tbmVideoPreview: url,
+              tbmVideoUrl: null,
+              tbmVideoFileName: file.name,
+              videoAnalysis: defaultAnalysis,
+          });
           setVideoUploadState('READY');
           setVideoUploadMessage(`업로드 완료: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
 
@@ -1070,7 +1077,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                             }`}>
                                 {tbmVideoPreview ? (
                                     <div className="relative w-full h-full flex items-center justify-center">
-                                        <video src={tbmVideoPreview} className="w-full h-full object-contain" controls/>
+                                        <video src={tbmVideoPreview} className="w-full h-full object-contain" controls playsInline preload="metadata"/>
                                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                                             <PlayCircle size={60} className="text-white drop-shadow-2xl"/>
                                         </div>

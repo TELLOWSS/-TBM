@@ -532,6 +532,25 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      const lowerName = (file.name || '').toLowerCase();
+      const isJsonFile = lowerName.endsWith('.json') || file.type === 'application/json' || file.type === 'text/json';
+
+      if (isJsonFile) {
+          setBackupStatusMessage(`복구 파일 1개를 불러오는 중입니다...`);
+          announceStatus('JSON 복구 파일을 감지했습니다. 데이터 복구를 진행합니다.');
+          onRestoreData(e.target.files);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          return;
+      }
+
+      const isLikelyPdf = lowerName.endsWith('.pdf') || file.type === 'application/pdf' || file.type === 'application/octet-stream';
+      const isLikelyImage = !!file.type && file.type.startsWith('image/');
+      const isImageExt = /\.(jpg|jpeg|png|webp|heic|heif|gif|bmp)$/i.test(lowerName);
+      if (!(isLikelyPdf || isLikelyImage || isImageExt)) {
+          announceStatus('문서 분석은 PDF 또는 이미지 파일만 지원합니다.');
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          return;
+      }
       
       setIsAnalyzing(true);
       setLoadingProgress(0); 
@@ -551,7 +570,18 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
         try {
           const base64Data = base64Url.split(',')[1];
-          const result: MonthlyExtractionResult = await extractMonthlyPriorities(base64Data, file.type, uploadType);
+                    const dataUrlMime = base64Url.startsWith('data:') ? (base64Url.split(';')[0]?.replace('data:', '') || '') : '';
+                    const normalizedMime = (() => {
+                            if (dataUrlMime === 'application/pdf' || dataUrlMime.startsWith('image/')) return dataUrlMime;
+                            if (file.type === 'application/pdf' || file.type.startsWith('image/')) return file.type;
+                            if (lowerName.endsWith('.pdf')) return 'application/pdf';
+                            if (/\.(jpg|jpeg)$/i.test(lowerName)) return 'image/jpeg';
+                            if (/\.png$/i.test(lowerName)) return 'image/png';
+                            if (/\.webp$/i.test(lowerName)) return 'image/webp';
+                            if (/\.(heic|heif)$/i.test(lowerName)) return 'image/heic';
+                            return 'application/pdf';
+                    })();
+                    const result: MonthlyExtractionResult = await extractMonthlyPriorities(base64Data, normalizedMime, uploadType);
           
           clearInterval(timer);
           setLoadingProgress(100);
@@ -842,7 +872,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
        {isAnalyzing && <AnalysisOverlay progress={loadingProgress} />}
 
        <input type="file" ref={backupInputRef} className="hidden" accept=".json" onChange={handleImportBackup} multiple/>
-       <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="application/pdf,image/*"/>
+    <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="application/pdf,.pdf,image/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.json,application/json,text/json"/>
 
        <div className="xl:hidden bg-white border border-slate-200 rounded-2xl p-3 shadow-sm sticky top-2 z-20">
           <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
