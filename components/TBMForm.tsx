@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { TBMEntry, RiskAssessmentItem, SafetyGuideline, TeamOption, TBMAnalysisResult, ScoreRubric, MonthlyRiskAssessment } from '../types';
 import { analyzeMasterLog, evaluateTBMVideo, generateSafetyFeedback } from '../services/geminiService';
 import { compressVideo, type VideoCompressionResult } from '../utils/videoUtils';
-import { Upload, Camera, FileText, X, Layers, ArrowLeft, Trash2, Film, Save, Plus, UserCheck, BrainCircuit, CheckCircle2, AlertCircle, Loader2, PlayCircle, Zap, Image as ImageIcon, Copy, Sparkles, Maximize, ScanText, ChevronRight, SplitSquareHorizontal, Paperclip, Users, Eye, Mic, Edit3, Sliders, Shield, Award } from 'lucide-react';
+import { Upload, Camera, FileText, X, Layers, ArrowLeft, Trash2, Film, Save, Plus, UserCheck, BrainCircuit, CheckCircle2, AlertCircle, Loader2, PlayCircle, Zap, Image as ImageIcon, Copy, Sparkles, Maximize, ScanText, ChevronRight, SplitSquareHorizontal, Paperclip, Users, Eye, Mic, Edit3, Sliders, Shield, Award, ClipboardCheck } from 'lucide-react';
 
 interface TBMFormProps {
     onSave: (data: TBMEntry | TBMEntry[], shouldExit?: boolean) => Promise<boolean>;
@@ -500,8 +500,23 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
               return;
           }
 
-          // 새 영상 업로드 시 기존 분석/압축 캐시 초기화
-          setVideoAnalysis(null);
+          // 새 영상 업로드 시 기존 분석/압축 캐시 초기화 후 기본값 채점 폼 생성
+          const defaultAnalysis: TBMAnalysisResult = {
+              score: 0,
+              evaluation: '',
+              evalLog: '',
+              evalAttendance: '',
+              evalFocus: '',
+              evalLeader: '',
+              analysisSource: 'VIDEO',
+              rubric: { logQuality: 0, focus: 0, voice: 0, ppe: 0, deductions: [] },
+              leaderCoaching: { actionItem: '', rationale: '' },
+              details: { participation: 'GOOD', voiceClarity: 'CLEAR', ppeStatus: 'GOOD', interaction: false },
+              focusAnalysis: { overall: 0, distractedCount: 0, focusZones: { front: 'HIGH', back: 'HIGH', side: 'HIGH' } },
+              insight: { mentionedTopics: [], missingTopics: [], suggestion: '' },
+              feedback: []
+          };
+          setVideoAnalysis(defaultAnalysis);
           setVideoAnalysisProgress(0);
           compressedVideoCacheRef.current = null;
 
@@ -1043,20 +1058,27 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                 <button onClick={()=>videoInputRef.current?.click()} className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded hover:bg-rose-100">변경</button>
                             </div>
                             
-                            <div onClick={()=>videoInputRef.current?.click()} onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
+                            <div onClick={()=>!tbmVideoPreview && videoInputRef.current?.click()} onKeyDown={(e) => {
+                                if (!tbmVideoPreview && (e.key === 'Enter' || e.key === ' ')) {
                                     e.preventDefault();
                                     videoInputRef.current?.click();
                                 }
-                            }} role="button" tabIndex={0} aria-label="TBM 동영상 업로드" className={`aspect-video rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center cursor-pointer hover:border-rose-300 hover:bg-rose-50 transition-all ${tbmVideoPreview ? 'bg-black border-none' : 'bg-slate-50'}`}>
+                            }} role="button" tabIndex={tbmVideoPreview ? -1 : 0} aria-label="TBM 동영상 "  className={`aspect-video rounded-xl border-2 flex items-center justify-center transition-all group ${
+                                tbmVideoPreview 
+                                ? 'border-rose-300 bg-black cursor-default' 
+                                : 'border-dashed border-slate-300 bg-slate-50 cursor-pointer hover:border-rose-300 hover:bg-rose-50'
+                            }`}>
                                 {tbmVideoPreview ? (
                                     <div className="relative w-full h-full flex items-center justify-center">
                                         <video src={tbmVideoPreview} className="w-full h-full object-contain" controls/>
-                                        <div className="absolute top-2 right-2 bg-black/50 text-white text-[10px] px-2 py-1 rounded-full">{tbmVideoFileName}</div>
+                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                            <PlayCircle size={60} className="text-white drop-shadow-2xl"/>
+                                        </div>
+                                        <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-full font-bold max-w-[280px] truncate">{tbmVideoFileName}</div>
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-center justify-center text-slate-400 gap-2">
-                                        <PlayCircle size={32}/>
+                                        <PlayCircle size={40}/>
                                         <span className="text-xs font-bold">동영상 업로드</span>
                                     </div>
                                 )}
@@ -1106,11 +1128,12 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                 </button>
                             )}
                             
+                            {/* AI Analysis Results (After Analysis) */}
                             {videoAnalysis && (
                                 <div className="mt-4 bg-indigo-50 border border-indigo-100 rounded-xl p-4 animate-fade-in">
                                     <div className="flex justify-between items-center mb-3 border-b border-indigo-100 pb-2">
                                         <span className="text-sm font-black text-indigo-800 flex items-center gap-2">
-                                            <Sparkles size={14}/> AI 진단 리포트 (수정 가능)
+                                            <Sparkles size={14}/> AI 분석 결과 (수정 가능)
                                         </span>
                                         <div className="flex items-center gap-2">
                                             <span className="text-[10px] font-bold text-indigo-400">종합 점수</span>
