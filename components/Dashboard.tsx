@@ -68,7 +68,7 @@ const DailyBarChart = ({
                 {chartData.map((_, i) => {
                     const lbl = labels[i] || `${i + 1}`;
                     return <span key={i} className="text-[8px] text-slate-400 font-bold text-center flex-1">{lbl}</span>;
-                ))}
+                })}
             </div>
         </div>
     );
