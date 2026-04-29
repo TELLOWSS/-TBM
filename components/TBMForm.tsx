@@ -41,6 +41,7 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuidelines, initialData, onDelete, teams, mode = 'ROUTINE' }) => {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+    const [mobileSection, setMobileSection] = useState<'MEDIA' | 'FORM'>('FORM');
   
   // [UPDATED] Default date set to current system date
   const [entryDate, setEntryDate] = useState(() => {
@@ -599,9 +600,27 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
 
             {/* 2. Main Work Area - Split View */}
             <div className="flex-1 flex overflow-hidden flex-col xl:flex-row">
+                <div className="xl:hidden px-4 py-3 border-b border-slate-200 bg-white">
+                    <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+                        <button
+                            type="button"
+                            onClick={() => setMobileSection('MEDIA')}
+                            className={`rounded-xl px-4 py-3 text-sm font-black transition-all ${mobileSection === 'MEDIA' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600'}`}
+                        >
+                            미디어
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setMobileSection('FORM')}
+                            className={`rounded-xl px-4 py-3 text-sm font-black transition-all ${mobileSection === 'FORM' ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' : 'text-slate-600'}`}
+                        >
+                            입력데이터
+                        </button>
+                    </div>
+                </div>
                 
                 {/* LEFT: Media Command Center */}
-                <div className="w-full xl:w-1/2 h-auto xl:h-full flex flex-col xl:border-r border-slate-200 bg-slate-100/80 overflow-y-auto custom-scrollbar">
+                <div className={`w-full xl:w-1/2 h-auto xl:h-full flex-col xl:border-r border-slate-200 bg-slate-100/80 overflow-y-auto custom-scrollbar ${mobileSection === 'MEDIA' ? 'flex' : 'hidden'} xl:flex`}>
                     <div className="p-4 sticky top-0 bg-slate-100/90 backdrop-blur z-20 border-b border-slate-200">
                         <h3 className="font-black text-slate-700 flex items-center gap-2"><ImageIcon size={18}/> 미디어 증빙 센터 (Assets)</h3>
                     </div>
@@ -835,7 +854,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                 </div>
 
                 {/* RIGHT: Form Data (Scrollable) */}
-                <div className="w-full xl:w-1/2 h-auto xl:h-full overflow-y-auto bg-white custom-scrollbar">
+                <div className={`w-full xl:w-1/2 h-auto xl:h-full overflow-y-auto bg-white custom-scrollbar ${mobileSection === 'FORM' ? 'block' : 'hidden'} xl:block`}>
                     <div className="p-4 bg-slate-50 border-b border-slate-200 sticky top-0 z-10 flex items-center gap-2">
                         <FileText size={18} className="text-slate-500"/>
                         <h3 className="font-black text-slate-700">입력 데이터 (Data Entry)</h3>
