@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { TBMEntry, RiskAssessmentItem, SafetyGuideline, TeamOption, TBMAnalysisResult, ScoreRubric } from '../types';
+import { TBMEntry, RiskAssessmentItem, SafetyGuideline, TeamOption, TBMAnalysisResult, ScoreRubric, MonthlyRiskAssessment } from '../types';
 import { analyzeMasterLog, evaluateTBMVideo, generateSafetyFeedback } from '../services/geminiService';
 import { compressVideo } from '../utils/videoUtils';
 import { Upload, Camera, FileText, X, Layers, ArrowLeft, Trash2, Film, Save, Plus, UserCheck, BrainCircuit, CheckCircle2, AlertCircle, Loader2, PlayCircle, Zap, Image as ImageIcon, Copy, Sparkles, Maximize, ScanText, ChevronRight, SplitSquareHorizontal, Paperclip, Users, Eye, Mic, Edit3, Sliders, Shield, Award } from 'lucide-react';
@@ -10,6 +10,15 @@ interface TBMFormProps {
     onSave: (data: TBMEntry | TBMEntry[], shouldExit?: boolean) => Promise<boolean>;
   onCancel: () => void;
   monthlyGuidelines: SafetyGuideline[];
+    riskAssessments?: MonthlyRiskAssessment[];
+    linkedRiskAssessment?: {
+        id?: string;
+        fileName: string;
+        label: string;
+        total: number;
+        high: number;
+        actionNotes: number;
+    };
   initialData?: TBMEntry;
   onDelete?: (id: string) => void;
   teams: TeamOption[];
@@ -38,7 +47,7 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
-export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuidelines, initialData, onDelete, teams, mode = 'ROUTINE' }) => {
+export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuidelines, riskAssessments, linkedRiskAssessment, initialData, onDelete, teams, mode = 'ROUTINE' }) => {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
     const [mobileSection, setMobileSection] = useState<'MEDIA' | 'FORM'>('FORM');
@@ -72,6 +81,95 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const [tempFeedbackText, setTempFeedbackText] = useState("");
   const [newFeedbackInput, setNewFeedbackInput] = useState("");
   const [isFeedbackGenerating, setIsFeedbackGenerating] = useState(false);
+
+  const resolvedLinkedRiskAssessment = React.useMemo(() => {
+      const validAssessments = (riskAssessments || []).filter(assessment => Array.isArray(assessment.priorities) && assessment.priorities.length > 0);
+      if (validAssessments.length === 0) return undefined;
+
+      const targetMonth = entryDate?.slice(0, 7);
+      const exactMonthly = validAssessments
+          .filter(assessment => assessment.type === 'MONTHLY' && assessment.month === targetMonth)
+          .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+
+      if (exactMonthly) return exactMonthly;
+
+      const latestMonthly = validAssessments
+          .filter(assessment => assessment.type === 'MONTHLY')
+          .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+
+      if (latestMonthly) return latestMonthly;
+
+      return [...validAssessments].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+  }, [riskAssessments, entryDate]);
+
+  const effectiveGuidelines = resolvedLinkedRiskAssessment?.priorities || monthlyGuidelines;
+
+  const linkedRiskSuggestions = React.useMemo(() => {
+      return [...effectiveGuidelines]
+          .filter(item => item.level === 'HIGH' || !!item.actionNote?.trim())
+          .sort((a, b) => {
+              if (a.level === 'HIGH' && b.level !== 'HIGH') return -1;
+              if (a.level !== 'HIGH' && b.level === 'HIGH') return 1;
+              if (!!a.actionNote?.trim() && !b.actionNote?.trim()) return -1;
+              if (!a.actionNote?.trim() && !!b.actionNote?.trim()) return 1;
+              return 0;
+          })
+          .slice(0, 5);
+  }, [effectiveGuidelines]);
+
+  const selectedTeam = React.useMemo(() => teams.find(team => team.id === teamId), [teams, teamId]);
+
+  const normalizeCategory = (value: string) => value.replace(/\s|\/|\(|\)|팀/gi, '').toLowerCase();
+
+  const teamFocusedLinkedRiskSuggestions = React.useMemo(() => {
+      if (linkedRiskSuggestions.length === 0) return [];
+      const selectedCategory = normalizeCategory(selectedTeam?.category || '');
+      const selectedName = normalizeCategory(selectedTeam?.name || '');
+
+      const scored = linkedRiskSuggestions.map(item => {
+          const guidelineCategory = normalizeCategory(item.category || '');
+          const isCommon = guidelineCategory.includes('공통');
+          const matchesTeamCategory = !!selectedCategory && (guidelineCategory.includes(selectedCategory) || selectedCategory.includes(guidelineCategory));
+          const matchesTeamName = !!selectedName && (guidelineCategory.includes(selectedName) || selectedName.includes(guidelineCategory));
+          const score = isCommon ? 1 : matchesTeamCategory ? 3 : matchesTeamName ? 2 : 0;
+          return { item, score };
+      });
+
+      const focused = scored.filter(entry => entry.score > 0).sort((a, b) => b.score - a.score).map(entry => entry.item);
+      return focused.length > 0 ? focused : linkedRiskSuggestions;
+  }, [linkedRiskSuggestions, selectedTeam]);
+
+  const linkedRiskAssessmentSummary = React.useMemo(() => {
+      if (resolvedLinkedRiskAssessment) {
+          return {
+              fileName: resolvedLinkedRiskAssessment.fileName,
+              label: resolvedLinkedRiskAssessment.type === 'INITIAL'
+                  ? '최초 위험성평가'
+                  : resolvedLinkedRiskAssessment.type === 'REGULAR'
+                  ? `${resolvedLinkedRiskAssessment.month.split('-')[0]}년 정기 위험성평가`
+                  : `${resolvedLinkedRiskAssessment.month}월 월간/수시 위험성평가`,
+              total: resolvedLinkedRiskAssessment.priorities.length,
+              high: resolvedLinkedRiskAssessment.priorities.filter(item => item.level === 'HIGH').length,
+              actionNotes: resolvedLinkedRiskAssessment.priorities.filter(item => !!item.actionNote?.trim()).length,
+              id: resolvedLinkedRiskAssessment.id,
+              matchedByMonth: resolvedLinkedRiskAssessment.type === 'MONTHLY' && resolvedLinkedRiskAssessment.month === entryDate.slice(0, 7),
+          };
+      }
+
+      if (linkedRiskAssessment) {
+          return {
+              ...linkedRiskAssessment,
+              matchedByMonth: false,
+          };
+      }
+
+      return undefined;
+  }, [resolvedLinkedRiskAssessment, linkedRiskAssessment, entryDate]);
+
+  const buildMeasureFromGuideline = (guideline: SafetyGuideline) => {
+      if (guideline.actionNote?.trim()) return guideline.actionNote.trim();
+      return `${guideline.category} 작업 전 위험요인 공유 및 보호구/작업순서 재점검`;
+  };
 
   const announceStatus = (message: string) => {
       setAnnounceMessage('');
@@ -166,6 +264,69 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       const newRisks = riskFactors.filter((_, idx) => idx !== i);
       setRiskFactors(newRisks);
       updateActiveItem({ riskFactors: newRisks });
+  };
+
+  const handleImportLinkedGuideline = (guideline: SafetyGuideline) => {
+      const exists = riskFactors.some(item => item.risk.trim() === guideline.content.trim());
+      if (exists) {
+          announceStatus('이미 동일한 위험요인이 등록되어 있습니다.');
+          return;
+      }
+
+      const next = [
+          ...riskFactors,
+          {
+              risk: guideline.content,
+              measure: buildMeasureFromGuideline(guideline),
+          }
+      ];
+      setRiskFactors(next);
+      updateActiveItem({ riskFactors: next });
+      setMobileSection('FORM');
+      announceStatus('연계된 위험성평가 항목을 위험요인에 추가했습니다.');
+  };
+
+  const handleImportAllLinkedGuidelines = () => {
+      if (teamFocusedLinkedRiskSuggestions.length === 0) {
+          announceStatus('가져올 연계 위험성평가 항목이 없습니다.');
+          return;
+      }
+
+      const existingRisks = new Set(riskFactors.map(item => item.risk.trim()));
+      const appendItems = teamFocusedLinkedRiskSuggestions
+          .filter(item => !existingRisks.has(item.content.trim()))
+          .map(item => ({
+              risk: item.content,
+              measure: buildMeasureFromGuideline(item),
+          }));
+
+      if (appendItems.length === 0) {
+          announceStatus('추천 항목이 이미 모두 등록되어 있습니다.');
+          return;
+      }
+
+      const next = [...riskFactors, ...appendItems];
+      setRiskFactors(next);
+      updateActiveItem({ riskFactors: next });
+      setMobileSection('FORM');
+      announceStatus(`연계 위험성평가 ${appendItems.length}건을 위험요인에 일괄 반영했습니다.`);
+  };
+
+  const handleApplyActionNotesToFeedback = () => {
+      const noteFeedback = teamFocusedLinkedRiskSuggestions
+          .filter(item => !!item.actionNote?.trim())
+          .map(item => `[${item.category}] ${item.actionNote!.trim()}`);
+
+      if (noteFeedback.length === 0) {
+          announceStatus('안전 코멘트로 반영할 조치메모가 없습니다.');
+          return;
+      }
+
+      const merged = Array.from(new Set([...safetyFeedback, ...noteFeedback]));
+      setSafetyFeedback(merged);
+      updateActiveItem({ safetyFeedback: merged });
+      setMobileSection('FORM');
+      announceStatus(`조치메모 ${noteFeedback.length}건을 안전 코멘트에 반영했습니다.`);
   };
 
   const handleAddFeedback = () => { if (newFeedbackInput.trim()) { const n = [...safetyFeedback, newFeedbackInput.trim()]; setSafetyFeedback(n); updateActiveItem({ safetyFeedback: n }); setNewFeedbackInput(""); } };
@@ -337,7 +498,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
         const base64Data = originalLogPreview.split(',')[1];
         const mimeType = originalLogPreview.split(';')[0].split(':')[1];
 
-        const results = await analyzeMasterLog(base64Data, mimeType, monthlyGuidelines, 'ROUTINE');
+        const results = await analyzeMasterLog(base64Data, mimeType, effectiveGuidelines, 'ROUTINE');
         
         if (results && results.length > 0) {
             const data = results[0];
@@ -394,7 +555,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
     }
     setIsFeedbackGenerating(true);
     try {
-        const newFeedback = await generateSafetyFeedback(workDescription, riskFactors, monthlyGuidelines);
+        const newFeedback = await generateSafetyFeedback(workDescription, riskFactors, effectiveGuidelines);
         
         if (newFeedback && newFeedback.length > 0) {
             const merged = Array.from(new Set([...safetyFeedback, ...newFeedback]));
@@ -426,7 +587,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
             base64Video.split(',')[1],
             'video/mp4',
             { workDescription, riskFactors },
-            monthlyGuidelines
+            effectiveGuidelines
         );
 
         setVideoAnalysis(result);
@@ -478,6 +639,11 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
               tbmVideoFileName: item.tbmVideoFileName,
               // [FIX] blob: URL은 세션 종료 후 무효화되므로 절대 저장하지 않음
               tbmVideoUrl: item.tbmVideoUrl?.startsWith('blob:') ? null : (item.tbmVideoUrl || null),
+              linkedRiskAssessmentId: linkedRiskAssessmentSummary?.id,
+              linkedRiskAssessmentLabel: linkedRiskAssessmentSummary?.label,
+              linkedRiskAssessmentMatchedByMonth: linkedRiskAssessmentSummary?.matchedByMonth,
+              linkedRiskAssessmentHighCount: linkedRiskAssessmentSummary?.high,
+              linkedRiskAssessmentActionNoteCount: linkedRiskAssessmentSummary?.actionNotes,
               createdAt: item.createdAt || Date.now()
           };
       });
@@ -861,6 +1027,104 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                     </div>
                     
                     <div className="p-6 md:p-8 space-y-8 max-w-2xl mx-auto">
+                        <div className={`rounded-2xl border p-4 ${linkedRiskAssessmentSummary ? 'border-indigo-200 bg-indigo-50' : 'border-amber-200 bg-amber-50'}`}>
+                            <div className="flex items-start gap-3">
+                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${linkedRiskAssessmentSummary ? 'bg-indigo-600 text-white' : 'bg-amber-500 text-white'}`}>
+                                    <Shield size={18}/>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                                        <span className="text-xs font-black text-slate-800">위험성평가 연계 상태</span>
+                                        <span className={`text-[10px] font-black px-2 py-1 rounded-full ${linkedRiskAssessmentSummary ? 'bg-indigo-600 text-white' : 'bg-amber-500 text-white'}`}>
+                                            {linkedRiskAssessmentSummary ? '연계중' : '미연계'}
+                                        </span>
+                                    </div>
+                                    {linkedRiskAssessmentSummary ? (
+                                        <>
+                                            <p className="text-sm font-bold text-slate-800 leading-snug">{linkedRiskAssessmentSummary.label}</p>
+                                            <p className="text-xs text-slate-500 truncate mt-1">{linkedRiskAssessmentSummary.fileName}</p>
+                                            <div className="mt-3 grid grid-cols-3 gap-2">
+                                                <div className="rounded-xl bg-white/80 border border-indigo-100 px-3 py-2">
+                                                    <p className="text-[10px] font-bold text-slate-400">연계 항목</p>
+                                                    <p className="text-sm font-black text-slate-800">{linkedRiskAssessmentSummary.total}건</p>
+                                                </div>
+                                                <div className="rounded-xl bg-white/80 border border-red-100 px-3 py-2">
+                                                    <p className="text-[10px] font-bold text-slate-400">상위험</p>
+                                                    <p className="text-sm font-black text-red-600">{linkedRiskAssessmentSummary.high}건</p>
+                                                </div>
+                                                <div className="rounded-xl bg-white/80 border border-emerald-100 px-3 py-2">
+                                                    <p className="text-[10px] font-bold text-slate-400">조치메모</p>
+                                                    <p className="text-sm font-black text-emerald-600">{linkedRiskAssessmentSummary.actionNotes}건</p>
+                                                </div>
+                                            </div>
+                                            <p className={`mt-3 inline-flex items-center rounded-full px-3 py-1 text-[10px] font-black ${linkedRiskAssessmentSummary.matchedByMonth ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                                                {linkedRiskAssessmentSummary.matchedByMonth ? '입력 일자와 같은 월 위험성평가 우선 연계' : '최신 위험성평가 기준으로 연계'}
+                                            </p>
+                                            <p className="mt-3 text-[11px] text-slate-600 leading-relaxed">
+                                                수기 일지 OCR, 안전 코멘트 생성, 동영상 평가 시 현재 연계된 위험성평가 항목이 함께 사용됩니다.
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <p className="text-xs text-amber-800 leading-relaxed">
+                                            현재 연계된 위험성평가가 없습니다. 위험성평가 관리에서 OCR 분석/등록 후 TBM 등록 OCR 정확도를 높일 수 있습니다.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {linkedRiskAssessmentSummary && teamFocusedLinkedRiskSuggestions.length > 0 && (
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                                    <div>
+                                        <p className="text-sm font-black text-emerald-900">연계 위험성평가 빠른 가져오기</p>
+                                        <p className="text-[11px] text-emerald-800 mt-1">{selectedTeam ? `${selectedTeam.name} 기준 우선 추천 · ` : ''}상위위험 및 즉시조치 메모를 TBM 위험요인/대책 초안으로 즉시 반영합니다.</p>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleImportAllLinkedGuidelines}
+                                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-3 text-xs font-black min-h-[44px] shadow-md shadow-emerald-200"
+                                        >
+                                            <Plus size={14}/> 추천 {teamFocusedLinkedRiskSuggestions.length}건 일괄 가져오기
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleApplyActionNotesToFeedback}
+                                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-xs font-black text-emerald-700 min-h-[44px]"
+                                        >
+                                            <UserCheck size={14}/> 조치메모 → 코멘트
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    {teamFocusedLinkedRiskSuggestions.map((item, index) => (
+                                        <div key={`${item.content}-${index}`} className="rounded-xl border border-emerald-100 bg-white/80 p-3">
+                                            <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded ${item.level === 'HIGH' ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                                                            {item.level === 'HIGH' ? '상위험' : '연계항목'}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-slate-500">{item.category}</span>
+                                                    </div>
+                                                    <p className="text-sm font-bold text-slate-800 leading-snug">{item.content}</p>
+                                                    <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">대책 제안: {buildMeasureFromGuideline(item)}</p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleImportLinkedGuideline(item)}
+                                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 min-h-[44px] whitespace-nowrap"
+                                                >
+                                                    <ChevronRight size={14}/> 가져오기
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Form Fields */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1">

@@ -96,7 +96,8 @@ const App = () => {
   const [siteConfig, setSiteConfig] = useState<SiteConfig>({
       siteName: '용인 푸르지오 원클러스터 2,3단지',
       managerName: '박성훈 부장',
-      userApiKey: null
+      userApiKey: null,
+      linkageTargetRate: 90,
   });
   
   const [reportTargetEntries, setReportTargetEntries] = useState<TBMEntry[]>([]);
@@ -131,7 +132,8 @@ const App = () => {
         const loadedConfig = loadStoredSiteConfig({
             siteName: '용인 푸르지오 원클러스터 2,3단지',
             managerName: '박성훈 부장',
-            userApiKey: null
+            userApiKey: null,
+            linkageTargetRate: 90,
         });
         if (mountedRef.current) setSiteConfig(loadedConfig);
 
@@ -590,8 +592,8 @@ const App = () => {
       setCurrentView('new');
   };
 
-  const monthlyGuidelines: SafetyGuideline[] = useMemo(() => {
-      const latestAssessment = [...assessments]
+  const linkedRiskAssessment = useMemo(() => {
+      return [...assessments]
           .filter(a => Array.isArray(a.priorities) && a.priorities.length > 0)
           .sort((a, b) => {
               const monthlyWeightA = a.type === 'MONTHLY' ? 1 : 0;
@@ -602,9 +604,11 @@ const App = () => {
 
               return (b.createdAt ?? 0) - (a.createdAt ?? 0);
           })[0];
-
-      return latestAssessment?.priorities ?? [];
   }, [assessments]);
+
+  const monthlyGuidelines: SafetyGuideline[] = useMemo(() => {
+      return linkedRiskAssessment?.priorities ?? [];
+  }, [linkedRiskAssessment]);
   return (
     <div className="flex bg-slate-50 min-h-screen font-sans text-slate-900" aria-busy={isRestoring}>
             <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{appStatusMessage}</p>
@@ -629,6 +633,19 @@ const App = () => {
                         onSave={handleSaveEntry} 
                         onCancel={() => setCurrentView('dashboard')}
                         monthlyGuidelines={monthlyGuidelines}
+                        riskAssessments={assessments}
+                        linkedRiskAssessment={linkedRiskAssessment ? {
+                            id: linkedRiskAssessment.id,
+                            fileName: linkedRiskAssessment.fileName,
+                            label: linkedRiskAssessment.type === 'INITIAL'
+                                ? '최초 위험성평가'
+                                : linkedRiskAssessment.type === 'REGULAR'
+                                ? `${linkedRiskAssessment.month.split('-')[0]}년 정기 위험성평가`
+                                : `${linkedRiskAssessment.month}월 월간/수시 위험성평가`,
+                            total: linkedRiskAssessment.priorities.length,
+                            high: linkedRiskAssessment.priorities.filter(item => item.level === 'HIGH').length,
+                            actionNotes: linkedRiskAssessment.priorities.filter(item => !!item.actionNote?.trim()).length,
+                        } : undefined}
                         initialData={editingEntry || undefined}
                         onDelete={handleRequestDelete}
                         teams={teams}
@@ -654,7 +671,8 @@ const App = () => {
                         entries={entries} 
                         teams={teams} 
                         onBackupData={handleBackupData} 
-                        onRestoreData={handleRestoreData} 
+                        onRestoreData={handleRestoreData}
+                        siteConfig={siteConfig}
                     />;
                   default:
                     return <Dashboard 

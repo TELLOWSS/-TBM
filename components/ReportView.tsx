@@ -769,6 +769,20 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                     <div className="text-[11px] leading-relaxed text-wrap-fix text-black min-h-[50px]">
                                         {entry.workDescription || "내용 없음"}
                                     </div>
+                                    {entry.linkedRiskAssessmentLabel && (
+                                        <div className="mt-2 rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5">
+                                            <div className="flex items-center gap-1 flex-wrap">
+                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${entry.linkedRiskAssessmentMatchedByMonth ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'}`}>
+                                                    {entry.linkedRiskAssessmentMatchedByMonth ? '동일월 위험성평가 연계' : '위험성평가 연계'}
+                                                </span>
+                                                <span className="text-[10px] font-bold text-slate-700">{entry.linkedRiskAssessmentLabel}</span>
+                                            </div>
+                                            <div className="mt-1 text-[9px] text-slate-600 flex items-center gap-2 flex-wrap">
+                                                <span>상위험 {entry.linkedRiskAssessmentHighCount ?? 0}건</span>
+                                                <span>조치메모 {entry.linkedRiskAssessmentActionNoteCount ?? 0}건</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex-1 border border-orange-300 rounded flex flex-col min-h-0 bg-white">
                                     <div className="bg-orange-50 p-1.5 text-center text-[10px] font-bold text-orange-700 border-b border-orange-200 shrink-0">⚠ 중점 위험 관리 사항</div>

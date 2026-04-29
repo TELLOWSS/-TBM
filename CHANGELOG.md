@@ -89,6 +89,90 @@
   - 통합 검증 상태 카드에 `평가자 관점`/`실무자 관점` 충족 배지 추가
   - 모바일 빠른 검증 액션 바(검증 로그 복사/클리어 요약 복사) 추가
 
+### ✅ 위험성평가 모바일 최적화 (평가자/실무자 관점)
+- `components/RiskAssessmentManager.tsx`
+  - 모바일 1차 탭 전환 추가: `평가목록 / 평가내용`
+  - 모바일 작업영역 2차 탭 전환 추가: `실무도구 / 최종목록`
+  - 고정 2열 구조를 모바일 우선 세로 흐름으로 재구성하고 터치 타겟 최소 높이 보강
+  - 평가 항목 카드의 수정/삭제 액션을 모바일에서 항상 노출되도록 조정
+  - 평가자용 요약(상위험 수, 비교추적) / 실무자용 요약(등록·수정·삭제 동선) 카드 추가
+  - 검색창/액션 버튼/빈 상태 CTA를 모바일 폭에 맞춰 전체폭 중심으로 재배치
+  - 평가 선택 시 자동 상세 전환, 수동 추가 후 자동 목록 복귀, `상위험만` 필터 추가
+  - 모바일 하단 고정 액션바 추가: `평가목록 / 실무도구 / 최종목록 / 상위험` 전환 + 문서추가 바로가기
+  - 상위험 카드 및 편집모드에 `즉시조치 메모` 저장 필드 추가
+  - 상위위험 `TOP 3` 상단 요약 카드와 `즉시조치 메모 복사` 버튼 추가
+  - 평가 목록에 `기준 정보 / 운영 정보` 아코디언 축소 추가
+  - `상위위험 고정 섹션` 및 `즉시조치 메모 일괄 복사` 추가
+- `types.ts`, `utils/backupValidation.ts`
+  - `SafetyGuideline.actionNote` 필드 및 백업 검증 스키마 반영
+
+### ✅ 스마트TBM 등록-위험성평가 연계 가시화/정밀화
+- `App.tsx`, `components/TBMForm.tsx`
+  - TBM 등록 화면에 현재 연계된 위험성평가 상태 카드 추가
+  - TBM 입력 일자와 같은 `월간 위험성평가`를 우선 연결하도록 보강
+  - 연계 데이터는 수기 일지 OCR, 안전 코멘트 생성, 동영상 평가에 공통 사용되도록 유지
+  - 연계된 상위위험/즉시조치 메모를 TBM 위험요인/대책 초안으로 `단건/일괄 가져오기` 추가
+  - 선택 팀 기준으로 연계 추천을 우선 정렬하고, 조치메모를 안전 코멘트로 즉시 반영하는 액션 추가
+  - TBM 저장 시 사용된 위험성평가 ID/라벨/연계조건(동일월 여부) 메타데이터 기록
+- `components/Dashboard.tsx`, `components/ReportCenter.tsx`, `components/ReportView.tsx`
+  - 저장 후 이력/문서 목록/출력 보고서에서 연계된 위험성평가 라벨과 동일월 연계 여부를 표시
+
+### ✅ 위험성평가 연계 운영 필터/경보/지표 확장
+- `components/ReportCenter.tsx`
+  - 문서 보관소에 `연계 전체 / 연계 있음 / 미연계` 필터 추가
+  - 데이터 패키지 `manifest.json`에 연계 필터 상태 저장
+- `components/Dashboard.tsx`
+  - 금일 TBM 기준 `미연계 / 동일월 미일치 / 동일월 연계` 현황 경보 카드 추가
+- `components/SafetyDataLab.tsx`
+  - 위험성평가 연계 사용률, 동일월 연계율, 평균 상위위험 수 KPI 카드 추가
+
+### ✅ 위험성평가 연계 운영 후속 고도화
+- `components/ReportCenter.tsx`
+  - `동일월 연계 / 동일월 미일치` 세부 필터 추가
+- `components/Dashboard.tsx`
+  - 경보 카드에서 `연계 보정 바로가기` 및 보관소 이동 액션 추가
+- `components/SafetyDataLab.tsx`
+  - 팀별 연계율/동일월 연계율 Top 보드 추가
+
+### ✅ 위험성평가 연계 운영 모니터링 추가 확장
+- `components/ReportCenter.tsx`
+  - 보관소 카드에 `연계 보정 필요 / 동일월 확인 필요` 배지 추가
+- `components/Dashboard.tsx`
+  - 금일 경보를 팀별 우선순위 묶음으로 표시
+- `components/SafetyDataLab.tsx`
+  - 최근 6개월 `연계율 / 동일월 연계율` 추이 차트 추가
+
+### ✅ 위험성평가 연계 운영 탐색성 추가 개선
+- `components/ReportCenter.tsx`
+  - `보정 필요만` 빠른 토글 추가
+  - 패키지 `manifest`에 보정 토글 상태 저장
+- `components/SafetyDataLab.tsx`
+  - 월별 연계 추이 차트 범위를 `3M / 6M / 12M`으로 즉시 전환 가능하게 확장
+
+### ✅ 위험성평가 연계 운영 가시성 추가 보강
+- `components/Dashboard.tsx`
+  - 팀별 경보 카드 클릭 시 해당 팀 금일 TBM만 실시간 목록에서 확인 가능
+- `components/ReportCenter.tsx`
+  - 현재 목록 기준 `미연계 / 미일치 / 동일월 연계` 요약 배너 추가
+- `components/SafetyDataLab.tsx`
+  - 월별 연계 추이 차트에 목표선(`90%`) 추가
+
+### ✅ 위험성평가 연계 운영 액션/운영값 추가 보강
+- `components/Dashboard.tsx`
+  - 선택된 경보 팀 기준으로 `보정 바로가기` 대상도 해당 팀 우선으로 연결
+- `components/ReportCenter.tsx`
+  - 보정 요약 배너에 `보정 필요만 켜기/해제` 원클릭 액션 추가
+- `components/SafetyDataLab.tsx`
+  - 연계율 목표선을 저장형 운영값으로 전환(`80/90/95` 프리셋 + 직접 입력)
+
+### ✅ 위험성평가 연계 운영 전역설정/세부필터 확장
+- `types.ts`, `utils/siteConfigStorage.ts`, `utils/backupValidation.ts`
+  - `SiteConfig.linkageTargetRate` 추가 및 저장/복구 스키마 확장
+- `components/SettingsModal.tsx`, `App.tsx`, `components/SafetyDataLab.tsx`
+  - 연계율 목표값을 설정 화면에서 전역 관리하고 연구소 차트와 동기화
+- `components/ReportCenter.tsx`
+  - 보정 요약 배너에 `미연계만`, `미일치만` 원클릭 액션 추가
+
 ### ✅ 전일 기록 확인 검증 및 후속 진행 착수
 - `SAFETY_DATALAB_V2_TRACKER.md`
   - 전일(2026-04-28) 구현 항목의 코드 교차검증 결과를 작업 로그에 추가

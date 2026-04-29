@@ -21,6 +21,7 @@ export interface SiteConfig {
   siteName: string;
   managerName: string;
   userApiKey: string | null; // Bring Your Own Key
+  linkageTargetRate?: number;
 }
 
 export interface RiskAssessmentItem {
@@ -32,6 +33,7 @@ export interface SafetyGuideline {
   content: string;
   level: 'HIGH' | 'GENERAL'; // 상, 중/하
   category: string; // 공통, 철근, 형틀, 등등...
+  actionNote?: string; // 즉시조치 메모
 }
 
 export interface MonthlyRiskAssessment {
@@ -143,6 +145,11 @@ export interface TBMEntry {
 
   originalLogImageUrl?: string; // URL for the paper log photo or PDF preview
   originalLogMimeType?: string; // To distinguish PDF vs Image
+  linkedRiskAssessmentId?: string;
+  linkedRiskAssessmentLabel?: string;
+  linkedRiskAssessmentMatchedByMonth?: boolean;
+  linkedRiskAssessmentHighCount?: number;
+  linkedRiskAssessmentActionNoteCount?: number;
   createdAt: number;
   
   // [NEW] Digital Integrity Seal

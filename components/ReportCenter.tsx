@@ -45,6 +45,8 @@ const SimpleLoadingOverlay = ({ text }: { text: string }) => (
 export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrintModal, signatures, teams, onDelete, onBulkDelete }) => {
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [selectedDate, setSelectedDate] = useState(''); // Date Filter
+    const [selectedLinkStatus, setSelectedLinkStatus] = useState<'all' | 'linked' | 'matched' | 'mismatched' | 'unlinked'>('all');
+    const [showRemediationOnly, setShowRemediationOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set()); // Multi-select
     const [statusMessage, setStatusMessage] = useState('');
   
@@ -104,8 +106,50 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
           result = result.filter(e => e.date === selectedDate);
       }
 
+      // 3. Linked Risk Assessment Filter
+      if (selectedLinkStatus === 'linked') {
+          result = result.filter(e => !!e.linkedRiskAssessmentId || !!e.linkedRiskAssessmentLabel);
+      } else if (selectedLinkStatus === 'matched') {
+          result = result.filter(e => (!!e.linkedRiskAssessmentId || !!e.linkedRiskAssessmentLabel) && !!e.linkedRiskAssessmentMatchedByMonth);
+      } else if (selectedLinkStatus === 'mismatched') {
+          result = result.filter(e => (!!e.linkedRiskAssessmentId || !!e.linkedRiskAssessmentLabel) && !e.linkedRiskAssessmentMatchedByMonth);
+      } else if (selectedLinkStatus === 'unlinked') {
+          result = result.filter(e => !e.linkedRiskAssessmentId && !e.linkedRiskAssessmentLabel);
+      }
+
+      if (showRemediationOnly) {
+          result = result.filter(e => !e.linkedRiskAssessmentId || !e.linkedRiskAssessmentMatchedByMonth);
+      }
+
       return result;
-  }, [selectedTeam, selectedDate, entries, uniqueTeams]);
+  }, [selectedTeam, selectedDate, selectedLinkStatus, showRemediationOnly, entries, uniqueTeams]);
+
+  const remediationSummary = useMemo(() => {
+      const missing = filteredEntries.filter(e => !e.linkedRiskAssessmentId && !e.linkedRiskAssessmentLabel).length;
+      const mismatched = filteredEntries.filter(e => (e.linkedRiskAssessmentId || e.linkedRiskAssessmentLabel) && !e.linkedRiskAssessmentMatchedByMonth).length;
+      const matched = filteredEntries.filter(e => (e.linkedRiskAssessmentId || e.linkedRiskAssessmentLabel) && e.linkedRiskAssessmentMatchedByMonth).length;
+
+      return {
+          missing,
+          mismatched,
+          matched,
+          remediation: missing + mismatched,
+      };
+  }, [filteredEntries]);
+
+  const handleToggleRemediationOnly = () => {
+      setShowRemediationOnly(prev => !prev);
+  };
+
+  const handleFilterMissingOnly = () => {
+      setSelectedLinkStatus('unlinked');
+      setShowRemediationOnly(true);
+  };
+
+  const handleFilterMismatchedOnly = () => {
+      setSelectedLinkStatus('mismatched');
+      setShowRemediationOnly(true);
+  };
 
   // --- Handlers ---
 
@@ -183,6 +227,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
               filters: {
                   team: selectedTeam,
                   date: selectedDate || null,
+                  linkedRiskAssessment: selectedLinkStatus,
+                  remediationOnly: showRemediationOnly,
               },
           }, null, 2));
 
@@ -262,6 +308,51 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
         </div>
       </div>
 
+      <div className={`rounded-2xl border p-4 shadow-sm ${remediationSummary.remediation > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                  <p className={`text-xs font-black uppercase tracking-wider ${remediationSummary.remediation > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>보정 대상 요약</p>
+                  <p className="text-sm font-bold text-slate-800 mt-1">
+                      {remediationSummary.remediation > 0 ? '현재 목록에 위험성평가 연계 보정이 필요한 문서가 있습니다.' : '현재 목록은 모두 동일월 연계 상태입니다.'}
+                  </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                  <div className="grid grid-cols-3 gap-2 md:min-w-[320px]">
+                      <div className="rounded-xl bg-white/80 border border-white px-3 py-2">
+                          <p className="text-[10px] font-bold text-slate-400">미연계</p>
+                          <p className="text-lg font-black text-amber-600">{remediationSummary.missing}</p>
+                      </div>
+                      <div className="rounded-xl bg-white/80 border border-white px-3 py-2">
+                          <p className="text-[10px] font-bold text-slate-400">미일치</p>
+                          <p className="text-lg font-black text-violet-600">{remediationSummary.mismatched}</p>
+                      </div>
+                      <div className="rounded-xl bg-white/80 border border-white px-3 py-2">
+                          <p className="text-[10px] font-bold text-slate-400">동일월 연계</p>
+                          <p className="text-lg font-black text-emerald-600">{remediationSummary.matched}</p>
+                      </div>
+                  </div>
+                  <button
+                      onClick={handleToggleRemediationOnly}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-bold border whitespace-nowrap ${showRemediationOnly ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700 border-slate-200 hover:border-rose-300 hover:bg-rose-50'}`}
+                  >
+                      {showRemediationOnly ? '보정 필요만 해제' : '보정 필요만 켜기'}
+                  </button>
+                  <button
+                      onClick={handleFilterMissingOnly}
+                      className="px-4 py-2.5 rounded-xl text-xs font-bold border whitespace-nowrap bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
+                  >
+                      미연계만
+                  </button>
+                  <button
+                      onClick={handleFilterMismatchedOnly}
+                      className="px-4 py-2.5 rounded-xl text-xs font-bold border whitespace-nowrap bg-white text-violet-700 border-violet-200 hover:bg-violet-50"
+                  >
+                      미일치만
+                  </button>
+              </div>
+          </div>
+      </div>
+
       {/* Filter & Toolbar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between sticky top-0 z-20">
          <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 no-scrollbar">
@@ -286,6 +377,25 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
                           <button key={team.id} onClick={() => setSelectedTeam(team.id)} aria-pressed={selectedTeam === team.id} aria-label={`${team.name} 팀 필터`} className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border whitespace-nowrap ${selectedTeam === team.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>{team.name}</button>
                  ))}
              </div>
+
+             <div className="h-6 w-px bg-slate-200 mx-2"></div>
+
+             <div className="flex gap-2">
+                 <button onClick={() => setSelectedLinkStatus('all')} aria-pressed={selectedLinkStatus === 'all'} aria-label="연계 여부 전체 필터" className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border whitespace-nowrap ${selectedLinkStatus === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>연계 전체</button>
+                 <button onClick={() => setSelectedLinkStatus('linked')} aria-pressed={selectedLinkStatus === 'linked'} aria-label="연계된 문서만 보기" className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border whitespace-nowrap ${selectedLinkStatus === 'linked' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>연계 있음</button>
+                 <button onClick={() => setSelectedLinkStatus('matched')} aria-pressed={selectedLinkStatus === 'matched'} aria-label="동일월 연계 문서만 보기" className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border whitespace-nowrap ${selectedLinkStatus === 'matched' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>동일월 연계</button>
+                 <button onClick={() => setSelectedLinkStatus('mismatched')} aria-pressed={selectedLinkStatus === 'mismatched'} aria-label="동일월 미일치 문서만 보기" className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border whitespace-nowrap ${selectedLinkStatus === 'mismatched' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>동일월 미일치</button>
+                 <button onClick={() => setSelectedLinkStatus('unlinked')} aria-pressed={selectedLinkStatus === 'unlinked'} aria-label="미연계 문서만 보기" className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border whitespace-nowrap ${selectedLinkStatus === 'unlinked' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>미연계</button>
+             </div>
+
+             <button
+                 onClick={handleToggleRemediationOnly}
+                 aria-pressed={showRemediationOnly}
+                 aria-label="보정 필요 문서만 보기"
+                 className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border whitespace-nowrap ${showRemediationOnly ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
+             >
+                 보정 필요만
+             </button>
          </div>
 
          {/* Selection Actions */}
@@ -307,12 +417,14 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <Search size={48} className="mb-4 opacity-20"/>
               <p className="font-bold">조건에 맞는 문서가 없습니다.</p>
-              <button onClick={() => { setSelectedDate(''); setSelectedTeam('all'); }} aria-label="날짜 및 팀 필터 초기화" className="mt-4 text-sm text-blue-500 underline">필터 초기화</button>
+              <button onClick={() => { setSelectedDate(''); setSelectedTeam('all'); setSelectedLinkStatus('all'); setShowRemediationOnly(false); }} aria-label="날짜 및 팀 필터 초기화" className="mt-4 text-sm text-blue-500 underline">필터 초기화</button>
           </div>
       ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
              {filteredEntries.map((entry, idx) => {
                 const isSelected = selectedIds.has(entry.id);
+                     const needsLinkageRemediation = !entry.linkedRiskAssessmentId && !entry.linkedRiskAssessmentLabel;
+                     const hasSameMonthMismatch = !needsLinkageRemediation && !entry.linkedRiskAssessmentMatchedByMonth;
                 return (
                 <div 
                     key={entry.id} 
@@ -339,6 +451,21 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
                       <div>
                          <h4 className={`font-bold text-sm ${isSelected ? 'text-indigo-700' : 'text-slate-800'}`}>{entry.teamName}</h4>
                          <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium"><Calendar size={10} /> {entry.date} {entry.time}</div>
+                         {(needsLinkageRemediation || hasSameMonthMismatch) && (
+                             <div className="mt-1 flex items-center gap-1 flex-wrap">
+                                 <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${needsLinkageRemediation ? 'bg-amber-100 text-amber-700' : 'bg-violet-100 text-violet-700'}`}>
+                                     {needsLinkageRemediation ? '연계 보정 필요' : '동일월 확인 필요'}
+                                 </span>
+                             </div>
+                         )}
+                         {entry.linkedRiskAssessmentLabel && (
+                             <div className="mt-1 flex items-center gap-1 flex-wrap">
+                                 <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${entry.linkedRiskAssessmentMatchedByMonth ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                     {entry.linkedRiskAssessmentMatchedByMonth ? '동일월 연계' : '위험성평가 연계'}
+                                 </span>
+                                 <span className="text-[10px] text-slate-500 truncate max-w-[180px]">{entry.linkedRiskAssessmentLabel}</span>
+                             </div>
+                         )}
                       </div>
                       <div className={`px-2 py-1 rounded text-[10px] font-bold border ${entry.riskFactors && entry.riskFactors.length > 0 ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-green-50 text-green-600 border-green-100'}`}>{entry.riskFactors && entry.riskFactors.length > 0 ? '위험 발견' : '양호'}</div>
                    </div>

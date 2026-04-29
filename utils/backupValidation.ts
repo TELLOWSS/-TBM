@@ -17,6 +17,7 @@ const SafetyGuidelineSchema = z.object({
   content: z.string().optional(),
   level: z.enum(['HIGH', 'GENERAL']).optional(),
   category: z.string().optional(),
+  actionNote: z.string().optional(),
 }).passthrough();
 
 const MonthlyRiskAssessmentSchema = z.object({
@@ -53,6 +54,7 @@ const SiteConfigSchema = z.object({
   siteName: z.string().optional(),
   managerName: z.string().optional(),
   userApiKey: z.string().nullable().optional(),
+  linkageTargetRate: z.number().min(0).max(100).optional(),
 }).passthrough();
 
 const SignaturesSchema = z.object({

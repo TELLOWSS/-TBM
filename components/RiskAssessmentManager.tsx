@@ -2,7 +2,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { MonthlyRiskAssessment, SafetyGuideline } from '../types';
 import { extractMonthlyPriorities, ExtractedPriority, MonthlyExtractionResult } from '../services/geminiService';
-import { Upload, Loader2, Trash2, ShieldCheck, Plus, RefreshCcw, Calendar, TrendingUp, Search, Edit2, Save, X, Download, FileJson, Layers, ArrowRight, BarChart3, AlertTriangle, CheckCircle2, ChevronDown, GitMerge, Scale, BookOpen, AlertOctagon, FileText, PieChart, Activity, FileStack, Sparkles, BrainCircuit, Clock } from 'lucide-react';
+import { Upload, Loader2, Trash2, ShieldCheck, Plus, RefreshCcw, Calendar, TrendingUp, Search, Edit2, Save, X, Download, FileJson, Layers, ArrowRight, BarChart3, AlertTriangle, CheckCircle2, ChevronDown, GitMerge, Scale, BookOpen, AlertOctagon, FileText, PieChart, Activity, FileStack, Sparkles, BrainCircuit, Clock, Copy } from 'lucide-react';
 import { ConfirmDialog } from './common/ConfirmDialog';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 
@@ -113,6 +113,7 @@ const RiskGauge = ({ highCount, totalCount }: { highCount: number, totalCount: n
 export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ assessments, onSave, onRestoreData }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0); 
+    const [librarySectionOpen, setLibrarySectionOpen] = useState({ baseline: true, monthly: true });
   
   // Separate Assessments by Type
   const initialAssessments = useMemo(() => {
@@ -130,6 +131,9 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
   // Initial State from Props
   const [selectedMonthId, setSelectedMonthId] = useState<string>('');
+    const [mobilePrimaryView, setMobilePrimaryView] = useState<'LIBRARY' | 'DETAIL'>('LIBRARY');
+    const [mobileWorkspaceView, setMobileWorkspaceView] = useState<'TOOLS' | 'LIST'>('LIST');
+        const [mobileListFilter, setMobileListFilter] = useState<'ALL' | 'HIGH'>('ALL');
 
   // Auto-Select Logic
     React.useEffect(() => {
@@ -159,6 +163,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   const [regularStep, setRegularStep] = useState<'SELECT' | 'REVIEW'>('SELECT');
 
   const activeAssessment = assessments.find(a => a.id === selectedMonthId);
+
+  React.useEffect(() => {
+      if (activeAssessment) {
+          setMobilePrimaryView('DETAIL');
+      }
+  }, [activeAssessment]);
   
   const previousAssessment = useMemo(() => {
      if (!activeAssessment) return null;
@@ -184,8 +194,8 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [backupStatusMessage, setBackupStatusMessage] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
-  const [editForm, setEditForm] = useState<{content: string, level: string, category: string}>({
-      content: '', level: 'GENERAL', category: '공통'
+  const [editForm, setEditForm] = useState<{content: string, level: string, category: string, actionNote: string}>({
+      content: '', level: 'GENERAL', category: '공통', actionNote: ''
   });
   const { confirmDialogState, requestConfirm, closeConfirmDialog } = useConfirmDialog();
 
@@ -223,13 +233,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
   const displayPriorities = useMemo(() => {
     if (!activeAssessment) return [];
-    if (!searchTerm.trim()) return activeAssessment.priorities;
-    
-    return activeAssessment.priorities.filter(item => 
-        (item.content || '').includes(searchTerm) || 
-        (item.category || '').includes(searchTerm)
-    );
-  }, [activeAssessment, searchTerm]);
+        return activeAssessment.priorities.filter(item => {
+                const matchesSearch = !searchTerm.trim() || (item.content || '').includes(searchTerm) || (item.category || '').includes(searchTerm);
+                const matchesLevel = mobileListFilter === 'ALL' || item.level === 'HIGH';
+                return matchesSearch && matchesLevel;
+        });
+    }, [activeAssessment, searchTerm, mobileListFilter]);
 
   const stats = useMemo(() => {
       if (!activeAssessment) return null;
@@ -255,6 +264,47 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
       return { total, high, general, topCategories, diff };
   }, [activeAssessment, previousAssessment]);
+
+  const mobileReadiness = useMemo(() => {
+      if (!activeAssessment) return null;
+      const priorities = activeAssessment.priorities || [];
+      const high = priorities.filter(item => item.level === 'HIGH').length;
+      const general = priorities.length - high;
+      return {
+          evaluator: {
+              summary: `${priorities.length}건 중 상위험 ${high}건`,
+              detail: previousAssessment ? `${previousAssessment.month} 대비 ${stats?.diff || 0}건 변동 추적 가능` : '기준 비교 데이터는 다음 평가 선택 시 활성화'
+          },
+          practitioner: {
+              summary: `수동등록·수정·삭제·문서추가 즉시 수행 가능`,
+              detail: `일반 ${general}건 / 상위험 ${high}건을 모바일에서 직접 관리`
+          }
+      };
+  }, [activeAssessment, previousAssessment, stats]);
+
+  const highRiskHighlights = useMemo(() => {
+      if (!activeAssessment?.priorities) return [];
+      return activeAssessment.priorities
+          .filter(item => item.level === 'HIGH')
+          .slice(0, 3)
+          .map(item => ({
+              content: item.content,
+              category: item.category,
+              actionNote: item.actionNote || '즉시조치 메모 미입력'
+          }));
+  }, [activeAssessment]);
+
+  const batchActionNoteText = useMemo(() => {
+      if (!activeAssessment?.priorities) return '';
+      const items = activeAssessment.priorities.filter(item => item.level === 'HIGH' || item.actionNote?.trim());
+      if (items.length === 0) return '';
+
+      return [
+          `[위험성평가 즉시조치 일괄복사]`,
+          `${activeAssessment.fileName}`,
+          ...items.map((item, index) => `${index + 1}. [${item.category}] ${item.content}\n- 등급: ${item.level === 'HIGH' ? '상위험' : '일반'}\n- 즉시조치: ${item.actionNote?.trim() || '메모 미입력'}`),
+      ].join('\n');
+  }, [activeAssessment]);
 
   const normalizeString = (str: string) => {
     return (str || '').replace(/[\s\n\r.,\-()[\]]/g, '').trim();
@@ -619,6 +669,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       };
       updateActiveAssessment([...activeAssessment.priorities, newGuideline]);
       setCandidates(prev => prev.filter(c => c.content !== item.content));
+            setMobileWorkspaceView('LIST');
     }
   };
 
@@ -640,10 +691,14 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       const newGuideline: SafetyGuideline = {
         content: manualInput.trim(),
         level: 'GENERAL',
-        category: manualCategory
+                category: manualCategory,
+                actionNote: ''
       };
       updateActiveAssessment([newGuideline, ...activeAssessment.priorities]);
       setManualInput('');
+            setMobilePrimaryView('DETAIL');
+            setMobileWorkspaceView('LIST');
+            setMobileListFilter('ALL');
     }
   };
 
@@ -670,12 +725,61 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   }
 
   // --- Edit Logic ---
+  const handleSelectAssessment = (assessmentId: string) => {
+      setSelectedMonthId(assessmentId);
+      setMobilePrimaryView('DETAIL');
+      setMobileWorkspaceView('LIST');
+      setMobileListFilter('ALL');
+  };
+
   const startEditing = (index: number, item: SafetyGuideline) => {
       setEditingIndex(index);
       setEditForm({
           content: item.content,
           level: item.level,
-          category: item.category
+          category: item.category,
+          actionNote: item.actionNote || ''
+      });
+      setMobilePrimaryView('DETAIL');
+      setMobileWorkspaceView('LIST');
+  };
+
+  const handleActionNoteChange = (index: number, actionNote: string) => {
+      if (!activeAssessment) return;
+      const updatedPriorities = [...activeAssessment.priorities];
+      updatedPriorities[index] = {
+          ...updatedPriorities[index],
+          actionNote,
+      };
+      updateActiveAssessment(updatedPriorities);
+  };
+
+  const handleCopyActionNote = (item: SafetyGuideline) => {
+      const text = [
+          `[위험성평가 즉시조치]`,
+          `구분: ${item.category}`,
+          `위험: ${item.content}`,
+          `등급: ${item.level === 'HIGH' ? '상위험' : '일반'}`,
+          `즉시조치: ${item.actionNote || '메모 미입력'}`,
+      ].join('\n');
+
+      navigator.clipboard.writeText(text).then(() => {
+          announceStatus('즉시조치 메모가 클립보드에 복사되었습니다.');
+      }).catch(() => {
+          announceStatus('즉시조치 메모 복사에 실패했습니다.');
+      });
+  };
+
+  const handleCopyAllActionNotes = () => {
+      if (!batchActionNoteText) {
+          announceStatus('복사할 즉시조치 메모가 없습니다.');
+          return;
+      }
+
+      navigator.clipboard.writeText(batchActionNoteText).then(() => {
+          announceStatus('즉시조치 메모 일괄 복사가 완료되었습니다.');
+      }).catch(() => {
+          announceStatus('즉시조치 메모 일괄 복사에 실패했습니다.');
       });
   };
 
@@ -690,11 +794,13 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
       updatedPriorities[editingIndex] = {
           content: editForm.content,
           level: editForm.level as 'HIGH' | 'GENERAL',
-          category: editForm.category
+          category: editForm.category,
+          actionNote: editForm.actionNote
       };
       
       updateActiveAssessment(updatedPriorities);
       setEditingIndex(null);
+      setMobileWorkspaceView('LIST');
   };
 
   // ... (Component rendering remains same as provided in previous full file context, using handleDeleteMonth) ...
@@ -717,15 +823,34 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   };
 
   return (
-    <div className="bg-slate-50 min-h-[calc(100vh-140px)] flex gap-6 relative">
+    <div className="bg-slate-50 min-h-[calc(100vh-140px)] flex flex-col xl:flex-row gap-4 xl:gap-6 relative pb-28 xl:pb-0">
              <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{statusMessage}</p>
        {isAnalyzing && <AnalysisOverlay progress={loadingProgress} />}
 
        <input type="file" ref={backupInputRef} className="hidden" accept=".json" onChange={handleImportBackup} multiple/>
        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="application/pdf,image/*"/>
 
+       <div className="xl:hidden bg-white border border-slate-200 rounded-2xl p-3 shadow-sm sticky top-2 z-20">
+          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+              <button
+                  type="button"
+                  onClick={() => setMobilePrimaryView('LIBRARY')}
+                  className={`rounded-xl px-4 py-3 text-sm font-black transition-all ${mobilePrimaryView === 'LIBRARY' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600'}`}
+              >
+                  평가목록
+              </button>
+              <button
+                  type="button"
+                  onClick={() => setMobilePrimaryView('DETAIL')}
+                  className={`rounded-xl px-4 py-3 text-sm font-black transition-all ${mobilePrimaryView === 'DETAIL' ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' : 'text-slate-600'}`}
+              >
+                  평가내용
+              </button>
+          </div>
+       </div>
+
        {/* Sidebar */}
-       <div className="w-64 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
+    <div className={`w-full xl:w-64 flex-col gap-4 overflow-y-auto custom-scrollbar pr-0 xl:pr-2 ${mobilePrimaryView === 'LIBRARY' ? 'flex' : 'hidden'} xl:flex`}>
           <button 
                  ref={regularBuilderTriggerRef}
              onClick={handleOpenRegularBuilder}
@@ -744,16 +869,27 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
           </button>
 
           {/* Section 1: Baseline */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
              <div className="flex justify-between items-center mb-3">
                 <h3 className="font-black text-slate-800 flex items-center gap-2 text-xs">
                    <BookOpen size={14} className="text-amber-500"/> 기준 정보 (Standard)
                 </h3>
-                <button onClick={() => handleUploadClick('INITIAL')} aria-label="최초 위험성평가 문서 등록" className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors" title="최초 위험성평가 등록">
-                   <Plus size={14}/>
-                </button>
+                     <div className="flex items-center gap-1">
+                          <button
+                                type="button"
+                                onClick={() => setLibrarySectionOpen(prev => ({ ...prev, baseline: !prev.baseline }))}
+                                className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"
+                                aria-label="기준 정보 목록 접기 또는 펼치기"
+                          >
+                                <ChevronDown size={14} className={`transition-transform ${librarySectionOpen.baseline ? '' : '-rotate-90'}`}/>
+                          </button>
+                          <button onClick={() => handleUploadClick('INITIAL')} aria-label="최초 위험성평가 문서 등록" className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors" title="최초 위험성평가 등록">
+                              <Plus size={14}/>
+                          </button>
+                     </div>
              </div>
-             <div className="space-y-2">
+                 {librarySectionOpen.baseline && (
+                 <div className="space-y-2">
                 {initialAssessments.length === 0 ? (
                     <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 cursor-pointer hover:bg-slate-100" onClick={() => handleUploadClick('INITIAL')} onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -767,7 +903,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                     initialAssessments.map(ass => (
                         <button
                             key={ass.id}
-                            onClick={() => setSelectedMonthId(ass.id)}
+                            onClick={() => handleSelectAssessment(ass.id)}
                             aria-label={`${ass.type === 'INITIAL' ? '최초평가' : '정기평가'} ${ass.fileName} 선택`}
                             className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
                                 selectedMonthId === ass.id 
@@ -784,20 +920,31 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                     ))
                 )}
              </div>
+                 )}
           </div>
 
           {/* Section 2: Monthly */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
              <div className="flex justify-between items-center mb-3">
                 <h3 className="font-black text-slate-800 flex items-center gap-2 text-xs">
                    <Calendar size={14} className="text-blue-600"/> 운영 정보 (Updates)
                 </h3>
-                     <button onClick={() => setNewMonthMode(true)} aria-label="신규 월간 위험성평가 생성 열기" className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
-                   <Plus size={14}/>
-                </button>
+                     <div className="flex items-center gap-1">
+                          <button
+                                type="button"
+                                onClick={() => setLibrarySectionOpen(prev => ({ ...prev, monthly: !prev.monthly }))}
+                                className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"
+                                aria-label="운영 정보 목록 접기 또는 펼치기"
+                          >
+                                <ChevronDown size={14} className={`transition-transform ${librarySectionOpen.monthly ? '' : '-rotate-90'}`}/>
+                          </button>
+                          <button onClick={() => setNewMonthMode(true)} aria-label="신규 월간 위험성평가 생성 열기" className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
+                              <Plus size={14}/>
+                          </button>
+                     </div>
              </div>
              
-             {newMonthMode && (
+                 {librarySectionOpen.monthly && newMonthMode && (
                 <div className="mb-4 bg-slate-50 p-3 rounded-xl border border-slate-200 animate-slide-up">
                    <label className="text-[10px] font-bold text-slate-500 mb-1 block">추가할 월 선택</label>
                    <input 
@@ -813,11 +960,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                 </div>
              )}
 
-             <div className="space-y-2">
+                 {librarySectionOpen.monthly && (
+                 <div className="space-y-2">
                 {monthlyAssessments.map(month => (
                    <button
                       key={month.id}
-                      onClick={() => setSelectedMonthId(month.id)}
+                      onClick={() => handleSelectAssessment(month.id)}
                              aria-label={`${month.month}월 월간 위험성평가 선택`}
                       className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
                          selectedMonthId === month.id 
@@ -840,11 +988,12 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                    </button>
                 ))}
              </div>
+                 )}
           </div>
        </div>
 
        {/* Main Content */}
-       <div className="flex-1 flex flex-col gap-6 overflow-hidden">
+         <div className={`flex-1 flex-col gap-4 xl:gap-6 overflow-hidden ${mobilePrimaryView === 'DETAIL' ? 'flex' : 'hidden'} xl:flex`}>
           {activeAssessment ? (
              <>
                 <div className={`rounded-2xl p-6 shadow-sm border flex flex-col gap-6 ${
@@ -852,19 +1001,19 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                     ? 'bg-amber-50 border-amber-200' 
                     : 'bg-white border-slate-200'
                 }`}>
-                   <div className="flex justify-between items-start">
-                       <div>
+                   <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
+                       <div className="min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                               {activeAssessment.type === 'INITIAL' || activeAssessment.type === 'REGULAR' ? (
                                   <span className="bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded">기준 정보</span>
                               ) : (
                                   <span className="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded">운영 정보</span>
                               )}
-                              <span className="text-xs font-bold text-slate-500 bg-white/50 px-2 py-0.5 rounded border border-slate-200/50">
+                              <span className="text-xs font-bold text-slate-500 bg-white/50 px-2 py-0.5 rounded border border-slate-200/50 max-w-full truncate">
                                 파일명: {activeAssessment.fileName}
                              </span>
                           </div>
-                          <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+                          <h2 className="text-xl sm:text-2xl font-black text-slate-800 flex items-center gap-3 leading-tight">
                              {activeAssessment.type === 'REGULAR' ? `${activeAssessment.month.split('-')[0]}년 정기 위험성평가` : 
                               activeAssessment.type === 'INITIAL' ? '최초 위험성평가 (Baseline)' : 
                               `${activeAssessment.month}월 월간/수시 위험성평가`}
@@ -872,21 +1021,19 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                           <p className="text-[10px] text-slate-400 mt-1 font-mono">ID: {activeAssessment.id}</p>
                        </div>
                        
-                       <div className="flex items-center gap-2">
-                          <button onClick={() => handleUploadClick(activeAssessment.type === 'INITIAL' ? 'INITIAL' : 'MONTHLY')} aria-label={activeAssessment.type === 'INITIAL' ? '최초 위험성평가 문서 분석 또는 추가' : `${activeAssessment.month} 위험성평가 문서 분석 또는 추가`} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
+                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
+                          <button onClick={() => handleUploadClick(activeAssessment.type === 'INITIAL' ? 'INITIAL' : 'MONTHLY')} aria-label={activeAssessment.type === 'INITIAL' ? '최초 위험성평가 문서 분석 또는 추가' : `${activeAssessment.month} 위험성평가 문서 분석 또는 추가`} className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 min-h-[48px] w-full sm:w-auto">
                              <FileJson size={18}/>
                              <span>문서 분석/추가</span>
                           </button>
-                          <div className="flex flex-col gap-1">
-                              <div className="flex gap-1">
-                                  <button onClick={handleExportBackup} aria-label="위험성평가 데이터 백업 다운로드" className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold" title="데이터 백업 (다운로드)">
+                          <div className="grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex sm:flex-col sm:gap-1">
+                              <button onClick={handleExportBackup} aria-label="위험성평가 데이터 백업 다운로드" className="p-3 bg-white border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold flex items-center justify-center min-h-[48px]" title="데이터 백업 (다운로드)">
                                       <Download size={16}/>
                                   </button>
-                                  <button onClick={() => backupInputRef.current?.click()} aria-label="위험성평가 데이터 복구 파일 업로드" className="p-2 bg-white border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition-colors text-xs font-bold" title="데이터 복구 (업로드)">
+                              <button onClick={() => backupInputRef.current?.click()} aria-label="위험성평가 데이터 복구 파일 업로드" className="p-3 bg-white border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold flex items-center justify-center min-h-[48px]" title="데이터 복구 (업로드)">
                                       <Upload size={16}/>
                                   </button>
-                              </div>
-                              <button onClick={handleDeleteMonth} aria-label={`현재 선택된 ${activeAssessment.month} 위험성평가 삭제`} className="p-2 bg-white border border-slate-200 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors text-xs font-bold flex justify-center" title="현재 월 삭제">
+                              <button onClick={handleDeleteMonth} aria-label={`현재 선택된 ${activeAssessment.month} 위험성평가 삭제`} className="p-3 bg-white border border-slate-200 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors text-xs font-bold flex justify-center min-h-[48px]" title="현재 월 삭제">
                                   <Trash2 size={16}/>
                               </button>
                           </div>
@@ -900,12 +1047,33 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                       </div>
                    )}
 
+                   {mobileReadiness && (
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                           <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+                               <div className="flex items-center gap-2 mb-2">
+                                   <BarChart3 size={16} className="text-indigo-600"/>
+                                   <span className="text-sm font-black text-indigo-900">평가자 관점</span>
+                               </div>
+                               <p className="text-sm font-bold text-slate-800">{mobileReadiness.evaluator.summary}</p>
+                               <p className="text-xs text-slate-600 mt-1 leading-relaxed">{mobileReadiness.evaluator.detail}</p>
+                           </div>
+                           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                               <div className="flex items-center gap-2 mb-2">
+                                   <Activity size={16} className="text-emerald-600"/>
+                                   <span className="text-sm font-black text-emerald-900">실무자 관점</span>
+                               </div>
+                               <p className="text-sm font-bold text-slate-800">{mobileReadiness.practitioner.summary}</p>
+                               <p className="text-xs text-slate-600 mt-1 leading-relaxed">{mobileReadiness.practitioner.detail}</p>
+                           </div>
+                       </div>
+                   )}
+
                    {stats && (
                        <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                           <div className="flex flex-col items-center border-r border-slate-100 pr-4">
+                           <div className="flex flex-col items-center md:border-r border-slate-100 md:pr-4">
                                <RiskGauge highCount={stats.high} totalCount={stats.total} />
                            </div>
-                           <div className="flex flex-col gap-3 border-r border-slate-100 pr-4 h-full justify-center">
+                           <div className="flex flex-col gap-3 md:border-r border-slate-100 md:pr-4 h-full justify-center">
                                <div className="flex justify-between items-end p-2 bg-slate-50 rounded-lg">
                                    <span className="text-xs font-bold text-slate-400 uppercase">Total Items</span>
                                    <span className="text-2xl font-black text-slate-800">{stats.total}</span>
@@ -938,17 +1106,65 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                 </div>
 
                 {/* Main Workspace */}
-                <div className="grid grid-cols-12 gap-6 h-full min-h-0">
-                   <div className="col-span-4 flex flex-col gap-4">
+                <div className="xl:hidden bg-white border border-slate-200 rounded-2xl p-3 shadow-sm">
+                    <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+                        <button
+                            type="button"
+                            onClick={() => setMobileWorkspaceView('TOOLS')}
+                            className={`rounded-xl px-4 py-3 text-sm font-black transition-all ${mobileWorkspaceView === 'TOOLS' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600'}`}
+                        >
+                            실무도구
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setMobileWorkspaceView('LIST')}
+                            className={`rounded-xl px-4 py-3 text-sm font-black transition-all ${mobileWorkspaceView === 'LIST' ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' : 'text-slate-600'}`}
+                        >
+                            최종목록
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 xl:gap-6 h-full min-h-0">
+                   <div className={`xl:col-span-4 flex flex-col gap-4 ${mobileWorkspaceView === 'TOOLS' ? 'flex' : 'hidden'} xl:flex`}>
+                             {highRiskHighlights.length > 0 && (
+                                 <div className="bg-white rounded-2xl p-4 border border-red-200 shadow-sm sticky top-2 z-10">
+                                     <div className="flex items-center gap-2 mb-3">
+                                         <AlertTriangle size={16} className="text-red-500"/>
+                                         <h3 className="font-black text-red-900 text-sm">상위위험 고정 섹션</h3>
+                                         <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-100 text-red-700">{highRiskHighlights.length}건</span>
+                                     </div>
+                                     <div className="space-y-2">
+                                         {highRiskHighlights.map((risk, idx) => (
+                                             <div key={`${risk.content}-${idx}-fixed`} className="rounded-xl border border-red-100 bg-red-50/60 p-3">
+                                                  <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-red-500 text-white">상위험</span>
+                                                        <span className="text-[10px] font-bold text-slate-500">{risk.category}</span>
+                                                  </div>
+                                                  <p className="text-xs font-bold text-slate-800 leading-snug">{risk.content}</p>
+                                                  <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">{risk.actionNote}</p>
+                                             </div>
+                                         ))}
+                                     </div>
+                                     <button
+                                         type="button"
+                                         onClick={handleCopyAllActionNotes}
+                                         className="mt-3 w-full rounded-xl bg-slate-900 text-white py-3 text-xs font-black min-h-[48px] flex items-center justify-center gap-2"
+                                     >
+                                         <Copy size={14}/> 즉시조치 메모 일괄 복사
+                                     </button>
+                                 </div>
+                             )}
+
                       {/* Manual Input */}
                       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
                          <h3 className="font-bold text-slate-700 mb-3 text-sm flex items-center gap-2"><Plus size={16}/> 수동 항목 추가</h3>
                          <div className="flex flex-col gap-2">
-                           <div className="flex gap-2">
+                           <div className="flex flex-col sm:flex-row gap-2">
                               <select 
                                  value={manualCategory} 
                                  onChange={(e) => setManualCategory(e.target.value)}
-                                 className="bg-slate-50 border border-slate-300 rounded-lg px-2 text-xs font-bold w-20 outline-none"
+                                 className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-3 text-xs font-bold w-full sm:w-24 outline-none min-h-[48px]"
                               >
                                  <option value="공통">공통</option>
                                  <option value="형틀">형틀</option>
@@ -960,10 +1176,10 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                  onChange={(e) => setManualInput(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && addManualPriority()}
                                  placeholder="내용 입력..."
-                                 className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="flex-1 border border-slate-300 rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none min-h-[48px]"
                               />
                            </div>
-                           <button onClick={addManualPriority} aria-label="수동 입력 위험요소 추가하기" className="w-full bg-slate-800 text-white py-2 rounded-lg text-xs font-bold hover:bg-slate-700">추가하기</button>
+                                    <button onClick={addManualPriority} aria-label="수동 입력 위험요소 추가하기" className="w-full bg-slate-800 text-white py-3 rounded-lg text-xs font-bold hover:bg-slate-700 min-h-[48px]">추가하기</button>
                          </div>
                       </div>
 
@@ -986,26 +1202,70 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                    </div>
 
                    {/* Right: Active Priorities List */}
-                   <div className="col-span-8 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[500px]">
-                      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
-                         <div className="flex items-center gap-2">
+                         <div className={`xl:col-span-8 bg-white rounded-2xl border border-slate-200 shadow-sm flex-col min-h-[420px] xl:h-[500px] ${mobileWorkspaceView === 'LIST' ? 'flex' : 'hidden'} xl:flex`}>
+                             {highRiskHighlights.length > 0 && (
+                                <div className="border-b border-red-100 bg-gradient-to-r from-red-50 to-amber-50 p-4 rounded-t-2xl">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <AlertTriangle size={16} className="text-red-500"/>
+                                        <h4 className="text-sm font-black text-slate-800">상위위험 상단 요약</h4>
+                                        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-100 text-red-700">TOP {highRiskHighlights.length}</span>
+                                        <button
+                                            type="button"
+                                            onClick={handleCopyAllActionNotes}
+                                            className="ml-auto inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1 text-[10px] font-black text-slate-700 border border-slate-200 hover:bg-slate-50"
+                                        >
+                                            <Copy size={11}/> 일괄 복사
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                        {highRiskHighlights.map((risk, idx) => (
+                                            <div key={`${risk.content}-${idx}`} className="rounded-xl border border-red-100 bg-white/80 p-3">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded bg-red-500 text-white">상위험</span>
+                                                    <span className="text-[10px] font-bold text-slate-500">{risk.category}</span>
+                                                </div>
+                                                <p className="text-xs font-bold text-slate-800 leading-snug line-clamp-2">{risk.content}</p>
+                                                <p className="mt-2 text-[11px] text-slate-600 leading-relaxed line-clamp-3">{risk.actionNote}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                             )}
+                             <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-slate-50/50 rounded-t-2xl">
+                                 <div className="flex items-center gap-2 min-w-0">
                             <ShieldCheck className="text-green-600" size={20}/>
                             <h3 className="font-bold text-slate-800">최종 관리 목록</h3>
                          </div>
-                         <div className="flex gap-2 items-center">
-                           <div className="relative">
+                                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setMobileListFilter('ALL')}
+                                            className={`px-3 py-2 rounded-lg text-[11px] font-black border transition-colors min-h-[40px] ${mobileListFilter === 'ALL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200'}`}
+                                        >
+                                            전체
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setMobileListFilter('HIGH')}
+                                            className={`px-3 py-2 rounded-lg text-[11px] font-black border transition-colors min-h-[40px] ${mobileListFilter === 'HIGH' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-500 border-slate-200'}`}
+                                        >
+                                            상위험만
+                                        </button>
+                                    </div>
+                                    <div className="relative w-full sm:w-auto">
                                <input 
                                    type="text" 
                                    placeholder="항목 검색..." 
                                    value={searchTerm}
                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                   className="pl-8 pr-3 py-1.5 text-xs font-bold border border-slate-300 rounded-lg outline-none focus:border-blue-500 w-40"
+                                              className="pl-8 pr-3 py-3 text-xs font-bold border border-slate-300 rounded-lg outline-none focus:border-blue-500 w-full sm:w-40 min-h-[48px]"
                                />
-                               <Search size={14} className="absolute left-2.5 top-2 text-slate-400"/>
+                                         <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"/>
                            </div>
                            
                            {previousAssessment && (
-                              <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-lg flex items-center gap-1">
+                                        <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-2 rounded-lg flex items-center gap-1 w-fit">
                                  <TrendingUp size={12}/> vs {previousAssessment.month} 비교 중
                               </span>
                            )}
@@ -1022,10 +1282,8 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                             displayPriorities.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400 font-medium">검색 결과가 없습니다.</div>
                             ) : (
-                                activeAssessment.priorities.map((item, originalIndex) => {
-                                   if (searchTerm.trim() && !((item.content || '').includes(searchTerm) || (item.category || '').includes(searchTerm))) {
-                                       return null; 
-                                   }
+                                displayPriorities.map((item) => {
+                                   const originalIndex = activeAssessment.priorities.findIndex(priority => priority === item);
 
                                    if (editingIndex === originalIndex) {
                                        return (
@@ -1040,6 +1298,13 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                                        autoFocus
                                                    />
                                                </div>
+                                               <textarea
+                                                   value={editForm.actionNote}
+                                                   onChange={(e) => setEditForm({...editForm, actionNote: e.target.value})}
+                                                   className="w-full text-xs border border-blue-300 rounded px-3 py-2 outline-none bg-white resize-none"
+                                                   rows={3}
+                                                   placeholder="즉시조치 메모를 입력하세요. 예: 작업 전 난간 재확인, 팀장 구두전파 후 사진증빙"
+                                               />
                                                <div className="flex justify-between items-center">
                                                    <div className="flex gap-2">
                                                        <select 
@@ -1082,7 +1347,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                    }
 
                                    return (
-                                      <div key={originalIndex} className={`p-3 rounded-xl border flex items-start gap-3 group transition-all ${status === 'NEW' ? 'bg-blue-50/50 border-blue-200' : 'bg-white border-slate-100 hover:border-blue-300'}`}>
+                                                  <div key={originalIndex} className={`p-3 rounded-xl border flex items-start gap-3 group transition-all ${status === 'NEW' ? 'bg-blue-50/50 border-blue-200' : 'bg-white border-slate-100 hover:border-blue-300'}`}>
                                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs shrink-0 ${item.level === 'HIGH' ? 'bg-red-500 text-white shadow-red-200 shadow-sm' : 'bg-slate-200 text-slate-600'}`}>
                                             {item.level === 'HIGH' ? '상' : '일반'}
                                          </div>
@@ -1094,9 +1359,31 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                                <CategoryBadge category={item.category} />
                                             </div>
                                             <p className="text-sm font-bold text-slate-800 leading-snug">{item.content}</p>
+                                            {(item.level === 'HIGH' || item.actionNote) && (
+                                                <div className="mt-3 rounded-xl border border-red-100 bg-red-50/70 p-3">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <AlertTriangle size={14} className="text-red-500"/>
+                                                        <span className="text-[11px] font-black text-red-700">즉시조치 메모</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleCopyActionNote(item)}
+                                                            className="ml-auto inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1 text-[10px] font-black text-red-600 border border-red-100 hover:bg-red-50"
+                                                        >
+                                                            <Copy size={11}/> 복사
+                                                        </button>
+                                                    </div>
+                                                    <textarea
+                                                        value={item.actionNote || ''}
+                                                        onChange={(e) => handleActionNoteChange(originalIndex, e.target.value)}
+                                                        className="w-full rounded-lg border border-red-100 bg-white px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-red-200 resize-none"
+                                                        rows={3}
+                                                        placeholder="모바일 실무자용 즉시조치 메모를 입력하세요."
+                                                    />
+                                                </div>
+                                            )}
                                          </div>
 
-                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                                      <div className="flex gap-1 opacity-100 xl:opacity-0 xl:group-hover:opacity-100 xl:group-focus-within:opacity-100 transition-opacity shrink-0">
                                                             <button onClick={() => startEditing(originalIndex, item)} aria-label={`${item.content} 항목 수정`} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="수정">
                                                 <Edit2 size={16}/>
                                              </button>
@@ -1114,7 +1401,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                 </div>
              </>
           ) : (
-             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 animate-fade-in">
+             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 animate-fade-in px-4 py-10">
                 <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6 shadow-sm">
                     <ShieldCheck size={40} className="text-indigo-400"/>
                 </div>
@@ -1124,18 +1411,18 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                    매월 변동되는 <strong>[월간/수시 평가]</strong>를 추가하여 빈틈없이 관리하세요.
                 </p>
                 
-                <div className="flex gap-4">
+                     <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xl">
                    <button 
                       onClick={() => handleUploadClick('INITIAL')} 
                              aria-label="최초 위험성평가 문서 등록 시작"
-                      className="px-6 py-4 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-200 flex items-center gap-3 transition-transform hover:scale-105"
+                             className="px-6 py-4 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-200 flex items-center justify-center gap-3 transition-transform hover:scale-105 min-h-[52px]"
                    >
                       <Plus size={18}/> 최초 위험성평가 등록 (Standard)
                    </button>
                    <button 
                       onClick={() => backupInputRef.current?.click()} 
                              aria-label="기존 위험성평가 데이터 복구 파일 업로드"
-                      className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-50 hover:border-slate-300 flex items-center gap-3 transition-colors"
+                             className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-50 hover:border-slate-300 flex items-center justify-center gap-3 transition-colors min-h-[52px]"
                    >
                       <Upload size={18}/> 기존 데이터 복구
                    </button>
@@ -1143,6 +1430,68 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
              </div>
           )}
        </div>
+
+       {activeAssessment && (
+           <div className="xl:hidden fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur px-3 py-3 shadow-[0_-10px_30px_rgba(15,23,42,0.12)]">
+               <div className="mb-2 flex items-center justify-between gap-3 rounded-2xl bg-slate-100 px-3 py-2">
+                   <div className="min-w-0">
+                       <p className="text-[10px] font-bold text-slate-500">현재 선택</p>
+                       <p className="text-xs font-black text-slate-800 truncate">{activeAssessment.fileName}</p>
+                   </div>
+                   <div className="shrink-0 text-right">
+                       <p className="text-[10px] font-bold text-slate-500">상위험</p>
+                       <p className="text-xs font-black text-red-600">{stats?.high || 0}건</p>
+                   </div>
+               </div>
+               <div className="grid grid-cols-4 gap-2">
+                   <button
+                       type="button"
+                       onClick={() => setMobilePrimaryView('LIBRARY')}
+                       className={`rounded-2xl px-2 py-3 text-[11px] font-black min-h-[56px] transition-colors ${mobilePrimaryView === 'LIBRARY' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
+                   >
+                       평가목록
+                   </button>
+                   <button
+                       type="button"
+                       onClick={() => {
+                           setMobilePrimaryView('DETAIL');
+                           setMobileWorkspaceView('TOOLS');
+                       }}
+                       className={`rounded-2xl px-2 py-3 text-[11px] font-black min-h-[56px] transition-colors ${mobilePrimaryView === 'DETAIL' && mobileWorkspaceView === 'TOOLS' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                   >
+                       실무도구
+                   </button>
+                   <button
+                       type="button"
+                       onClick={() => {
+                           setMobilePrimaryView('DETAIL');
+                           setMobileWorkspaceView('LIST');
+                       }}
+                       className={`rounded-2xl px-2 py-3 text-[11px] font-black min-h-[56px] transition-colors ${mobilePrimaryView === 'DETAIL' && mobileWorkspaceView === 'LIST' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                   >
+                       최종목록
+                   </button>
+                   <button
+                       type="button"
+                       onClick={() => {
+                           setMobilePrimaryView('DETAIL');
+                           setMobileWorkspaceView('LIST');
+                           setMobileListFilter(prev => prev === 'ALL' ? 'HIGH' : 'ALL');
+                       }}
+                       className={`rounded-2xl px-2 py-3 text-[11px] font-black min-h-[56px] transition-colors ${mobileListFilter === 'HIGH' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                   >
+                       상위험
+                   </button>
+               </div>
+               <button
+                   type="button"
+                   onClick={() => handleUploadClick(activeAssessment.type === 'INITIAL' ? 'INITIAL' : 'MONTHLY')}
+                   className="mt-2 w-full rounded-2xl bg-blue-600 text-white py-3 text-xs font-black min-h-[52px] shadow-lg shadow-blue-200"
+               >
+                   문서 분석/추가 바로가기
+               </button>
+           </div>
+       )}
 
        {/* Regular Assessment Modal */}
        {showRegularBuilder && (

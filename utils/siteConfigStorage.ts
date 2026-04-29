@@ -13,6 +13,7 @@ const normalizeText = (value: unknown, fallback: string) => {
 export const stripSensitiveSiteConfig = (config: SiteConfig) => ({
   siteName: config.siteName,
   managerName: config.managerName,
+  linkageTargetRate: typeof config.linkageTargetRate === 'number' ? config.linkageTargetRate : 90,
 });
 
 export const persistSiteConfig = (config: SiteConfig) => {
@@ -47,6 +48,9 @@ export const loadStoredSiteConfig = (fallback: SiteConfig): SiteConfig => {
       siteName: normalizeText(publicConfig.siteName, fallback.siteName),
       managerName: normalizeText(publicConfig.managerName, fallback.managerName),
       userApiKey: resolvedKey,
+      linkageTargetRate: typeof publicConfig.linkageTargetRate === 'number' && publicConfig.linkageTargetRate >= 0 && publicConfig.linkageTargetRate <= 100
+        ? publicConfig.linkageTargetRate
+        : (typeof fallback.linkageTargetRate === 'number' ? fallback.linkageTargetRate : 90),
     };
 
     if (legacyKey) {

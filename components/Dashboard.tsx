@@ -378,6 +378,7 @@ const KpiCard = ({ icon, label, value, unit, colorClass }: KpiCardProps) => (
 
 export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewReport, onNavigateToReports, onNavigateToDataLab, onNewEntry, onEdit, onDelete }) => {
     const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+    const [selectedIssueTeam, setSelectedIssueTeam] = useState<string | null>(null);
 
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -387,12 +388,41 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
         const riskCount = todaysEntries.reduce((acc, curr) => acc + (curr.riskFactors?.length || 0), 0);
         const workerCount = todaysEntries.reduce((acc, curr) => acc + (curr.attendeesCount || 0), 0);
         const recentEntries = todaysEntries.slice(0, 10);
+        const linkedEntries = todaysEntries.filter(entry => !!entry.linkedRiskAssessmentId || !!entry.linkedRiskAssessmentLabel);
+        const matchedEntries = linkedEntries.filter(entry => entry.linkedRiskAssessmentMatchedByMonth);
+        const mismatchedEntries = linkedEntries.filter(entry => !entry.linkedRiskAssessmentMatchedByMonth);
+        const missingLinkedEntries = todaysEntries.filter(entry => !entry.linkedRiskAssessmentId && !entry.linkedRiskAssessmentLabel);
+        const primaryLinkageIssueEntry = missingLinkedEntries[0] || mismatchedEntries[0] || null;
+        const issueTeamSummary = Object.values(todaysEntries.reduce((acc, entry) => {
+            const teamName = (entry.teamName || entry.teamId || '미지정').trim();
+            if (!acc[teamName]) {
+                acc[teamName] = { teamName, missing: 0, mismatched: 0, matched: 0, total: 0 };
+            }
+            acc[teamName].total += 1;
+            if (!entry.linkedRiskAssessmentId && !entry.linkedRiskAssessmentLabel) {
+                acc[teamName].missing += 1;
+            } else if (!entry.linkedRiskAssessmentMatchedByMonth) {
+                acc[teamName].mismatched += 1;
+            } else {
+                acc[teamName].matched += 1;
+            }
+            return acc;
+        }, {} as Record<string, { teamName: string; missing: number; mismatched: number; matched: number; total: number }>))
+            .filter(team => team.missing > 0 || team.mismatched > 0)
+            .sort((left, right) => (right.missing + right.mismatched) - (left.missing + left.mismatched) || right.total - left.total)
+            .slice(0, 4);
 
         return {
             todaysEntries,
             riskCount,
             workerCount,
             recentEntries,
+            linkedEntries,
+            matchedEntries,
+            mismatchedEntries,
+            missingLinkedEntries,
+            primaryLinkageIssueEntry,
+            issueTeamSummary,
         };
     }, [entries, today]);
     
@@ -495,6 +525,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
 
         return { teams: sortedTeams, labels: dateLabels };
     }, [entries]);
+
+    const visibleRealtimeEntries = useMemo(() => {
+        const targetEntries = selectedIssueTeam
+            ? dailySummary.todaysEntries.filter(entry => (entry.teamName || entry.teamId || '미지정').trim() === selectedIssueTeam)
+            : dailySummary.recentEntries;
+
+        return targetEntries.slice(0, 10);
+    }, [dailySummary.todaysEntries, dailySummary.recentEntries, selectedIssueTeam]);
+
+    const selectedIssueTeamPrimaryEntry = useMemo(() => {
+        if (!selectedIssueTeam) return dailySummary.primaryLinkageIssueEntry;
+
+        return dailySummary.todaysEntries.find(entry => {
+            const teamName = (entry.teamName || entry.teamId || '미지정').trim();
+            const hasIssue = !entry.linkedRiskAssessmentId || !entry.linkedRiskAssessmentMatchedByMonth;
+            return teamName === selectedIssueTeam && hasIssue;
+        }) || dailySummary.primaryLinkageIssueEntry;
+    }, [dailySummary.primaryLinkageIssueEntry, dailySummary.todaysEntries, selectedIssueTeam]);
     
     return (
         <div className="space-y-6 pb-20 animate-fade-in font-sans text-slate-800">
@@ -567,6 +615,97 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                     </div>
                 </div>
             </div>
+
+            {dailySummary.todaysEntries.length > 0 && (
+                <div className={`rounded-3xl border p-4 md:p-5 shadow-sm ${dailySummary.missingLinkedEntries.length > 0 || dailySummary.mismatchedEntries.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                            <div className={`p-2 rounded-xl ${dailySummary.missingLinkedEntries.length > 0 || dailySummary.mismatchedEntries.length > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                {dailySummary.missingLinkedEntries.length > 0 || dailySummary.mismatchedEntries.length > 0 ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}
+                            </div>
+                            <div>
+                                <p className={`text-xs font-black uppercase tracking-wider ${dailySummary.missingLinkedEntries.length > 0 || dailySummary.mismatchedEntries.length > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                    위험성평가 연계 점검
+                                </p>
+                                <p className="text-sm font-bold text-slate-800 mt-1">
+                                    {dailySummary.missingLinkedEntries.length > 0 || dailySummary.mismatchedEntries.length > 0
+                                        ? '금일 TBM 중 일부가 동일월 위험성평가와 정확히 연결되지 않았습니다.'
+                                        : '금일 TBM이 모두 동일월 위험성평가와 연계되었습니다.'}
+                                </p>
+                                <p className="text-xs text-slate-600 mt-1">
+                                    미연계 {dailySummary.missingLinkedEntries.length}건 · 동일월 미일치 {dailySummary.mismatchedEntries.length}건 · 동일월 연계 {dailySummary.matchedEntries.length}건
+                                </p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 md:min-w-[300px]">
+                            <div className="rounded-2xl bg-white/80 border border-white px-3 py-2">
+                                <p className="text-[10px] font-bold text-slate-400">연계 문서</p>
+                                <p className="text-lg font-black text-slate-800">{dailySummary.linkedEntries.length}</p>
+                            </div>
+                            <div className="rounded-2xl bg-white/80 border border-white px-3 py-2">
+                                <p className="text-[10px] font-bold text-slate-400">동일월 연계</p>
+                                <p className="text-lg font-black text-emerald-600">{dailySummary.matchedEntries.length}</p>
+                            </div>
+                            <div className="rounded-2xl bg-white/80 border border-white px-3 py-2">
+                                <p className="text-[10px] font-bold text-slate-400">조치 필요</p>
+                                <p className={`text-lg font-black ${dailySummary.missingLinkedEntries.length > 0 || dailySummary.mismatchedEntries.length > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{dailySummary.missingLinkedEntries.length + dailySummary.mismatchedEntries.length}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {dailySummary.primaryLinkageIssueEntry && (
+                        <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                            <button
+                                onClick={() => selectedIssueTeamPrimaryEntry && onEdit(selectedIssueTeamPrimaryEntry)}
+                                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
+                            >
+                                <FileText size={14} /> {selectedIssueTeam ? `${selectedIssueTeam} 보정 바로가기` : '연계 보정 바로가기'}
+                            </button>
+                            <button
+                                onClick={onNavigateToReports}
+                                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-white text-slate-700 border border-slate-200 text-xs font-bold hover:border-amber-300 hover:bg-amber-50 transition-colors"
+                            >
+                                <ArrowRight size={14} /> 문서 보관소에서 전체 확인
+                            </button>
+                        </div>
+                    )}
+                    {dailySummary.issueTeamSummary.length > 0 && (
+                        <div className="mt-4 rounded-2xl border border-white/70 bg-white/70 p-3">
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">팀별 보정 우선순위</p>
+                                <div className="flex items-center gap-2">
+                                    {selectedIssueTeam && (
+                                        <button
+                                            onClick={() => setSelectedIssueTeam(null)}
+                                            className="text-[10px] font-bold text-slate-500 px-2 py-1 rounded border border-slate-200 bg-white hover:border-slate-300"
+                                        >
+                                            전체 보기
+                                        </button>
+                                    )}
+                                    <span className="text-[10px] text-slate-400">Top {dailySummary.issueTeamSummary.length}</span>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                {dailySummary.issueTeamSummary.map(team => (
+                                    <button
+                                        key={team.teamName}
+                                        onClick={() => setSelectedIssueTeam(prev => prev === team.teamName ? null : team.teamName)}
+                                        className={`w-full flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left ${selectedIssueTeam === team.teamName ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                                    >
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-bold text-slate-800 truncate">{team.teamName}</p>
+                                            <p className="text-[10px] text-slate-500">총 {team.total}건 · 동일월 연계 {team.matched}건</p>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <p className="text-[11px] font-black text-amber-600">미연계 {team.missing}건</p>
+                                            <p className="text-[11px] font-black text-violet-600">미일치 {team.mismatched}건</p>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* REFACTORED CHART SECTION */}
@@ -691,17 +830,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                         <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
                             <Radio size={16} className="text-red-500 animate-pulse"/> 실시간 활동 (금일)
                         </h3>
-                        <span className="bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold">{dailySummary.todaysEntries.length}건</span>
+                        <span className="bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold">{selectedIssueTeam ? `${selectedIssueTeam} ${visibleRealtimeEntries.length}건` : `${dailySummary.todaysEntries.length}건`}</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar" role="status" aria-live="polite" aria-label="금일 실시간 활동 목록">
-                        {dailySummary.todaysEntries.length === 0 ? (
+                        {visibleRealtimeEntries.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 p-4 text-center">
                                 <Clock size={24} className="opacity-20"/>
-                                <span className="text-xs font-bold">금일 작성된 일지가 없습니다.</span>
-                                <span className="text-[10px] opacity-70">과거 기록은 '문서 보관소'에서 확인하세요.</span>
+                                <span className="text-xs font-bold">조건에 맞는 금일 기록이 없습니다.</span>
+                                <span className="text-[10px] opacity-70">팀 선택을 해제하거나 다른 팀을 선택하세요.</span>
                             </div>
                         ) : (
-                            dailySummary.recentEntries.map((entry) => (
+                            visibleRealtimeEntries.map((entry) => (
                                 <div key={entry.id} className="p-3 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:bg-indigo-50/30 transition-all flex items-center gap-3 group relative">
                                     <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
                                         {entry.tbmPhotoUrl ? (
@@ -716,6 +855,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                                             <span className="text-[10px] text-slate-400 font-mono">{entry.time}</span>
                                         </div>
                                         <p className="text-[10px] text-slate-500 truncate">{entry.workDescription || '내용 없음'}</p>
+                                        {entry.linkedRiskAssessmentLabel && (
+                                            <div className="mt-1 flex items-center gap-1 flex-wrap">
+                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${entry.linkedRiskAssessmentMatchedByMonth ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                                    {entry.linkedRiskAssessmentMatchedByMonth ? '동일월 연계' : '위험성평가 연계'}
+                                                </span>
+                                                <span className="text-[9px] text-slate-500 truncate max-w-[160px]">{entry.linkedRiskAssessmentLabel}</span>
+                                            </div>
+                                        )}
                                     </div>
                                     <button 
                                         onClick={(e) => {

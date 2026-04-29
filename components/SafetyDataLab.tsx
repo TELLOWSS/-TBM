@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { TBMEntry, TeamOption, CommandTask as SmartCommandTask, CommandPriority as SmartCommandPriority, CommandStatus as SmartCommandStatus, CommandStatusHistoryItem } from '../types';
+import { TBMEntry, TeamOption, CommandTask as SmartCommandTask, CommandPriority as SmartCommandPriority, CommandStatus as SmartCommandStatus, CommandStatusHistoryItem, SiteConfig } from '../types';
 import { BarChart2, TrendingUp, BrainCircuit, Activity, Database, Info, Hexagon, Radar, ShieldCheck, Upload, HardDrive, Search, AlertTriangle, Users, Zap, Layers, FileText, Download, Share2, Target, CheckCircle2, XCircle, Filter, ClipboardList, Plus, Trash2 } from 'lucide-react';
 import { generateGeneralInsight } from '../services/geminiService';
 
@@ -9,6 +9,7 @@ interface SafetyDataLabProps {
     teams: TeamOption[];
     onBackupData: (scope: 'ALL' | 'TBM' | 'RISK') => void;
     onRestoreData: (files: FileList) => void;
+    siteConfig?: SiteConfig;
 }
 
 type PeriodFilter = '7D' | '30D' | 'THIS_MONTH' | 'CUSTOM' | 'ALL';
@@ -48,6 +49,8 @@ export const RISK_KEYWORD_DICT: RiskKeywordDef[] = [
     { keyword: '화재', category: '화학/게 사고' },
     { keyword: '질식', category: '화학/게 사고' },
 ];
+
+const LINKAGE_TARGET_STORAGE_KEY = 'safety_datalab_linkage_target_rate_v1';
 
 // ============================================================
 // --- [Visual Component] Neon Donut Chart ---
@@ -238,7 +241,7 @@ const CommandOrderCard: React.FC<{ order: CommandOrder; index: number }> = ({ or
     );
 };
 
-export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, onBackupData, onRestoreData }) => {
+export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, onBackupData, onRestoreData, siteConfig }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiCards, setAiCards] = useState<CommandOrder[] | null>(null);
     const [aiRawFallback, setAiRawFallback] = useState<string | null>(null);
@@ -265,6 +268,15 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         rationale: '',
         kpi: '',
     });
+    const [linkageTrendRange, setLinkageTrendRange] = useState<'3M' | '6M' | '12M'>('6M');
+    const [linkageTargetRate, setLinkageTargetRate] = useState<number>(() => {
+        if (typeof siteConfig?.linkageTargetRate === 'number' && siteConfig.linkageTargetRate >= 0 && siteConfig.linkageTargetRate <= 100) {
+            return siteConfig.linkageTargetRate;
+        }
+        const stored = Number(localStorage.getItem(LINKAGE_TARGET_STORAGE_KEY) || '90');
+        if (Number.isFinite(stored) && stored >= 0 && stored <= 100) return stored;
+        return 90;
+    });
     const [filter, setFilter] = useState<LabFilterState>({
         teamId: null,
         riskLabel: null,
@@ -276,6 +288,14 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     // [FIX] 컴포넌트 언마운트 후 setState 방지
     const mountedRef = useRef(true);
     React.useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+    React.useEffect(() => {
+        localStorage.setItem(LINKAGE_TARGET_STORAGE_KEY, String(linkageTargetRate));
+    }, [linkageTargetRate]);
+    React.useEffect(() => {
+        if (typeof siteConfig?.linkageTargetRate === 'number' && siteConfig.linkageTargetRate >= 0 && siteConfig.linkageTargetRate <= 100) {
+            setLinkageTargetRate(siteConfig.linkageTargetRate);
+        }
+    }, [siteConfig?.linkageTargetRate]);
 
     const announceStatus = (message: string) => {
         if (!mountedRef.current) return;
@@ -367,6 +387,74 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
 
         const totalEntries = filteredEntries.length;
         const totalPeople = filteredEntries.reduce((acc, e) => acc + (e.attendeesCount || 0), 0);
+        const linkedEntries = filteredEntries.filter(e => !!e.linkedRiskAssessmentId || !!e.linkedRiskAssessmentLabel);
+        const sameMonthLinkedEntries = linkedEntries.filter(e => e.linkedRiskAssessmentMatchedByMonth);
+        const linkedUsageRate = totalEntries > 0 ? Math.round((linkedEntries.length / totalEntries) * 100) : 0;
+        const sameMonthLinkedRate = totalEntries > 0 ? Math.round((sameMonthLinkedEntries.length / totalEntries) * 100) : 0;
+        const avgLinkedHighRiskCount = linkedEntries.length > 0
+            ? Number((linkedEntries.reduce((sum, entry) => sum + (entry.linkedRiskAssessmentHighCount || 0), 0) / linkedEntries.length).toFixed(1))
+            : 0;
+        const actionNoteLinkedEntries = linkedEntries.filter(entry => (entry.linkedRiskAssessmentActionNoteCount || 0) > 0);
+        const teamLinkageStats = Object.values(filteredEntries.reduce((acc, entry) => {
+            const teamName = (entry.teamName || entry.teamId || '미지정').trim();
+            if (!acc[teamName]) {
+                acc[teamName] = {
+                    teamName,
+                    total: 0,
+                    linked: 0,
+                    matched: 0,
+                };
+            }
+            acc[teamName].total += 1;
+            if (entry.linkedRiskAssessmentId || entry.linkedRiskAssessmentLabel) {
+                acc[teamName].linked += 1;
+                if (entry.linkedRiskAssessmentMatchedByMonth) {
+                    acc[teamName].matched += 1;
+                }
+            }
+            return acc;
+        }, {} as Record<string, { teamName: string; total: number; linked: number; matched: number }>)).map(item => ({
+            ...item,
+            linkedRate: item.total > 0 ? Math.round((item.linked / item.total) * 100) : 0,
+            matchedRate: item.total > 0 ? Math.round((item.matched / item.total) * 100) : 0,
+        })).sort((left, right) => right.linkedRate - left.linkedRate || right.matchedRate - left.matchedRate || right.total - left.total).slice(0, 4);
+        const monthlyLinkageTrend = (() => {
+            const monthCount = linkageTrendRange === '3M' ? 3 : linkageTrendRange === '12M' ? 12 : 6;
+            const buckets = Array.from({ length: monthCount }, (_, index) => {
+                const d = new Date();
+                d.setMonth(d.getMonth() - ((monthCount - 1) - index));
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                return {
+                    key,
+                    label: `${String(d.getMonth() + 1).padStart(2, '0')}월`,
+                    total: 0,
+                    linked: 0,
+                    matched: 0,
+                };
+            });
+            const bucketMap = buckets.reduce((acc, bucket) => {
+                acc[bucket.key] = bucket;
+                return acc;
+            }, {} as Record<string, { key: string; label: string; total: number; linked: number; matched: number }>);
+
+            filteredEntries.forEach(entry => {
+                const key = entry.date?.slice(0, 7);
+                if (!key || !bucketMap[key]) return;
+                bucketMap[key].total += 1;
+                if (entry.linkedRiskAssessmentId || entry.linkedRiskAssessmentLabel) {
+                    bucketMap[key].linked += 1;
+                    if (entry.linkedRiskAssessmentMatchedByMonth) {
+                        bucketMap[key].matched += 1;
+                    }
+                }
+            });
+
+            return buckets.map(bucket => ({
+                ...bucket,
+                linkedRate: bucket.total > 0 ? Math.round((bucket.linked / bucket.total) * 100) : 0,
+                matchedRate: bucket.total > 0 ? Math.round((bucket.matched / bucket.total) * 100) : 0,
+            }));
+        })();
         
         const validScores = filteredEntries.filter(e => e.videoAnalysis?.score).map(e => e.videoAnalysis!.score);
         const avgScore = validScores.length > 0 ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) : 0;
@@ -388,8 +476,23 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         // [Phase 2] 동적 트렌드 스케일: 최대건수 기준 점유율 계산
         const maxTrendCount = Math.max(...trendData.map(d => d.count), 1);
 
-        return { totalEntries, totalPeople, avgScore, trendData, maxTrendCount, filteredEntries };
-    }, [periodEntries, filter.teamId, filter.riskLabel]);
+        return {
+            totalEntries,
+            totalPeople,
+            avgScore,
+            trendData,
+            maxTrendCount,
+            filteredEntries,
+            linkedEntriesCount: linkedEntries.length,
+            sameMonthLinkedCount: sameMonthLinkedEntries.length,
+            linkedUsageRate,
+            sameMonthLinkedRate,
+            avgLinkedHighRiskCount,
+            actionNoteLinkedCount: actionNoteLinkedEntries.length,
+            teamLinkageStats,
+            monthlyLinkageTrend,
+        };
+    }, [periodEntries, filter.teamId, filter.riskLabel, linkageTrendRange]);
 
     // --- [Smart TBM Command] 지휘브리핑 스켈레톤 데이터 ---
     const commandBriefingDraft = useMemo(() => {
@@ -1166,6 +1269,121 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                             <div className="flex items-baseline gap-1">
                                 <span className="text-xl font-black text-white">{filteredAnalysis.totalPeople}</span>
                                 <span className="text-xs text-slate-500">명</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                            <div className="flex items-center gap-2">
+                                <ShieldCheck size={14} className="text-cyan-300" />
+                                <p className="text-[10px] text-cyan-300 font-black uppercase tracking-[0.2em]">Risk Linkage Usage</p>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">TBM ↔ RA</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div className="rounded-xl bg-slate-950/70 border border-slate-700/50 p-3">
+                                <p className="text-[10px] text-slate-500 font-bold mb-1">연계 사용률</p>
+                                <p className="text-lg font-black text-white">{filteredAnalysis.linkedUsageRate}<span className="text-xs text-slate-500 ml-1">%</span></p>
+                                <p className="text-[10px] text-slate-500 mt-1">{filteredAnalysis.linkedEntriesCount} / {filteredAnalysis.totalEntries}건</p>
+                            </div>
+                            <div className="rounded-xl bg-slate-950/70 border border-slate-700/50 p-3">
+                                <p className="text-[10px] text-slate-500 font-bold mb-1">동일월 연계율</p>
+                                <p className="text-lg font-black text-emerald-300">{filteredAnalysis.sameMonthLinkedRate}<span className="text-xs text-slate-500 ml-1">%</span></p>
+                                <p className="text-[10px] text-slate-500 mt-1">{filteredAnalysis.sameMonthLinkedCount}건</p>
+                            </div>
+                            <div className="rounded-xl bg-slate-950/70 border border-slate-700/50 p-3">
+                                <p className="text-[10px] text-slate-500 font-bold mb-1">평균 상위위험</p>
+                                <p className="text-lg font-black text-amber-300">{filteredAnalysis.avgLinkedHighRiskCount}<span className="text-xs text-slate-500 ml-1">건</span></p>
+                                <p className="text-[10px] text-slate-500 mt-1">메모 반영 {filteredAnalysis.actionNoteLinkedCount}건</p>
+                            </div>
+                        </div>
+                        {filteredAnalysis.teamLinkageStats.length > 0 && (
+                            <div className="mt-3 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Team Linkage Top</p>
+                                    <span className="text-[10px] text-slate-500">상위 {filteredAnalysis.teamLinkageStats.length}팀</span>
+                                </div>
+                                <div className="space-y-2">
+                                    {filteredAnalysis.teamLinkageStats.map(team => (
+                                        <div key={team.teamName} className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2">
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-bold text-white truncate">{team.teamName}</p>
+                                                <p className="text-[10px] text-slate-500">연계 {team.linked}/{team.total} · 동일월 {team.matched}건</p>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <p className="text-sm font-black text-cyan-300">{team.linkedRate}%</p>
+                                                <p className="text-[10px] text-emerald-400">동일월 {team.matchedRate}%</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        <div className="mt-3 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Monthly Linkage Trend</p>
+                                <div className="flex flex-col items-end gap-2">
+                                    <div className="flex items-center gap-1">
+                                        {(['3M', '6M', '12M'] as const).map(range => (
+                                            <button
+                                                key={range}
+                                                onClick={() => setLinkageTrendRange(range)}
+                                                className={`px-2 py-1 rounded text-[10px] font-bold border ${linkageTrendRange === range ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'bg-slate-900 text-slate-500 border-slate-700 hover:text-slate-300'}`}
+                                            >
+                                                {range}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        {[80, 90, 95].map(rate => (
+                                            <button
+                                                key={rate}
+                                                onClick={() => setLinkageTargetRate(rate)}
+                                                className={`px-2 py-1 rounded text-[10px] font-bold border ${linkageTargetRate === rate ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' : 'bg-slate-900 text-slate-500 border-slate-700 hover:text-slate-300'}`}
+                                            >
+                                                {rate}%
+                                            </button>
+                                        ))}
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            max={100}
+                                            value={linkageTargetRate}
+                                            onChange={(event) => {
+                                                const nextValue = Number(event.target.value);
+                                                if (Number.isFinite(nextValue)) {
+                                                    setLinkageTargetRate(Math.max(0, Math.min(100, nextValue)));
+                                                }
+                                            }}
+                                            className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] font-bold text-slate-200"
+                                            aria-label="연계율 목표값"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="relative">
+                                <div className="absolute left-0 right-0 border-t border-dashed border-rose-400/70 z-10" style={{ bottom: `${linkageTargetRate}%` }}></div>
+                                <div className="absolute right-0 -top-2 text-[9px] font-bold text-rose-300">목표 {linkageTargetRate}%</div>
+                                <div className="grid gap-2 items-end h-32" style={{ gridTemplateColumns: `repeat(${filteredAnalysis.monthlyLinkageTrend.length}, minmax(0, 1fr))` }}>
+                                    {filteredAnalysis.monthlyLinkageTrend.map(month => (
+                                        <div key={month.key} className="flex flex-col items-center justify-end gap-2 h-full relative z-20">
+                                            <div className="w-full flex items-end justify-center gap-1 h-full">
+                                                <div className="w-3 rounded-t bg-cyan-500/80" style={{ height: `${month.linkedRate}%` }} title={`${month.label} 연계율 ${month.linkedRate}%`}></div>
+                                                <div className="w-3 rounded-t bg-emerald-400/90" style={{ height: `${month.matchedRate}%` }} title={`${month.label} 동일월 연계율 ${month.matchedRate}%`}></div>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-[10px] font-bold text-slate-400">{month.label}</p>
+                                                <p className="text-[9px] text-slate-500">{month.total}건</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="mt-2 flex items-center gap-4 text-[10px] text-slate-500 font-bold">
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-cyan-500"></span>연계율</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-400"></span>동일월 연계율</span>
+                                <span className="flex items-center gap-1"><span className="w-3 h-px border-t border-dashed border-rose-400"></span>목표선</span>
                             </div>
                         </div>
                     </div>
