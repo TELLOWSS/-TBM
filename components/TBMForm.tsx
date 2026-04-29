@@ -78,6 +78,9 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
     const [videoUploadState, setVideoUploadState] = useState<'IDLE' | 'CHECKING' | 'READY' | 'ERROR'>('IDLE');
     const [videoUploadMessage, setVideoUploadMessage] = useState('');
     const [videoAnalysisProgress, setVideoAnalysisProgress] = useState(0);
+        const [videoAnalysisStartedAt, setVideoAnalysisStartedAt] = useState<number | null>(null);
+        const [videoAnalysisEtaSec, setVideoAnalysisEtaSec] = useState<number | null>(null);
+        const [videoEstimatedTotalSec, setVideoEstimatedTotalSec] = useState<number | null>(null);
   const [isDocAnalyzing, setIsDocAnalyzing] = useState(false);
 
   const [editingFeedbackIndex, setEditingFeedbackIndex] = useState<number | null>(null);
@@ -185,6 +188,24 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       return allowedExt.has(ext);
   };
 
+  const estimateTotalSeconds = (fileSizeMB: number, profileLabel?: 'BALANCED' | 'FAST' | 'ULTRA_FAST') => {
+      const sizeFactor = Math.min(1.8, Math.max(0.7, fileSizeMB / 80));
+
+      let base = 18;
+      if (profileLabel === 'ULTRA_FAST') base = 12;
+      else if (profileLabel === 'FAST') base = 15;
+      else if (profileLabel === 'BALANCED') base = 20;
+
+      // 프로파일 미확정(초기 단계)에서는 파일 크기 기반으로 대략 추정
+      if (!profileLabel) {
+          if (fileSizeMB >= 200) base = 14;
+          else if (fileSizeMB >= 50) base = 17;
+          else base = 21;
+      }
+
+      return Math.round(base * sizeFactor);
+  };
+
   const announceStatus = (message: string) => {
       setAnnounceMessage('');
       requestAnimationFrame(() => {
@@ -209,6 +230,31 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           }
       };
   }, []);
+
+    React.useEffect(() => {
+      if (!isVideoAnalyzing || !videoAnalysisStartedAt) {
+          setVideoAnalysisEtaSec(null);
+          return;
+      }
+
+      const calculateEta = () => {
+          if (videoAnalysisProgress <= 3) {
+              setVideoAnalysisEtaSec(null);
+              return;
+          }
+
+          const elapsedSec = (Date.now() - videoAnalysisStartedAt) / 1000;
+          const progressBasedTotal = Math.max(elapsedSec / (videoAnalysisProgress / 100), elapsedSec + 2);
+          const calibratedTotal = videoEstimatedTotalSec ? Math.max(progressBasedTotal * 0.7 + videoEstimatedTotalSec * 0.3, elapsedSec + 2) : progressBasedTotal;
+          const totalEstimatedSec = calibratedTotal;
+          const remainingSec = Math.max(0, Math.round(totalEstimatedSec - elapsedSec));
+          setVideoAnalysisEtaSec(remainingSec);
+      };
+
+      calculateEta();
+      const timer = window.setInterval(calculateEta, 700);
+      return () => window.clearInterval(timer);
+    }, [isVideoAnalyzing, videoAnalysisStartedAt, videoAnalysisProgress, videoEstimatedTotalSec]);
 
     React.useEffect(() => {
       if (initialData) {
@@ -634,6 +680,9 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
     if (!tbmVideoFile) return;
     setIsVideoAnalyzing(true);
     setVideoAnalysisProgress(10);
+        setVideoAnalysisStartedAt(Date.now());
+        setVideoAnalysisEtaSec(null);
+        setVideoEstimatedTotalSec(estimateTotalSeconds(tbmVideoFile.size / 1024 / 1024));
     setVideoStatusMessage("영상 최적화 준비 중...");
     setVideoUploadState('CHECKING');
     setVideoUploadMessage('AI 분석 준비 중...');
@@ -646,12 +695,14 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
             compressionResult = compressedVideoCacheRef.current.result;
             setVideoStatusMessage(`압축 결과 재사용 (${compressionResult.profile.label})`);
             setVideoAnalysisProgress(35);
+            setVideoEstimatedTotalSec(estimateTotalSeconds(compressionResult.originalSizeMB, compressionResult.profile.label));
         } else {
             setVideoStatusMessage('영상 자동 축소/고속 처리 중...');
             setVideoAnalysisProgress(25);
             compressionResult = await compressVideo(tbmVideoFile);
             compressedVideoCacheRef.current = { key: fileKey, result: compressionResult };
             setVideoAnalysisProgress(60);
+            setVideoEstimatedTotalSec(estimateTotalSeconds(compressionResult.originalSizeMB, compressionResult.profile.label));
         }
 
         const base64Video = await blobToBase64(compressionResult.blob);
@@ -690,6 +741,9 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
         announceStatus(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : 'AI 분석에 실패했습니다.');
     } finally {
         setIsVideoAnalyzing(false);
+        setVideoAnalysisStartedAt(null);
+        setVideoAnalysisEtaSec(null);
+        setVideoEstimatedTotalSec(null);
         setVideoStatusMessage("");
     }
   };
@@ -779,6 +833,30 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
               </button>
            </div>
         </div>
+
+        {(videoUploadState !== 'IDLE' || isVideoAnalyzing) && (
+            <div className={`shrink-0 px-3 md:px-6 py-2 border-b ${videoUploadState === 'ERROR' ? 'bg-red-50 border-red-200' : 'bg-rose-50 border-rose-200'}`}>
+                <div className="flex items-center gap-2">
+                    {(isVideoAnalyzing || videoUploadState === 'CHECKING')
+                        ? <Loader2 size={14} className="animate-spin text-rose-600"/>
+                        : <CheckCircle2 size={14} className={videoUploadState === 'ERROR' ? 'text-red-500' : 'text-emerald-500'} />}
+                    <span className={`text-xs md:text-sm font-bold ${videoUploadState === 'ERROR' ? 'text-red-700' : 'text-rose-700'}`}>
+                        {isVideoAnalyzing ? (videoStatusMessage || '동영상 AI 분석 진행 중...') : (videoUploadMessage || '동영상 상태 확인 중...')}
+                    </span>
+                    {isVideoAnalyzing && videoAnalysisEtaSec !== null && videoAnalysisProgress < 100 && (
+                        <span className="text-[11px] md:text-xs font-bold text-rose-500">· 약 {videoAnalysisEtaSec}초 남음</span>
+                    )}
+                </div>
+                {isVideoAnalyzing && (
+                    <div className="mt-2">
+                        <div className="h-1.5 rounded-full bg-rose-100 overflow-hidden">
+                            <div className="h-full bg-rose-500 transition-all duration-300" style={{ width: `${Math.max(8, videoAnalysisProgress)}%` }}></div>
+                        </div>
+                        <p className="mt-1 text-[10px] text-rose-600 font-semibold text-right">{videoAnalysisProgress}%</p>
+                    </div>
+                )}
+            </div>
+        )}
 
         {/* Body Layout */}
         <div className="flex-1 flex overflow-hidden flex-col lg:flex-row">
