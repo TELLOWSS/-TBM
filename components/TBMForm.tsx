@@ -3,7 +3,7 @@ import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { TBMEntry, RiskAssessmentItem, SafetyGuideline, TeamOption, TBMAnalysisResult, ScoreRubric, MonthlyRiskAssessment } from '../types';
 import { analyzeMasterLog, evaluateTBMVideo, generateSafetyFeedback } from '../services/geminiService';
-import { compressVideo } from '../utils/videoUtils';
+import { compressVideo, type VideoCompressionResult } from '../utils/videoUtils';
 import { Upload, Camera, FileText, X, Layers, ArrowLeft, Trash2, Film, Save, Plus, UserCheck, BrainCircuit, CheckCircle2, AlertCircle, Loader2, PlayCircle, Zap, Image as ImageIcon, Copy, Sparkles, Maximize, ScanText, ChevronRight, SplitSquareHorizontal, Paperclip, Users, Eye, Mic, Edit3, Sliders, Shield, Award } from 'lucide-react';
 
 interface TBMFormProps {
@@ -171,6 +171,8 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       return `${guideline.category} 작업 전 위험요인 공유 및 보호구/작업순서 재점검`;
   };
 
+    const normalizeRiskText = (value: string) => value.trim().replace(/\s+/g, ' ');
+
   const announceStatus = (message: string) => {
       setAnnounceMessage('');
       requestAnimationFrame(() => {
@@ -184,6 +186,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const fileInputRef = useRef<HTMLInputElement>(null);
   // [FIX] Track blob URL to revoke on change/unmount (memory leak prevention)
   const videoBlobUrlRef = useRef<string | null>(null);
+    const compressedVideoCacheRef = useRef<{ key: string; result: VideoCompressionResult } | null>(null);
 
   // [FIX] Revoke video blob URL on component unmount
     React.useEffect(() => {
@@ -267,7 +270,13 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   };
 
   const handleImportLinkedGuideline = (guideline: SafetyGuideline) => {
-      const exists = riskFactors.some(item => item.risk.trim() === guideline.content.trim());
+      const normalizedRisk = normalizeRiskText(guideline.content || '');
+      if (!normalizedRisk) {
+          announceStatus('가져올 위험요인 내용이 비어 있습니다.');
+          return;
+      }
+
+      const exists = riskFactors.some(item => normalizeRiskText(item.risk || '') === normalizedRisk);
       if (exists) {
           announceStatus('이미 동일한 위험요인이 등록되어 있습니다.');
           return;
@@ -276,7 +285,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       const next = [
           ...riskFactors,
           {
-              risk: guideline.content,
+              risk: normalizedRisk,
               measure: buildMeasureFromGuideline(guideline),
           }
       ];
@@ -292,13 +301,18 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           return;
       }
 
-      const existingRisks = new Set(riskFactors.map(item => item.risk.trim()));
-      const appendItems = teamFocusedLinkedRiskSuggestions
-          .filter(item => !existingRisks.has(item.content.trim()))
-          .map(item => ({
-              risk: item.content,
+      const existingRisks = new Set(riskFactors.map(item => normalizeRiskText(item.risk || '')));
+      const seen = new Set(existingRisks);
+      const appendItems = teamFocusedLinkedRiskSuggestions.reduce<RiskAssessmentItem[]>((acc, item) => {
+          const normalizedRisk = normalizeRiskText(item.content || '');
+          if (!normalizedRisk || seen.has(normalizedRisk)) return acc;
+          seen.add(normalizedRisk);
+          acc.push({
+              risk: normalizedRisk,
               measure: buildMeasureFromGuideline(item),
-          }));
+          });
+          return acc;
+      }, []);
 
       if (appendItems.length === 0) {
           announceStatus('추천 항목이 이미 모두 등록되어 있습니다.');
@@ -402,12 +416,22 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
               videoBlobUrlRef.current = null;
           }
           const file = e.target.files[0];
+          if (!file.type.startsWith('video/')) {
+              announceStatus('동영상 파일만 업로드할 수 있습니다.');
+              e.target.value = '';
+              return;
+          }
           // [FIX] 영상 파일 크기 제한 — 500MB 초과 시 메모리 압박 방지
           if (file.size > 500 * 1024 * 1024) {
               announceStatus('영상 파일이 너무 큽니다. 최대 500MB까지 업로드할 수 있습니다.');
               e.target.value = '';
               return;
           }
+
+          // 새 영상 업로드 시 기존 분석/압축 캐시 초기화
+          setVideoAnalysis(null);
+          compressedVideoCacheRef.current = null;
+
           setTbmVideoFile(file);
           setTbmVideoFileName(file.name);
           const url = URL.createObjectURL(file);
@@ -577,15 +601,27 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const handleRunVideoAnalysis = async () => {
     if (!tbmVideoFile) return;
     setIsVideoAnalyzing(true);
-    setVideoStatusMessage("AI 고속 압축 분석 중 (3배속)...");
+    setVideoStatusMessage("영상 최적화 준비 중...");
 
     try {
-        const compressedBlob = await compressVideo(tbmVideoFile);
-        const base64Video = await blobToBase64(compressedBlob);
+        const fileKey = `${tbmVideoFile.name}:${tbmVideoFile.size}:${tbmVideoFile.lastModified}`;
+        let compressionResult: VideoCompressionResult;
+
+        if (compressedVideoCacheRef.current?.key === fileKey) {
+            compressionResult = compressedVideoCacheRef.current.result;
+            setVideoStatusMessage(`압축 결과 재사용 (${compressionResult.profile.label})`);
+        } else {
+            setVideoStatusMessage('영상 자동 축소/고속 처리 중...');
+            compressionResult = await compressVideo(tbmVideoFile);
+            compressedVideoCacheRef.current = { key: fileKey, result: compressionResult };
+        }
+
+        const base64Video = await blobToBase64(compressionResult.blob);
+        setVideoStatusMessage(`AI 분석 중 (${compressionResult.profile.label}, ${compressionResult.profile.playbackRate.toFixed(1)}x)`);
         
         const result = await evaluateTBMVideo(
             base64Video.split(',')[1],
-            'video/mp4',
+            compressionResult.mimeType,
             { workDescription, riskFactors },
             effectiveGuidelines
         );
@@ -601,7 +637,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
             setSafetyFeedback(currentFeedback);
             updateActiveItem({ safetyFeedback: currentFeedback });
         }
-        announceStatus('AI 분석이 완료되었습니다. 내용을 확인하고 수정해주세요.');
+        announceStatus(`AI 분석 완료: ${compressionResult.originalSizeMB.toFixed(1)}MB → ${compressionResult.compressedSizeKB.toFixed(0)}KB (${compressionResult.profile.label})`);
     } catch (e: any) {
         console.error(e);
         const msg = e.message || '';
@@ -902,6 +938,9 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                 )}
                             </div>
                             <input type="file" ref={videoInputRef} className="hidden" accept="video/*" onChange={handleVideoUpload}/>
+                            <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
+                                대용량 영상은 자동으로 축소/고속 처리되어 빠른 코칭 분석에 사용됩니다.
+                            </p>
                             
                             {tbmVideoPreview && (
                                 <button 
