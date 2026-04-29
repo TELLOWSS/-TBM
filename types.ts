@@ -230,3 +230,21 @@ export interface TeamNormalizationLog {
   targetTeamName: string;
   affectedCount: number;
 }
+
+export type TeamNormalizationRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type TeamNormalizationReasonCode = 'MISLABEL' | 'UNASSIGNED_CLEANUP' | 'DATA_QUALITY' | 'TEAM_REORG' | 'EXTERNAL_AUDIT' | 'OTHER';
+
+export interface TeamNormalizationRequest {
+  id: string;
+  requestedAt: number;
+  requestedBy: string;
+  sourceLabel: string;
+  action: 'MAP_TO_EXISTING' | 'PROMOTE_AND_MAP';
+  targetTeamId?: string;
+  targetTeamName?: string;
+  status: TeamNormalizationRequestStatus;
+  reviewReasonCode?: TeamNormalizationReasonCode;
+  reviewComment?: string;
+  reviewedAt?: number;
+  reviewedBy?: string;
+}

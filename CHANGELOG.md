@@ -21,6 +21,29 @@
   - 정규화 작업 이력(누가/언제/무엇/몇건)을 저장하고 심층연구소 내 최근 이력 카드로 표시
 - `utils/backupValidation.ts`, `App.tsx`
   - 전체 백업/복구 범위에 `teamNormalizationLogs`를 포함해 운영 이력의 연속성 보장
+- `App.tsx`, `components/Dashboard.tsx`
+  - 팀 정규화 로그 적재 시 최신 스냅샷 기반으로 병합하도록 보강해 동시 액션 경합 시 로그 누락 위험 완화
+  - 날씨 요청에 request sequence 가드를 추가해 이전 요청 응답이 최신 상태를 덮어쓰는 충돌(stale response) 방지
+- `components/SafetyDataLab.tsx`
+  - 정규화 작업 이력 카드에 기간 필터(`오늘/7일/30일`) 추가
+  - 선택 기간 기준 이력만 조회하도록 필터링 로직 추가
+  - 선택 기간 기준 이력 CSV 내보내기 기능 추가
+- `App.tsx`, `components/SafetyDataLab.tsx`, `types.ts`, `utils/backupValidation.ts`
+  - 정규화 동선을 `요청 → 승인/반려` 워크플로우로 전환
+  - 승인/반려 시 사유코드(`오기입/미지정정리/품질개선/팀개편/대외점검/기타`) 및 검토 메모 기록
+  - 승인 대기/요청 처리 이력 보드 추가, 승인 시 실제 정규화 실행 및 로그 누적
+  - `teamNormalizationRequests` 저장/백업/복구 연계로 워크플로우 상태 지속성 보장
+- `components/SafetyDataLab.tsx`
+  - Phase C 운영 KPI 추가: 요청 SLA(대기 건수/평균 대기시간/최장 대기시간/24시간 초과 건수)
+  - 반려 사유 Top 통계 카드 추가로 반려 패턴 분석 지원
+  - KPI 임계치 기반 운영 경보 배지 추가(`24h 초과 대기`, `평균 대기 12h+`, `반려 누적 5건+`)
+- `App.tsx`, `components/Dashboard.tsx`
+  - 팀 정규화 요청 상태를 기반으로 대시보드용 경보 요약 지표(`critical/warning/pending`)를 계산해 전달
+  - 대시보드 상단 헤더에 `CRITICAL/WARNING` 경보 배지 및 심층연구소 즉시 이동 액션 추가
+  - 대시보드 `데이터 연구소` 카드에 정규화 경보 건수 배지를 노출해 초기 화면에서 운영 리스크 선인지 강화
+- `App.tsx`, `components/Dashboard.tsx`, `components/SafetyDataLab.tsx`
+  - 대시보드 경보 라벨 클릭 시 심층연구소 `Unknown Team Normalization Queue` 섹션으로 딥링크 포커스 연동
+  - 심층연구소 진입 시 대상 섹션 자동 스크롤 및 일시 하이라이트로 조치 구간 인지성 강화
 - `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
   - 운영 로그 및 구현 메모 동기화
 

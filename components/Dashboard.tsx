@@ -6,9 +6,16 @@ import { Calendar, Users, AlertCircle, FileText, BarChart2, TrendingUp, ShieldAl
 interface DashboardProps {
   entries: TBMEntry[];
   siteName: string; // [NEW] Dynamic Site Name
+    normalizationAlertSummary?: {
+        criticalCount: number;
+        warningCount: number;
+        pendingCount: number;
+        pendingOver24h: number;
+        topAlertLabel?: string | null;
+    };
   onViewReport: () => void;
     onNavigateToReports: (options?: { teamName?: string | null; linkStatus?: 'all' | 'unlinked' | 'mismatched' }) => void;
-  onNavigateToDataLab: () => void; 
+    onNavigateToDataLab: (options?: { focusTarget?: 'NORMALIZATION_WORKFLOW' | null }) => void; 
   onNewEntry: () => void; 
   onEdit: (entry: TBMEntry) => void;
   onOpenSettings: () => void;
@@ -173,8 +180,10 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
     const [isLoaded, setIsLoaded] = useState(false);
     // [FIX] AbortController ref to cancel in-flight requests on unmount or new request
     const abortControllerRef = useRef<AbortController | null>(null);
+    const requestSeqRef = useRef(0);
 
     const fetchRealWeather = async () => {
+        const requestId = ++requestSeqRef.current;
         // Cancel any previous in-flight request
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -199,6 +208,7 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
             else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82) || (code >= 95 && code <= 99)) condition = 'Rain';
             else if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) condition = 'Snow';
 
+            if (requestId !== requestSeqRef.current) return;
             setWeather({
                 temp: Math.round(current.temperature_2m),
                 humidity: current.relative_humidity_2m,
@@ -210,9 +220,11 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
             // [FIX] Ignore AbortError — it's intentional cancellation, not a real error
             if (error.name === 'AbortError') return;
             console.error("Failed to fetch weather:", error);
+            if (requestId !== requestSeqRef.current) return;
             setWeather(prev => ({ ...prev, temp: 20, condition: 'Sun' }));
             setIsLoaded(true);
         } finally {
+            if (requestId !== requestSeqRef.current) return;
             setIsRefreshing(false);
         }
     };
@@ -376,7 +388,7 @@ const KpiCard = ({ icon, label, value, unit, colorClass }: KpiCardProps) => (
     </div>
 );
 
-export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewReport, onNavigateToReports, onNavigateToDataLab, onNewEntry, onEdit, onDelete }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, normalizationAlertSummary, onViewReport, onNavigateToReports, onNavigateToDataLab, onNewEntry, onEdit, onDelete }) => {
     const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
     const [selectedIssueTeam, setSelectedIssueTeam] = useState<string | null>(null);
 
@@ -543,6 +555,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
             return teamName === selectedIssueTeam && hasIssue;
         }) || dailySummary.primaryLinkageIssueEntry;
     }, [dailySummary.primaryLinkageIssueEntry, dailySummary.todaysEntries, selectedIssueTeam]);
+
+    const hasNormalizationAlert = (normalizationAlertSummary?.criticalCount || 0) > 0 || (normalizationAlertSummary?.warningCount || 0) > 0;
+    const hasCriticalNormalizationAlert = (normalizationAlertSummary?.criticalCount || 0) > 0;
     
     return (
         <div className="space-y-4 md:space-y-6 pb-20 pt-0.5 md:pt-0 animate-fade-in font-sans text-slate-800">
@@ -555,6 +570,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                     <p className="text-xs font-bold text-slate-500 mt-1">
                         Site Command Center • Safety Monitoring System (v4.0.1)
                     </p>
+                    {hasNormalizationAlert && (
+                        <div className="mt-2 flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black border ${hasCriticalNormalizationAlert ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                                <Siren size={12} />
+                                {hasCriticalNormalizationAlert ? 'CRITICAL' : 'WARNING'}
+                            </span>
+                            <button
+                                onClick={() => onNavigateToDataLab({ focusTarget: 'NORMALIZATION_WORKFLOW' })}
+                                className="text-[11px] font-bold text-slate-700 underline underline-offset-2 hover:text-emerald-600"
+                            >
+                                {normalizationAlertSummary?.topAlertLabel || '팀 정규화 워크플로우 점검 필요'}
+                            </button>
+                        </div>
+                    )}
                 </div>
                 <LiveClock />
             </div>
@@ -608,6 +637,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, onViewR
                                 <div className="text-left">
                                     <h4 className="font-bold text-sm text-slate-800">데이터 연구소</h4>
                                     <p className="text-[10px] text-slate-500">안전 트렌드 분석</p>
+                                    {hasNormalizationAlert && (
+                                        <p className={`text-[10px] font-black mt-0.5 ${hasCriticalNormalizationAlert ? 'text-red-600' : 'text-amber-600'}`}>
+                                            {hasCriticalNormalizationAlert ? 'CRITICAL' : 'WARNING'} · 정규화 경보 {normalizationAlertSummary!.criticalCount + normalizationAlertSummary!.warningCount}건
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                             <ArrowRight size={16} className="text-slate-300 group-hover:text-emerald-500"/>

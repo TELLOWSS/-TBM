@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const MAX_BACKUP_FILE_SIZE = 50 * 1024 * 1024;
 export const MAX_BACKUP_FILE_COUNT = 20;
-export const KNOWN_BACKUP_KEYS = ['version', 'backupDate', 'scope', 'entries', 'assessments', 'teams', 'signatures', 'siteConfig', 'teamNormalizationLogs'] as const;
+export const KNOWN_BACKUP_KEYS = ['version', 'backupDate', 'scope', 'entries', 'assessments', 'teams', 'signatures', 'siteConfig', 'teamNormalizationLogs', 'teamNormalizationRequests'] as const;
 
 // ============================================
 // Zod Schemas for Runtime Backup Validation
@@ -73,6 +73,21 @@ const TeamNormalizationLogSchema = z.object({
   affectedCount: z.number(),
 }).passthrough();
 
+const TeamNormalizationRequestSchema = z.object({
+  id: z.string(),
+  requestedAt: z.number(),
+  requestedBy: z.string(),
+  sourceLabel: z.string(),
+  action: z.enum(['MAP_TO_EXISTING', 'PROMOTE_AND_MAP']),
+  targetTeamId: z.string().optional(),
+  targetTeamName: z.string().optional(),
+  status: z.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  reviewReasonCode: z.enum(['MISLABEL', 'UNASSIGNED_CLEANUP', 'DATA_QUALITY', 'TEAM_REORG', 'EXTERNAL_AUDIT', 'OTHER']).optional(),
+  reviewComment: z.string().optional(),
+  reviewedAt: z.number().optional(),
+  reviewedBy: z.string().optional(),
+}).passthrough();
+
 /** Full typed backup payload schema */
 export const BackupPayloadSchema = z.object({
   version: z.string().optional(),
@@ -84,6 +99,7 @@ export const BackupPayloadSchema = z.object({
   signatures: SignaturesSchema.optional(),
   siteConfig: SiteConfigSchema.optional(),
   teamNormalizationLogs: z.array(TeamNormalizationLogSchema).optional(),
+  teamNormalizationRequests: z.array(TeamNormalizationRequestSchema).optional(),
 }).passthrough();
 
 export type BackupPayload = z.infer<typeof BackupPayloadSchema>;

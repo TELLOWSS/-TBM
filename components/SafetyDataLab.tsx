@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { TBMEntry, TeamOption, CommandTask as SmartCommandTask, CommandPriority as SmartCommandPriority, CommandStatus as SmartCommandStatus, CommandStatusHistoryItem, SiteConfig, TeamNormalizationLog } from '../types';
+import { TBMEntry, TeamOption, CommandTask as SmartCommandTask, CommandPriority as SmartCommandPriority, CommandStatus as SmartCommandStatus, CommandStatusHistoryItem, SiteConfig, TeamNormalizationLog, TeamNormalizationRequest, TeamNormalizationReasonCode } from '../types';
 import { BarChart2, TrendingUp, BrainCircuit, Activity, Database, Info, Hexagon, Radar, ShieldCheck, Upload, HardDrive, Search, AlertTriangle, Users, Zap, Layers, FileText, Download, Share2, Target, CheckCircle2, XCircle, Filter, ClipboardList, Plus, Trash2 } from 'lucide-react';
 import { generateGeneralInsight } from '../services/geminiService';
 
@@ -10,9 +10,13 @@ interface SafetyDataLabProps {
     onBackupData: (scope: 'ALL' | 'TBM' | 'RISK') => void;
     onRestoreData: (files: FileList) => void;
     siteConfig?: SiteConfig;
-    onNormalizeUnknownTeam?: (sourceLabel: string, targetTeamId: string) => Promise<void>;
-    onPromoteUnknownTeam?: (sourceLabel: string) => Promise<void>;
+    onRequestNormalization?: (payload: { sourceLabel: string; action: 'MAP_TO_EXISTING' | 'PROMOTE_AND_MAP'; targetTeamId?: string; targetTeamName?: string }) => Promise<void>;
+    onApproveNormalizationRequest?: (requestId: string, reasonCode: TeamNormalizationReasonCode, comment?: string) => Promise<void>;
+    onRejectNormalizationRequest?: (requestId: string, reasonCode: TeamNormalizationReasonCode, comment?: string) => Promise<void>;
     normalizationLogs?: TeamNormalizationLog[];
+    normalizationRequests?: TeamNormalizationRequest[];
+    focusTarget?: 'NORMALIZATION_WORKFLOW' | null;
+    onFocusTargetHandled?: () => void;
 }
 
 type PeriodFilter = '7D' | '30D' | 'THIS_MONTH' | 'CUSTOM' | 'ALL';
@@ -249,7 +253,7 @@ const CommandOrderCard: React.FC<{ order: CommandOrder; index: number }> = ({ or
     );
 };
 
-export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, onBackupData, onRestoreData, siteConfig, onNormalizeUnknownTeam, onPromoteUnknownTeam, normalizationLogs = [] }) => {
+export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, onBackupData, onRestoreData, siteConfig, onRequestNormalization, onApproveNormalizationRequest, onRejectNormalizationRequest, normalizationLogs = [], normalizationRequests = [], focusTarget, onFocusTargetHandled }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiCards, setAiCards] = useState<CommandOrder[] | null>(null);
     const [aiRawFallback, setAiRawFallback] = useState<string | null>(null);
@@ -264,8 +268,13 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     const [validationLogCopied, setValidationLogCopied] = useState(false);
     const [phaseClearLogCopied, setPhaseClearLogCopied] = useState(false);
     const [commandReportCopiedOnce, setCommandReportCopiedOnce] = useState(false);
+    const [normalizationFocusFlash, setNormalizationFocusFlash] = useState(false);
     const [unknownTeamTargetMap, setUnknownTeamTargetMap] = useState<Record<string, string>>({});
     const [normalizingUnknownLabel, setNormalizingUnknownLabel] = useState<string | null>(null);
+    const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+    const [reviewReasonMap, setReviewReasonMap] = useState<Record<string, TeamNormalizationReasonCode>>({});
+    const [reviewCommentMap, setReviewCommentMap] = useState<Record<string, string>>({});
+    const [normalizationLogRange, setNormalizationLogRange] = useState<'TODAY' | '7D' | '30D'>('7D');
     const [commandTasks, setCommandTasks] = useState<SmartCommandTask[]>(() => {
         try { return JSON.parse(localStorage.getItem(COMMAND_TASK_STORAGE_KEY) || '[]'); } catch { return []; }
     });
@@ -295,6 +304,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         customEnd: ''
     });
     const restoreInputRef = useRef<HTMLInputElement>(null);
+    const normalizationSectionRef = useRef<HTMLDivElement>(null);
     // [FIX] 컴포넌트 언마운트 후 setState 방지
     const mountedRef = useRef(true);
     React.useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -306,6 +316,19 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
             setLinkageTargetRate(siteConfig.linkageTargetRate);
         }
     }, [siteConfig?.linkageTargetRate]);
+
+    React.useEffect(() => {
+        if (focusTarget !== 'NORMALIZATION_WORKFLOW') return;
+
+        const timer = window.setTimeout(() => {
+            normalizationSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setNormalizationFocusFlash(true);
+            window.setTimeout(() => setNormalizationFocusFlash(false), 2200);
+            onFocusTargetHandled?.();
+        }, 80);
+
+        return () => window.clearTimeout(timer);
+    }, [focusTarget, onFocusTargetHandled]);
 
     const announceStatus = (message: string) => {
         if (!mountedRef.current) return;
@@ -437,6 +460,100 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         return Object.values(grouped).sort((a, b) => b.count - a.count || b.latestDate.localeCompare(a.latestDate));
     }, [entries, teams]);
 
+    const filteredNormalizationLogs = useMemo(() => {
+        const logs = [...normalizationLogs].sort((left, right) => right.actedAt - left.actedAt);
+        if (logs.length === 0) return logs;
+
+        const now = new Date();
+        const start = new Date(now);
+
+        if (normalizationLogRange === 'TODAY') {
+            start.setHours(0, 0, 0, 0);
+        } else if (normalizationLogRange === '7D') {
+            start.setDate(now.getDate() - 6);
+            start.setHours(0, 0, 0, 0);
+        } else {
+            start.setDate(now.getDate() - 29);
+            start.setHours(0, 0, 0, 0);
+        }
+
+        return logs.filter(log => log.actedAt >= start.getTime());
+    }, [normalizationLogs, normalizationLogRange]);
+
+    const pendingNormalizationRequests = useMemo(() => {
+        return normalizationRequests
+            .filter(request => request.status === 'PENDING')
+            .sort((left, right) => right.requestedAt - left.requestedAt);
+    }, [normalizationRequests]);
+
+    const reviewedNormalizationRequests = useMemo(() => {
+        return normalizationRequests
+            .filter(request => request.status !== 'PENDING')
+            .sort((left, right) => (right.reviewedAt || 0) - (left.reviewedAt || 0));
+    }, [normalizationRequests]);
+
+    const normalizationWorkflowKpi = useMemo(() => {
+        const now = Date.now();
+        const pendingAgesHours = pendingNormalizationRequests.map(request => Math.max(0, (now - request.requestedAt) / (1000 * 60 * 60)));
+        const pendingAvgHours = pendingAgesHours.length > 0
+            ? Number((pendingAgesHours.reduce((sum, age) => sum + age, 0) / pendingAgesHours.length).toFixed(1))
+            : 0;
+        const pendingMaxHours = pendingAgesHours.length > 0
+            ? Number(Math.max(...pendingAgesHours).toFixed(1))
+            : 0;
+        const pendingOver24h = pendingAgesHours.filter(age => age >= 24).length;
+
+        const rejectedRequests = reviewedNormalizationRequests.filter(request => request.status === 'REJECTED');
+        const reasonCounts = rejectedRequests.reduce((acc, request) => {
+            const reason = request.reviewReasonCode || 'OTHER';
+            acc[reason] = (acc[reason] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        const topRejectedReasons = Object.entries(reasonCounts)
+            .sort((left, right) => right[1] - left[1])
+            .slice(0, 3)
+            .map(([reason, count]) => ({ reason, count }));
+
+        return {
+            pendingCount: pendingNormalizationRequests.length,
+            pendingAvgHours,
+            pendingMaxHours,
+            pendingOver24h,
+            rejectedCount: rejectedRequests.length,
+            topRejectedReasons,
+        };
+    }, [pendingNormalizationRequests, reviewedNormalizationRequests]);
+
+    const normalizationAlertItems = useMemo(() => {
+        const alerts: Array<{ key: string; level: 'critical' | 'warning'; label: string }> = [];
+
+        if (normalizationWorkflowKpi.pendingOver24h >= 3) {
+            alerts.push({ key: 'pending-over24-critical', level: 'critical', label: '24시간 초과 대기 다수(3건+)'});
+        } else if (normalizationWorkflowKpi.pendingOver24h > 0) {
+            alerts.push({ key: 'pending-over24-warning', level: 'warning', label: '24시간 초과 대기 발생' });
+        }
+
+        if (normalizationWorkflowKpi.pendingAvgHours >= 12) {
+            alerts.push({ key: 'pending-avg-warning', level: 'warning', label: '평균 대기시간 12시간 이상' });
+        }
+
+        if (normalizationWorkflowKpi.rejectedCount >= 5) {
+            alerts.push({ key: 'rejected-high', level: 'warning', label: '반려 누적 5건 이상' });
+        }
+
+        return alerts;
+    }, [normalizationWorkflowKpi]);
+
+    const reasonCodeLabelMap: Record<TeamNormalizationReasonCode, string> = {
+        MISLABEL: '오기입/오분류',
+        UNASSIGNED_CLEANUP: '미지정 정리',
+        DATA_QUALITY: '데이터 품질 개선',
+        TEAM_REORG: '팀 체계 개편',
+        EXTERNAL_AUDIT: '대외 점검 대응',
+        OTHER: '기타',
+    };
+
     const resolveEntryTeamScopeId = (entry: TBMEntry) => {
         const teamId = (entry.teamId || '').trim();
         const teamName = (entry.teamName || '').trim();
@@ -467,33 +584,121 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
             announceStatus('치환할 대상 팀을 먼저 선택하세요.');
             return;
         }
-        if (!onNormalizeUnknownTeam) {
-            announceStatus('팀 정규화 기능을 사용할 수 없습니다.');
+        if (!onRequestNormalization) {
+            announceStatus('정규화 요청 기능을 사용할 수 없습니다.');
+            return;
+        }
+
+        const targetTeam = teams.find(team => team.id === targetTeamId);
+        if (!targetTeam) {
+            announceStatus('선택한 대상 팀을 찾을 수 없습니다.');
             return;
         }
 
         try {
             setNormalizingUnknownLabel(sourceLabel);
-            await onNormalizeUnknownTeam(sourceLabel, targetTeamId);
-            announceStatus(`${sourceLabel} 항목을 선택 팀으로 정규화했습니다.`);
+            await onRequestNormalization({
+                sourceLabel,
+                action: 'MAP_TO_EXISTING',
+                targetTeamId,
+                targetTeamName: targetTeam.name,
+            });
+            announceStatus(`${sourceLabel} 항목의 정규화 요청을 등록했습니다.`);
         } finally {
             setNormalizingUnknownLabel(null);
         }
     };
 
     const handlePromoteUnknownTeam = async (sourceLabel: string) => {
-        if (!onPromoteUnknownTeam) {
-            announceStatus('신규 팀 승격 기능을 사용할 수 없습니다.');
+        if (!onRequestNormalization) {
+            announceStatus('정규화 요청 기능을 사용할 수 없습니다.');
             return;
         }
 
         try {
             setNormalizingUnknownLabel(sourceLabel);
-            await onPromoteUnknownTeam(sourceLabel);
-            announceStatus(`${sourceLabel} 팀을 신규 등록 후 정규화했습니다.`);
+            await onRequestNormalization({
+                sourceLabel,
+                action: 'PROMOTE_AND_MAP',
+                targetTeamName: sourceLabel,
+            });
+            announceStatus(`${sourceLabel} 신규팀 등록 요청을 등록했습니다.`);
         } finally {
             setNormalizingUnknownLabel(null);
         }
+    };
+
+    const handleRequestReasonChange = (requestId: string, reason: TeamNormalizationReasonCode) => {
+        setReviewReasonMap(prev => ({ ...prev, [requestId]: reason }));
+    };
+
+    const handleRequestCommentChange = (requestId: string, comment: string) => {
+        setReviewCommentMap(prev => ({ ...prev, [requestId]: comment }));
+    };
+
+    const handleApproveRequest = async (requestId: string) => {
+        if (!onApproveNormalizationRequest) {
+            announceStatus('요청 승인 기능을 사용할 수 없습니다.');
+            return;
+        }
+
+        const reason = reviewReasonMap[requestId] || 'MISLABEL';
+        const comment = reviewCommentMap[requestId] || '';
+
+        try {
+            setProcessingRequestId(requestId);
+            await onApproveNormalizationRequest(requestId, reason, comment);
+        } finally {
+            setProcessingRequestId(null);
+        }
+    };
+
+    const handleRejectRequest = async (requestId: string) => {
+        if (!onRejectNormalizationRequest) {
+            announceStatus('요청 반려 기능을 사용할 수 없습니다.');
+            return;
+        }
+
+        const reason = reviewReasonMap[requestId] || 'OTHER';
+        const comment = reviewCommentMap[requestId] || '';
+
+        try {
+            setProcessingRequestId(requestId);
+            await onRejectNormalizationRequest(requestId, reason, comment);
+        } finally {
+            setProcessingRequestId(null);
+        }
+    };
+
+    const handleExportNormalizationLogsCsv = () => {
+        if (filteredNormalizationLogs.length === 0) {
+            announceStatus('내보낼 정규화 이력이 없습니다.');
+            return;
+        }
+
+        const escapeCsv = (value: string) => `"${String(value).replace(/"/g, '""')}"`;
+        const header = ['시각', '작업자', '원본팀', '대상팀', '반영건수', '작업유형'];
+        const rows = filteredNormalizationLogs.map(log => [
+            new Date(log.actedAt).toLocaleString('ko-KR'),
+            log.actor,
+            log.sourceLabel,
+            log.targetTeamName,
+            String(log.affectedCount),
+            log.action === 'PROMOTE_AND_MAP' ? '신규등록+치환' : '기존팀 치환',
+        ]);
+
+        const csv = [header, ...rows]
+            .map(cols => cols.map(escapeCsv).join(','))
+            .join('\n');
+
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `team_normalization_logs_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+        announceStatus(`정규화 이력 ${filteredNormalizationLogs.length}건을 CSV로 내보냈습니다.`);
     };
 
     const periodEntries = useMemo(() => {
@@ -1706,7 +1911,10 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     </div>
                 </div>
 
-                <div className="col-span-12 bg-slate-800/30 rounded-3xl p-4 md:p-6 border border-amber-500/30 shadow-xl">
+                <div
+                    ref={normalizationSectionRef}
+                    className={`col-span-12 bg-slate-800/30 rounded-3xl p-4 md:p-6 border shadow-xl transition-all duration-500 ${normalizationFocusFlash ? 'border-emerald-400/80 ring-2 ring-emerald-400/40' : 'border-amber-500/30'}`}
+                >
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                         <div className="flex items-center gap-2">
                             <Users size={16} className="text-amber-400"/>
@@ -1720,6 +1928,64 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     <div className="mb-3 flex flex-wrap gap-2 text-[11px]">
                         <span className="px-2 py-1 rounded border border-cyan-500/40 bg-cyan-600/20 text-cyan-300">평가자: 원인 파악 후 치환 승인</span>
                         <span className="px-2 py-1 rounded border border-indigo-500/40 bg-indigo-600/20 text-indigo-300">실무자: 신규팀 등록 또는 기존팀 치환</span>
+                    </div>
+
+                    <div className="mb-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <div className="rounded-xl border border-slate-700/60 bg-slate-900/60 px-3 py-2.5">
+                            <p className="text-[10px] text-slate-500 font-bold uppercase">대기 요청</p>
+                            <p className="text-lg font-black text-white mt-1">{normalizationWorkflowKpi.pendingCount}<span className="text-xs text-slate-500 ml-1">건</span></p>
+                        </div>
+                        <div className="rounded-xl border border-cyan-500/30 bg-cyan-600/10 px-3 py-2.5">
+                            <p className="text-[10px] text-cyan-300 font-bold uppercase">평균 대기</p>
+                            <p className="text-lg font-black text-cyan-300 mt-1">{normalizationWorkflowKpi.pendingAvgHours}<span className="text-xs text-cyan-200 ml-1">시간</span></p>
+                        </div>
+                        <div className="rounded-xl border border-amber-500/30 bg-amber-600/10 px-3 py-2.5">
+                            <p className="text-[10px] text-amber-300 font-bold uppercase">최장 대기</p>
+                            <p className="text-lg font-black text-amber-300 mt-1">{normalizationWorkflowKpi.pendingMaxHours}<span className="text-xs text-amber-200 ml-1">시간</span></p>
+                        </div>
+                        <div className="rounded-xl border border-rose-500/30 bg-rose-600/10 px-3 py-2.5">
+                            <p className="text-[10px] text-rose-300 font-bold uppercase">24h 초과</p>
+                            <p className="text-lg font-black text-rose-300 mt-1">{normalizationWorkflowKpi.pendingOver24h}<span className="text-xs text-rose-200 ml-1">건</span></p>
+                        </div>
+                    </div>
+
+                    <div className="mb-4 rounded-2xl border border-slate-700/60 bg-slate-900/50 p-3 md:p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <AlertTriangle size={14} className="text-amber-400"/>
+                            <p className="text-xs font-bold text-slate-300">운영 경보</p>
+                        </div>
+                        {normalizationAlertItems.length === 0 ? (
+                            <p className="text-[11px] text-emerald-300">현재 임계치 기반 경보가 없습니다.</p>
+                        ) : (
+                            <div className="flex flex-wrap gap-2">
+                                {normalizationAlertItems.map(item => (
+                                    <span
+                                        key={item.key}
+                                        className={`px-2.5 py-1 rounded border text-[11px] font-bold ${item.level === 'critical' ? 'border-rose-500/40 bg-rose-600/20 text-rose-300' : 'border-amber-500/40 bg-amber-600/20 text-amber-300'}`}
+                                    >
+                                        {item.level === 'critical' ? 'CRITICAL' : 'WARNING'} · {item.label}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mb-4 rounded-2xl border border-slate-700/60 bg-slate-900/50 p-3 md:p-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs font-bold text-slate-300">반려 사유 통계 (최근 처리 기준)</p>
+                            <span className="text-[10px] text-slate-500">반려 {normalizationWorkflowKpi.rejectedCount}건</span>
+                        </div>
+                        {normalizationWorkflowKpi.topRejectedReasons.length === 0 ? (
+                            <p className="text-[11px] text-slate-500">반려 이력이 없어 사유 통계가 없습니다.</p>
+                        ) : (
+                            <div className="flex flex-wrap gap-2">
+                                {normalizationWorkflowKpi.topRejectedReasons.map(item => (
+                                    <span key={item.reason} className="px-2.5 py-1 rounded border border-violet-500/40 bg-violet-600/20 text-[11px] text-violet-300 font-bold">
+                                        {reasonCodeLabelMap[item.reason as TeamNormalizationReasonCode] || item.reason} {item.count}건
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {unknownTeamQueue.length === 0 ? (
@@ -1755,7 +2021,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                                     className="px-3 py-2 rounded-lg text-[11px] font-bold border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 min-h-[40px]"
                                                     disabled={isWorking}
                                                 >
-                                                    기존팀으로 치환
+                                                    기존팀 치환 요청
                                                 </button>
                                                 {!item.hasUnassigned && (
                                                     <button
@@ -1763,7 +2029,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                                         className="px-3 py-2 rounded-lg text-[11px] font-bold border border-indigo-500/40 bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 min-h-[40px]"
                                                         disabled={isWorking}
                                                     >
-                                                        신규팀 등록+치환
+                                                        신규팀 등록 요청
                                                     </button>
                                                 )}
                                             </div>
@@ -1776,14 +2042,133 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
 
                     <div className="mt-4 rounded-2xl border border-slate-700/60 bg-slate-900/50 p-3 md:p-4">
                         <div className="flex items-center justify-between mb-2">
-                            <p className="text-xs font-bold text-slate-300">정규화 작업 이력 (최근)</p>
-                            <span className="text-[10px] text-slate-500">{normalizationLogs.length}건</span>
+                            <p className="text-xs font-bold text-slate-300">정규화 승인 대기 요청</p>
+                            <span className="text-[10px] text-slate-500">{pendingNormalizationRequests.length}건</span>
                         </div>
-                        {normalizationLogs.length === 0 ? (
+                        {pendingNormalizationRequests.length === 0 ? (
+                            <p className="text-[11px] text-slate-500">현재 승인 대기 요청이 없습니다.</p>
+                        ) : (
+                            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+                                {pendingNormalizationRequests.map(request => {
+                                    const isProcessing = processingRequestId === request.id;
+                                    const reason = reviewReasonMap[request.id] || 'MISLABEL';
+                                    const comment = reviewCommentMap[request.id] || '';
+                                    return (
+                                        <div key={request.id} className="rounded-lg border border-slate-700/60 bg-slate-950/60 px-3 py-3">
+                                            <p className="text-[11px] text-slate-200 break-words">
+                                                <span className="font-bold text-white">{request.sourceLabel}</span>
+                                                {' → '}
+                                                <span className="font-bold text-emerald-300">{request.targetTeamName || '신규팀 등록'}</span>
+                                            </p>
+                                            <p className="text-[10px] text-slate-500 mt-0.5">
+                                                요청자 {request.requestedBy} · {new Date(request.requestedAt).toLocaleString('ko-KR')} · {request.action === 'PROMOTE_AND_MAP' ? '신규등록+치환 요청' : '기존팀 치환 요청'}
+                                            </p>
+                                            <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+                                                <select
+                                                    value={reason}
+                                                    onChange={(event) => handleRequestReasonChange(request.id, event.target.value as TeamNormalizationReasonCode)}
+                                                    className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-[11px] text-slate-200 min-h-[38px]"
+                                                    disabled={isProcessing}
+                                                >
+                                                    <option value="MISLABEL">오기입/오분류</option>
+                                                    <option value="UNASSIGNED_CLEANUP">미지정 정리</option>
+                                                    <option value="DATA_QUALITY">데이터 품질 개선</option>
+                                                    <option value="TEAM_REORG">팀 체계 개편</option>
+                                                    <option value="EXTERNAL_AUDIT">대외 점검 대응</option>
+                                                    <option value="OTHER">기타</option>
+                                                </select>
+                                                <input
+                                                    value={comment}
+                                                    onChange={(event) => handleRequestCommentChange(request.id, event.target.value)}
+                                                    placeholder="검토 메모(선택)"
+                                                    className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-[11px] text-slate-200 md:col-span-2"
+                                                    disabled={isProcessing}
+                                                />
+                                            </div>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                <button
+                                                    onClick={() => handleApproveRequest(request.id)}
+                                                    className="px-3 py-2 rounded-lg text-[11px] font-bold border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 min-h-[38px]"
+                                                    disabled={isProcessing}
+                                                >
+                                                    승인
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRejectRequest(request.id)}
+                                                    className="px-3 py-2 rounded-lg text-[11px] font-bold border border-rose-500/40 bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 min-h-[38px]"
+                                                    disabled={isProcessing}
+                                                >
+                                                    반려
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-slate-700/60 bg-slate-900/50 p-3 md:p-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs font-bold text-slate-300">요청 처리 이력 (최근)</p>
+                            <span className="text-[10px] text-slate-500">{reviewedNormalizationRequests.length}건</span>
+                        </div>
+                        {reviewedNormalizationRequests.length === 0 ? (
+                            <p className="text-[11px] text-slate-500">처리 완료된 요청 이력이 없습니다.</p>
+                        ) : (
+                            <div className="flex flex-col gap-2 max-h-44 overflow-y-auto pr-1">
+                                {reviewedNormalizationRequests.slice(0, 10).map(request => (
+                                    <div key={request.id} className="rounded-lg border border-slate-700/60 bg-slate-950/60 px-3 py-2">
+                                        <p className="text-[11px] text-slate-200 break-words">
+                                            <span className="font-bold text-white">{request.sourceLabel}</span> → <span className="font-bold text-emerald-300">{request.targetTeamName || '신규팀 등록'}</span>
+                                        </p>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">
+                                            {request.status === 'APPROVED' ? '승인' : '반려'} · {request.reviewReasonCode || '기타'} · {request.reviewedBy || '-'} · {request.reviewedAt ? new Date(request.reviewedAt).toLocaleString('ko-KR') : '-'}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-slate-700/60 bg-slate-900/50 p-3 md:p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-xs font-bold text-slate-300">정규화 작업 이력 (최근)</p>
+                                <span className="text-[10px] text-slate-500">표시 {filteredNormalizationLogs.length}건 / 전체 {normalizationLogs.length}건</span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                    onClick={() => setNormalizationLogRange('TODAY')}
+                                    className={`px-2 py-1 rounded text-[10px] font-bold border ${normalizationLogRange === 'TODAY' ? 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50' : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-slate-200'}`}
+                                >
+                                    오늘
+                                </button>
+                                <button
+                                    onClick={() => setNormalizationLogRange('7D')}
+                                    className={`px-2 py-1 rounded text-[10px] font-bold border ${normalizationLogRange === '7D' ? 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50' : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-slate-200'}`}
+                                >
+                                    7일
+                                </button>
+                                <button
+                                    onClick={() => setNormalizationLogRange('30D')}
+                                    className={`px-2 py-1 rounded text-[10px] font-bold border ${normalizationLogRange === '30D' ? 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50' : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-slate-200'}`}
+                                >
+                                    30일
+                                </button>
+                                <button
+                                    onClick={handleExportNormalizationLogsCsv}
+                                    className="px-2.5 py-1 rounded text-[10px] font-bold border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30"
+                                >
+                                    CSV
+                                </button>
+                            </div>
+                        </div>
+                        {filteredNormalizationLogs.length === 0 ? (
                             <p className="text-[11px] text-slate-500">아직 정규화 이력이 없습니다.</p>
                         ) : (
                             <div className="flex flex-col gap-2 max-h-44 overflow-y-auto pr-1">
-                                {normalizationLogs.slice(0, 10).map(log => (
+                                {filteredNormalizationLogs.slice(0, 20).map(log => (
                                     <div key={log.id} className="rounded-lg border border-slate-700/60 bg-slate-950/60 px-3 py-2">
                                         <p className="text-[11px] text-slate-200 break-words">
                                             <span className="font-bold text-white">{log.sourceLabel}</span> → <span className="font-bold text-emerald-300">{log.targetTeamName}</span>

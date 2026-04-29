@@ -17,7 +17,7 @@ import { hasSupportedBackupShape, validateBackupPayload, MAX_BACKUP_FILE_COUNT, 
 import { loadStoredSiteConfig, persistSiteConfig } from './utils/siteConfigStorage';
 import { StorageDB } from './utils/storageDB';
 import { useConfirmDialog } from './hooks/useConfirmDialog';
-import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig, TeamNormalizationLog } from './types';
+import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig, TeamNormalizationLog, TeamNormalizationRequest, TeamNormalizationReasonCode } from './types';
 import { Database } from 'lucide-react';
 
 // [UPDATED] Restore Progress Overlay Component
@@ -85,6 +85,8 @@ const sanitizeAssessment = (assessment: Partial<MonthlyRiskAssessment> & Record<
     createdAt: typeof assessment.createdAt === 'number' ? assessment.createdAt : Date.now(),
 });
 
+type DataLabFocusTarget = 'NORMALIZATION_WORKFLOW' | null;
+
 const App = () => {
   const [currentView, setCurrentView] = useState('dashboard');
   const [entries, setEntries] = useState<TBMEntry[]>([]);
@@ -92,6 +94,7 @@ const App = () => {
   const [assessments, setAssessments] = useState<MonthlyRiskAssessment[]>([]);
   const [signatures, setSignatures] = useState<{ safety: string | null; site: string | null }>({ safety: null, site: null });
     const [teamNormalizationLogs, setTeamNormalizationLogs] = useState<TeamNormalizationLog[]>([]);
+        const [teamNormalizationRequests, setTeamNormalizationRequests] = useState<TeamNormalizationRequest[]>([]);
   
   // [NEW] Site Config State
   const [siteConfig, setSiteConfig] = useState<SiteConfig>({
@@ -108,6 +111,7 @@ const App = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false); 
+    const [dataLabFocusTarget, setDataLabFocusTarget] = useState<DataLabFocusTarget>(null);
   
   const [isRestoring, setIsRestoring] = useState(false); 
   const [restoreProgress, setRestoreProgress] = useState(0); 
@@ -116,7 +120,17 @@ const App = () => {
   const [editingEntry, setEditingEntry] = useState<TBMEntry | null>(null);
   const [entryMode, setEntryMode] = useState<'ROUTINE' | 'BATCH'>('ROUTINE');
   const mountedRef = useRef(true);
+    const normalizationLogsRef = useRef<TeamNormalizationLog[]>([]);
+    const normalizationRequestsRef = useRef<TeamNormalizationRequest[]>([]);
     const { confirmDialogState, requestConfirm, closeConfirmDialog } = useConfirmDialog();
+
+    React.useEffect(() => {
+            normalizationLogsRef.current = teamNormalizationLogs;
+    }, [teamNormalizationLogs]);
+
+    React.useEffect(() => {
+        normalizationRequestsRef.current = teamNormalizationRequests;
+    }, [teamNormalizationRequests]);
 
   const announceStatus = (message: string) => {
       if (!mountedRef.current) return;
@@ -161,6 +175,11 @@ const App = () => {
         const storedNormalizationLogs = await StorageDB.get<TeamNormalizationLog[]>('teamNormalizationLogs');
         if (storedNormalizationLogs && mountedRef.current) {
             setTeamNormalizationLogs(storedNormalizationLogs);
+        }
+
+        const storedNormalizationRequests = await StorageDB.get<TeamNormalizationRequest[]>('teamNormalizationRequests');
+        if (storedNormalizationRequests && mountedRef.current) {
+            setTeamNormalizationRequests(storedNormalizationRequests);
         }
     };
     loadData();
@@ -266,16 +285,57 @@ const App = () => {
           actor: siteConfig.managerName || '관리자',
           ...payload,
       };
-      const updatedLogs = [newLog, ...teamNormalizationLogs].slice(0, 200);
+      const updatedLogs = [newLog, ...(normalizationLogsRef.current || [])].slice(0, 200);
       setTeamNormalizationLogs(updatedLogs);
+      normalizationLogsRef.current = updatedLogs;
       await StorageDB.set('teamNormalizationLogs', updatedLogs);
+  };
+
+  const updateTeamNormalizationRequests = async (nextRequests: TeamNormalizationRequest[]) => {
+      const sorted = [...nextRequests].sort((left, right) => right.requestedAt - left.requestedAt).slice(0, 300);
+      setTeamNormalizationRequests(sorted);
+      normalizationRequestsRef.current = sorted;
+      await StorageDB.set('teamNormalizationRequests', sorted);
+  };
+
+  const handleRequestNormalization = async (payload: {
+      sourceLabel: string;
+      action: 'MAP_TO_EXISTING' | 'PROMOTE_AND_MAP';
+      targetTeamId?: string;
+      targetTeamName?: string;
+  }) => {
+      const requestedBy = siteConfig.managerName || '실무자';
+      const duplicate = (normalizationRequestsRef.current || []).some(request =>
+          request.status === 'PENDING'
+          && request.sourceLabel === payload.sourceLabel
+          && request.action === payload.action
+          && (request.targetTeamId || '') === (payload.targetTeamId || '')
+      );
+      if (duplicate) {
+          announceStatus('동일한 정규화 요청이 이미 대기 중입니다.');
+          return;
+      }
+
+      const request: TeamNormalizationRequest = {
+          id: `tnr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          requestedAt: Date.now(),
+          requestedBy,
+          sourceLabel: payload.sourceLabel,
+          action: payload.action,
+          targetTeamId: payload.targetTeamId,
+          targetTeamName: payload.targetTeamName,
+          status: 'PENDING',
+      };
+
+      await updateTeamNormalizationRequests([request, ...(normalizationRequestsRef.current || [])]);
+      announceStatus(`${payload.sourceLabel} 정규화 요청이 등록되었습니다.`);
   };
 
   const handleNormalizeUnknownTeam = async (sourceLabel: string, targetTeamId: string) => {
       const targetTeam = teams.find(team => team.id === targetTeamId);
       if (!targetTeam) {
           announceStatus('선택한 대상 팀을 찾을 수 없습니다.');
-          return;
+          return false;
       }
 
       let affectedCount = 0;
@@ -292,7 +352,7 @@ const App = () => {
 
       if (affectedCount === 0) {
           announceStatus('정규화 대상 기록이 없습니다.');
-          return;
+          return false;
       }
 
       setEntries(updatedEntries);
@@ -307,19 +367,19 @@ const App = () => {
           })
       ]);
       announceStatus(`${sourceLabel} 항목을 ${targetTeam.name} 팀으로 정규화했습니다.`);
+      return true;
   };
 
   const handlePromoteUnknownTeam = async (sourceLabel: string) => {
       const cleanLabel = sourceLabel.trim();
       if (!cleanLabel || cleanLabel === '미지정 팀') {
           announceStatus('미지정 팀은 신규 등록 대신 기존 팀으로 치환해 주세요.');
-          return;
+          return false;
       }
 
       const existingTeam = teams.find(team => team.name.trim() === cleanLabel);
       if (existingTeam) {
-          await handleNormalizeUnknownTeam(cleanLabel, existingTeam.id);
-          return;
+          return handleNormalizeUnknownTeam(cleanLabel, existingTeam.id);
       }
 
       const newTeam: TeamOption = {
@@ -354,6 +414,67 @@ const App = () => {
           })
       ]);
       announceStatus(`${cleanLabel} 팀을 신규 등록하고 기존 기록을 정규화했습니다.`);
+      return true;
+  };
+
+  const handleApproveNormalizationRequest = async (requestId: string, reasonCode: TeamNormalizationReasonCode, comment?: string) => {
+      const target = (normalizationRequestsRef.current || []).find(request => request.id === requestId);
+      if (!target || target.status !== 'PENDING') {
+          announceStatus('승인 대상 요청을 찾을 수 없습니다.');
+          return;
+      }
+
+      const reviewer = siteConfig.managerName || '평가자';
+      let succeeded = false;
+      if (target.action === 'MAP_TO_EXISTING' && target.targetTeamId) {
+          succeeded = await handleNormalizeUnknownTeam(target.sourceLabel, target.targetTeamId);
+      } else if (target.action === 'PROMOTE_AND_MAP') {
+          succeeded = await handlePromoteUnknownTeam(target.sourceLabel);
+      }
+
+      if (!succeeded) {
+          announceStatus('정규화 승인 처리 중 반영에 실패했습니다. 조건을 다시 확인해주세요.');
+          return;
+      }
+
+      const updated = (normalizationRequestsRef.current || []).map(request =>
+          request.id === requestId
+              ? {
+                  ...request,
+                  status: 'APPROVED' as const,
+                  reviewReasonCode: reasonCode,
+                  reviewComment: comment?.trim() || undefined,
+                  reviewedAt: Date.now(),
+                  reviewedBy: reviewer,
+              }
+              : request
+      );
+      await updateTeamNormalizationRequests(updated);
+      announceStatus(`${target.sourceLabel} 요청을 승인 처리했습니다.`);
+  };
+
+  const handleRejectNormalizationRequest = async (requestId: string, reasonCode: TeamNormalizationReasonCode, comment?: string) => {
+      const target = (normalizationRequestsRef.current || []).find(request => request.id === requestId);
+      if (!target || target.status !== 'PENDING') {
+          announceStatus('반려 대상 요청을 찾을 수 없습니다.');
+          return;
+      }
+
+      const reviewer = siteConfig.managerName || '평가자';
+      const updated = (normalizationRequestsRef.current || []).map(request =>
+          request.id === requestId
+              ? {
+                  ...request,
+                  status: 'REJECTED' as const,
+                  reviewReasonCode: reasonCode,
+                  reviewComment: comment?.trim() || undefined,
+                  reviewedAt: Date.now(),
+                  reviewedBy: reviewer,
+              }
+              : request
+      );
+      await updateTeamNormalizationRequests(updated);
+      announceStatus(`${target.sourceLabel} 요청을 반려 처리했습니다.`);
   };
 
   const handleBackupData = (scope: 'ALL' | 'TBM' | 'RISK') => {
@@ -374,6 +495,7 @@ const App = () => {
               backupData.teams = teams;
               backupData.signatures = signatures;
               backupData.teamNormalizationLogs = teamNormalizationLogs;
+              backupData.teamNormalizationRequests = teamNormalizationRequests;
               // [SECURITY FIX] Exclude API key from backup file to prevent credential leakage
               const { userApiKey: _stripped, ...siteConfigSafe } = siteConfig;
               backupData.siteConfig = siteConfigSafe;
@@ -436,6 +558,7 @@ const App = () => {
       let mergedSignatures = { ...signatures };
       let mergedConfig = { ...siteConfig };
     let mergedTeamNormalizationLogs = [...teamNormalizationLogs];
+            let mergedTeamNormalizationRequests = [...teamNormalizationRequests];
       
       let totalFound = 0;
 
@@ -496,6 +619,18 @@ const App = () => {
                           });
                           mergedTeamNormalizationLogs = [...validLogs, ...mergedTeamNormalizationLogs];
                           totalFound += validLogs.length;
+                          fileFound = true;
+                      }
+                      if (Array.isArray(payloadObject.teamNormalizationRequests)) {
+                          const validRequests = payloadObject.teamNormalizationRequests.filter((request): request is TeamNormalizationRequest => {
+                              return !!request && typeof request === 'object'
+                                  && typeof (request as TeamNormalizationRequest).id === 'string'
+                                  && typeof (request as TeamNormalizationRequest).requestedAt === 'number'
+                                  && typeof (request as TeamNormalizationRequest).sourceLabel === 'string'
+                                  && ((request as TeamNormalizationRequest).status === 'PENDING' || (request as TeamNormalizationRequest).status === 'APPROVED' || (request as TeamNormalizationRequest).status === 'REJECTED');
+                          });
+                          mergedTeamNormalizationRequests = [...validRequests, ...mergedTeamNormalizationRequests];
+                          totalFound += validRequests.length;
                           fileFound = true;
                       }
                       if (isRecord(payloadObject.signatures)) {
@@ -586,6 +721,15 @@ const App = () => {
               .sort((a, b) => b.actedAt - a.actedAt)
               .slice(0, 200);
 
+          const uniqueRequestMap = new Map<string, TeamNormalizationRequest>();
+          mergedTeamNormalizationRequests.forEach(request => {
+              if (!request?.id) return;
+              uniqueRequestMap.set(request.id, request);
+          });
+          const finalNormalizationRequests = Array.from(uniqueRequestMap.values())
+              .sort((a, b) => b.requestedAt - a.requestedAt)
+              .slice(0, 300);
+
           if (mountedRef.current) setRestoreProgress(70);
 
           // Save to DB
@@ -594,6 +738,7 @@ const App = () => {
           await StorageDB.set('teams', mergedTeams);
           await StorageDB.set('signatures', mergedSignatures);
           await StorageDB.set('teamNormalizationLogs', finalNormalizationLogs);
+          await StorageDB.set('teamNormalizationRequests', finalNormalizationRequests);
           // [SECURITY FIX] API 키는 sessionStorage에만 보관
           persistSiteConfig(mergedConfig);
 
@@ -608,6 +753,7 @@ const App = () => {
               setSignatures(mergedSignatures);
               setSiteConfig(mergedConfig);
               setTeamNormalizationLogs(finalNormalizationLogs);
+              setTeamNormalizationRequests(finalNormalizationRequests);
           }
           
           if (mountedRef.current) {
@@ -743,6 +889,40 @@ const App = () => {
   const monthlyGuidelines: SafetyGuideline[] = useMemo(() => {
       return linkedRiskAssessment?.priorities ?? [];
   }, [linkedRiskAssessment]);
+
+  const dashboardNormalizationAlertSummary = useMemo(() => {
+      const now = Date.now();
+      const pendingRequests = teamNormalizationRequests.filter(request => request.status === 'PENDING');
+      const reviewedRequests = teamNormalizationRequests.filter(request => request.status !== 'PENDING');
+
+      const pendingAgesHours = pendingRequests.map(request => Math.max(0, (now - request.requestedAt) / (1000 * 60 * 60)));
+      const pendingAvgHours = pendingAgesHours.length > 0
+          ? Number((pendingAgesHours.reduce((sum, age) => sum + age, 0) / pendingAgesHours.length).toFixed(1))
+          : 0;
+      const pendingOver24h = pendingAgesHours.filter(age => age >= 24).length;
+      const rejectedCount = reviewedRequests.filter(request => request.status === 'REJECTED').length;
+
+      const alerts: Array<{ level: 'critical' | 'warning'; label: string }> = [];
+      if (pendingOver24h >= 3) {
+          alerts.push({ level: 'critical', label: '24시간 초과 대기 다수(3건+)' });
+      } else if (pendingOver24h > 0) {
+          alerts.push({ level: 'warning', label: '24시간 초과 대기 발생' });
+      }
+      if (pendingAvgHours >= 12) {
+          alerts.push({ level: 'warning', label: '평균 대기시간 12시간 이상' });
+      }
+      if (rejectedCount >= 5) {
+          alerts.push({ level: 'warning', label: '반려 누적 5건 이상' });
+      }
+
+      return {
+          criticalCount: alerts.filter(alert => alert.level === 'critical').length,
+          warningCount: alerts.filter(alert => alert.level === 'warning').length,
+          pendingCount: pendingRequests.length,
+          pendingOver24h,
+          topAlertLabel: alerts[0]?.label || null,
+      };
+  }, [teamNormalizationRequests]);
   return (
     <div className="flex bg-slate-50 min-h-screen font-sans text-slate-900" aria-busy={isRestoring}>
             <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{appStatusMessage}</p>
@@ -815,21 +995,29 @@ const App = () => {
                         onBackupData={handleBackupData} 
                         onRestoreData={handleRestoreData}
                         siteConfig={siteConfig}
-                                                onNormalizeUnknownTeam={handleNormalizeUnknownTeam}
-                                                onPromoteUnknownTeam={handlePromoteUnknownTeam}
+                        onRequestNormalization={handleRequestNormalization}
+                        onApproveNormalizationRequest={handleApproveNormalizationRequest}
+                        onRejectNormalizationRequest={handleRejectNormalizationRequest}
                         normalizationLogs={teamNormalizationLogs}
+                        normalizationRequests={teamNormalizationRequests}
+                                                focusTarget={dataLabFocusTarget}
+                                                onFocusTargetHandled={() => setDataLabFocusTarget(null)}
                     />;
                   default:
                     return <Dashboard 
                         entries={entries}
                         siteName={siteConfig.siteName} // [NEW] Pass Config
+                        normalizationAlertSummary={dashboardNormalizationAlertSummary}
                         onViewReport={() => { setReportTargetEntries(entries); setShowReportModal(true); }} 
                         onNavigateToReports={(options) => {
                             setReportPrefillTeamName(options?.teamName?.trim() || null);
                             setReportPrefillLinkStatus(options?.linkStatus || 'all');
                             setCurrentView('reports');
                         }} 
-                        onNavigateToDataLab={()=>setCurrentView('data-lab')}
+                        onNavigateToDataLab={(options) => {
+                            setDataLabFocusTarget(options?.focusTarget || null);
+                            setCurrentView('data-lab');
+                        }}
                         onNewEntry={()=>{setEditingEntry(null); setEntryMode('ROUTINE'); setCurrentView('new')}} 
                         onEdit={handleEditEntry} 
                         onOpenSettings={()=>setIsSettingsOpen(true)} 
