@@ -49,34 +49,31 @@ const DailyBarChart = ({
                             {val > 0 ? `${Math.round(val)}점` : '미실시'}
                             <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
                         </div>
-                        
+
                         {/* Bar */}
-                        <div 
-                            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div
                             role="img"
                             aria-label={`${labels[i] || `${i + 1}일`} 점수 ${val > 0 ? `${Math.round(val)}점` : '미실시'}`}
-                                    className="flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
+                            className="w-full rounded-t-md transition-all duration-700 ease-out"
                             style={{ 
                                 height: val > 0 ? `${(val / maxVal) * 100}%` : '4px',
                                 backgroundColor: val > 0 ? color : undefined
                             }}
-                        >
-                                    className="flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-2xl bg-white text-slate-700 border border-slate-200 text-xs font-bold hover:border-amber-300 hover:bg-amber-50 transition-colors"
-                        </div>
+                        />
                     </div>
                 ))}
             </div>
             {/* X-Axis Labels */}
             <div className="flex justify-between mt-1 border-t border-slate-200 pt-1">
-                                        className="flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-2xl bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold hover:bg-amber-200 transition-colors"
-                    <span key={i} className="text-[8px] text-slate-400 font-bold text-center flex-1">{lbl}</span>
+                {chartData.map((_, i) => {
+                    const lbl = labels[i] || `${i + 1}`;
+                    return <span key={i} className="text-[8px] text-slate-400 font-bold text-center flex-1">{lbl}</span>;
                 ))}
             </div>
         </div>
     );
 };
 
-                                        className="flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-2xl bg-violet-100 text-violet-700 border border-violet-200 text-xs font-bold hover:bg-violet-200 transition-colors"
 const LiveClock = () => {
     const [time, setTime] = useState<Date>(new Date());
 
