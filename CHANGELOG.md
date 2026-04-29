@@ -44,6 +44,7 @@
 - `App.tsx`, `components/Dashboard.tsx`, `components/SafetyDataLab.tsx`
   - 대시보드 경보 라벨 클릭 시 심층연구소 `Unknown Team Normalization Queue` 섹션으로 딥링크 포커스 연동
   - 심층연구소 진입 시 대상 섹션 자동 스크롤 및 일시 하이라이트로 조치 구간 인지성 강화
+  - 포커스 진입 시 첫 번째 승인 대기 요청 카드도 자동 스크롤 + 에머랄드 링 하이라이트로 즉시 조치 유도
 - `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
   - 운영 로그 및 구현 메모 동기화
 

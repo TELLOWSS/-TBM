@@ -269,6 +269,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     const [phaseClearLogCopied, setPhaseClearLogCopied] = useState(false);
     const [commandReportCopiedOnce, setCommandReportCopiedOnce] = useState(false);
     const [normalizationFocusFlash, setNormalizationFocusFlash] = useState(false);
+    const [focusedRequestId, setFocusedRequestId] = useState<string | null>(null);
     const [unknownTeamTargetMap, setUnknownTeamTargetMap] = useState<Record<string, string>>({});
     const [normalizingUnknownLabel, setNormalizingUnknownLabel] = useState<string | null>(null);
     const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
@@ -305,6 +306,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     });
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const normalizationSectionRef = useRef<HTMLDivElement>(null);
+    const pendingRequestSectionRef = useRef<HTMLDivElement>(null);
     // [FIX] 컴포넌트 언마운트 후 setState 방지
     const mountedRef = useRef(true);
     React.useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -324,11 +326,30 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
             normalizationSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             setNormalizationFocusFlash(true);
             window.setTimeout(() => setNormalizationFocusFlash(false), 2200);
+
+            // 첫 번째 승인 대기 요청 하이라이트
+            const firstPendingId = normalizationRequestsForFocus.current;
+            if (firstPendingId) {
+                setFocusedRequestId(firstPendingId);
+                window.setTimeout(() => {
+                    pendingRequestSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 400);
+                window.setTimeout(() => setFocusedRequestId(null), 2400);
+            }
+
             onFocusTargetHandled?.();
         }, 80);
 
         return () => window.clearTimeout(timer);
     }, [focusTarget, onFocusTargetHandled]);
+
+    // 포커스 triggered 시점의 첫 번째 대기 요청 ID를 ref로 유지 (클로저 stale 방지)
+    const normalizationRequestsForFocus = useRef<string | null>(null);
+    React.useEffect(() => {
+        normalizationRequestsForFocus.current = normalizationRequests
+            .filter(r => r.status === 'PENDING')
+            .sort((a, b) => b.requestedAt - a.requestedAt)[0]?.id || null;
+    }, [normalizationRequests]);
 
     const announceStatus = (message: string) => {
         if (!mountedRef.current) return;
@@ -2040,7 +2061,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                         </div>
                     )}
 
-                    <div className="mt-4 rounded-2xl border border-slate-700/60 bg-slate-900/50 p-3 md:p-4">
+                    <div ref={pendingRequestSectionRef} className="mt-4 rounded-2xl border border-slate-700/60 bg-slate-900/50 p-3 md:p-4">
                         <div className="flex items-center justify-between mb-2">
                             <p className="text-xs font-bold text-slate-300">정규화 승인 대기 요청</p>
                             <span className="text-[10px] text-slate-500">{pendingNormalizationRequests.length}건</span>
@@ -2053,8 +2074,9 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                     const isProcessing = processingRequestId === request.id;
                                     const reason = reviewReasonMap[request.id] || 'MISLABEL';
                                     const comment = reviewCommentMap[request.id] || '';
+                                    const isFocused = focusedRequestId === request.id;
                                     return (
-                                        <div key={request.id} className="rounded-lg border border-slate-700/60 bg-slate-950/60 px-3 py-3">
+                                        <div key={request.id} className={`rounded-lg border px-3 py-3 transition-all duration-500 ${isFocused ? 'border-emerald-400/80 bg-emerald-900/20 ring-2 ring-emerald-400/30' : 'border-slate-700/60 bg-slate-950/60'}`}>
                                             <p className="text-[11px] text-slate-200 break-words">
                                                 <span className="font-bold text-white">{request.sourceLabel}</span>
                                                 {' → '}
