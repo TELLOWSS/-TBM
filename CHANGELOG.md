@@ -45,6 +45,22 @@
   - 대시보드 경보 라벨 클릭 시 심층연구소 `Unknown Team Normalization Queue` 섹션으로 딥링크 포커스 연동
   - 심층연구소 진입 시 대상 섹션 자동 스크롤 및 일시 하이라이트로 조치 구간 인지성 강화
   - 포커스 진입 시 첫 번째 승인 대기 요청 카드도 자동 스크롤 + 에머랄드 링 하이라이트로 즉시 조치 유도
+- `components/Dashboard.tsx`
+  - 모바일 상단 부제목 정렬/줄바꿈을 보강해 텍스트 우측 쏠림 현상 완화
+  - 상단 영문 부제목을 한글 문구로 전환해 모바일 가독성 개선
+- `components/SafetyDataLab.tsx`
+  - 심층연구소 주요 영문 UI 라벨을 한글로 전환(안전 점수/팀 활동 히트맵/미등록 팀 정규화 대기열/스마트TBM 지휘 섹션 등)
+  - 히트맵/워크플로우 카드 텍스트에 `min-w-0`/줄바꿈/축약 클래스 보강으로 글자 겹침·넘침 완화
+  - 잔여 영문 라벨(상태/우선순위/경보/기간비교/지연사유 표기)을 한글로 추가 통일해 심층연구소 UI 한글 일관성 강화
+- `components/Dashboard.tsx`, `components/ReportCenter.tsx`
+  - 대시보드/문서보관소 잔여 영문 라벨(`CRITICAL/WARNING`, `Last 7 Days`, `Top`, `Document Archive`, `Unknown` 등)을 한글로 통일
+  - 기상 경보 레벨 문구, 시스템 상태 배지, 이미지 대체텍스트를 한글화해 현장 가독성 및 접근성 강화
+- `components/RiskAssessmentManager.tsx`, `components/TBMForm.tsx`, `App.tsx`
+  - 위험성평가 화면 분석 HUD/통계 라벨(`AI Analysis`, `Processing`, `Top Risk Categories`, `Base/Updates/New Regular` 등) 한글 통일
+  - TBM 저장 로직의 기본 팀명 `Unknown`을 `미지정`으로 통일해 UI/유효성 조건 일관성 확보
+  - 앱 복구 오버레이 영문 안내(`System Restoring`, `Serializing & Saving`, `% Complete`)를 한글로 전환
+- `README.md`
+  - 대용량 기능 운영을 위한 한국어 사용자 설명서(화면별 기능, 역할별 가이드, 운영 시나리오, 백업/복구, 체크리스트) 확장
 - `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
   - 운영 로그 및 구현 메모 동기화
 
@@ -280,6 +296,26 @@
   - 단건 이미지 다운로드 파일명에도 특수문자 치환 적용(다건 ZIP 규칙과 일치)
 
 ## 2026-04-28
+
+### ✅ 대시보드/심층연구소 모바일 라벨 축약
+- `components/Dashboard.tsx`
+  - 연계 점검 카드의 안내 문구를 모바일 중심으로 축약(`미정합 상태`, `미연계/미일치/연계` 요약)
+  - 액션 버튼 라벨 길이 축소(`보정 이동`, `보관소 전체 확인`, `미연계만`, `미일치만`)
+  - 팀명 포함 액션 라벨에 `truncate` 적용으로 긴 팀명에서도 버튼 폭 안정화
+- `components/SafetyDataLab.tsx`
+  - 지휘 워크플로우/일일 리포트 헤더 및 검증 버튼 라벨 축약
+  - 상태 검증 배지 문구를 짧게 통일(`통합검증 충족/진행`, `이력검증 충족(10+)`)
+
+### ✅ 모달/등록화면 잔여 영문 최종 통일
+- `components/HistoryModal.tsx`
+  - 헤더/배지/타임라인 고정 문구의 영문 표기를 한글로 정리(`Devlog`, `System Evolution History`, `NEW`, `Project Initiated` 등)
+  - 마일스톤 제목·설명의 영문 괄호 표현을 현장 용어 중심 한글 문구로 통일
+- `components/SystemIdentityModal.tsx`
+  - 시스템 아이덴티티 배지 및 상태 설명의 혼용 영문을 한글화(`Ultra Fast`, `Verified`, `Failover`, `Client-Side` 등)
+  - 기술 식별자(모델명/버전/ID)는 유지하고 사용자 안내 문구만 한국어로 정리
+- `components/TBMForm.tsx`
+  - AI 진단 카드의 잔여 영문 라벨(`Total Score`, `Leader's Action Card`, `Master Safety Review`, `Data Entry`)을 한글 통일
+
 
 ### ✅ 안정화/버그 수정
 - `components/TBMForm.tsx`

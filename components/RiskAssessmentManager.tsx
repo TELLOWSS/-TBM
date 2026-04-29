@@ -36,14 +36,14 @@ const AnalysisOverlay = ({ progress }: { progress: number }) => (
                         <BrainCircuit size={32} className="text-indigo-600 animate-pulse" />
                     </div>
                 </div>
-                <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">AI Analysis</h3>
+                <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">AI 분석</h3>
                 <p className="text-sm text-slate-500 text-center leading-relaxed mb-8 font-medium">
                     문서의 구조를 스캔하고<br/>
                     <span className="text-indigo-600 font-bold">위험성평가 데이터</span>를 추출합니다.
                 </p>
                 <div className="w-full space-y-2">
                     <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        <span>Processing</span>
+                        <span>처리 진행</span>
                         <span>{progress}%</span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden shadow-inner">
@@ -53,7 +53,7 @@ const AnalysisOverlay = ({ progress }: { progress: number }) => (
                         ></div>
                     </div>
                     <p className="text-[10px] text-slate-400 text-right h-4">
-                        {progress < 30 ? 'Image Scanning...' : progress < 70 ? 'Context Reasoning...' : 'Data Structuring...'}
+                        {progress < 30 ? '이미지 스캔 중...' : progress < 70 ? '문맥 분석 중...' : '데이터 구조화 중...'}
                     </p>
                 </div>
             </div>
@@ -1075,7 +1075,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                            </div>
                            <div className="flex flex-col gap-3 md:border-r border-slate-100 md:pr-4 h-full justify-center">
                                <div className="flex justify-between items-end p-2 bg-slate-50 rounded-lg">
-                                   <span className="text-xs font-bold text-slate-400 uppercase">Total Items</span>
+                                   <span className="text-xs font-bold text-slate-400">총 항목</span>
                                    <span className="text-2xl font-black text-slate-800">{stats.total}</span>
                                </div>
                                <div className="flex justify-between items-center px-2">
@@ -1087,7 +1087,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                </div>
                            </div>
                            <div className="flex flex-col gap-2 h-full justify-center">
-                               <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-1">Top Risk Categories</h4>
+                               <h4 className="text-[10px] font-bold text-slate-400 mb-1">위험 카테고리 상위</h4>
                                {stats.topCategories.map(([cat, count], idx) => (
                                    <div key={cat} className="flex items-center gap-2">
                                        <span className="text-xs font-bold text-slate-600 w-16 truncate">{cat}</span>
@@ -1208,7 +1208,7 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                     <div className="flex items-center gap-2 mb-3">
                                         <AlertTriangle size={16} className="text-red-500"/>
                                         <h4 className="text-sm font-black text-slate-800">상위위험 상단 요약</h4>
-                                        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-100 text-red-700">TOP {highRiskHighlights.length}</span>
+                                        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-100 text-red-700">상위 {highRiskHighlights.length}</span>
                                         <button
                                             type="button"
                                             onClick={handleCopyAllActionNotes}
@@ -1265,8 +1265,8 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                            </div>
                            
                            {previousAssessment && (
-                                        <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-2 rounded-lg flex items-center gap-1 w-fit">
-                                 <TrendingUp size={12}/> vs {previousAssessment.month} 비교 중
+                                             <span className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-2 rounded-lg flex items-center gap-1 w-fit">
+                                         <TrendingUp size={12}/> 기준월 {previousAssessment.month} 비교 중
                               </span>
                            )}
                          </div>
@@ -1561,11 +1561,11 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
 
                                <div className="mt-8 flex justify-center">
                                    <div className="hidden md:flex items-center gap-4 text-slate-400 text-sm font-bold mb-8">
-                                       <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full">Base (All Items)</span>
+                                       <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full">기준 데이터(전체)</span>
                                        <Plus size={16}/>
-                                       <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full">Updates (New Risks)</span>
+                                       <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full">증분 데이터(신규 위험)</span>
                                        <ArrowRight size={16}/>
-                                       <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full">New Regular</span>
+                                       <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full">정기평가 통합본</span>
                                    </div>
                                </div>
 

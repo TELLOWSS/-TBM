@@ -97,7 +97,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
           }
       });
       entries.forEach(e => {
-          const name = (e.teamName || 'Unknown').trim();
+          const name = (e.teamName || '미지정').trim();
           if (name && !uniqueNames.has(name)) {
               uniqueNames.add(name);
               result.push({ id: e.teamId, name: name });
@@ -305,7 +305,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
           const a = document.createElement('a');
           const timestamp = exportedAt.replace(/[-:TZ.]/g, '').slice(0, 14);
           a.href = url;
-          a.download = `TBM_Data_Package_${timestamp}.zip`;
+          a.download = `TBM_데이터패키지_${timestamp}.zip`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -328,7 +328,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
         <div>
            <div className="flex items-center gap-2 mb-2">
               <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><FileText size={24} /></div>
-              <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full uppercase tracking-wider">Document Archive</span>
+                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full tracking-wider">문서 보관소</span>
            </div>
            <h2 className="text-2xl font-black text-slate-800 tracking-tight">안전 문서 통합 관리소</h2>
            <p className="text-slate-500 text-sm font-medium mt-1">
@@ -529,7 +529,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
                    </div>
                    
                    <div className="h-32 bg-slate-100 relative overflow-hidden">
-                      {entry.tbmPhotoUrl ? <img src={entry.tbmPhotoUrl} alt="Proof" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all" /> : <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs bg-slate-50"><AlertCircle size={20} className="mb-1"/><span>사진 없음</span></div>}
+                      {entry.tbmPhotoUrl ? <img src={entry.tbmPhotoUrl} alt="증빙 사진" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all" /> : <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs bg-slate-50"><AlertCircle size={20} className="mb-1"/><span>사진 없음</span></div>}
                       {entry.videoAnalysis && (
                           <div className="absolute top-2 right-2 flex gap-1">
                               <span className={`text-[10px] font-black px-2 py-1 rounded-full shadow-md flex items-center gap-1 backdrop-blur-md ${entry.videoAnalysis.score >= 80 ? 'bg-violet-500/90 text-white' : 'bg-orange-500/90 text-white'}`}><Sparkles size={10} className="text-yellow-300" /> AI {entry.videoAnalysis.score}</span>

@@ -133,7 +133,7 @@ const SafetyCampaignBanner = () => {
                     <HardHat size={20} className="text-white"/>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-[9px] font-black bg-black/20 px-1.5 py-0.5 rounded w-fit mb-0.5 text-orange-100">SAFETY FIRST</span>
+                    <span className="text-[9px] font-black bg-black/20 px-1.5 py-0.5 rounded w-fit mb-0.5 text-orange-100">안전 최우선</span>
                     <span key={index} className="text-sm font-bold animate-slide-up-fade">
                         {SAFETY_SLOGANS[index]}
                     </span>
@@ -320,7 +320,7 @@ const WeatherStation = ({ siteName }: { siteName: string }) => {
             <div className={`mt-3 p-3 rounded-xl flex items-start gap-2 ${riskLevel.level === 'NORMAL' ? 'bg-emerald-50 text-emerald-700' : riskLevel.level === 'WARNING' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
                 {riskLevel.level === 'NORMAL' ? <CheckCircle2 size={16} className="mt-0.5 shrink-0"/> : <AlertTriangle size={16} className="mt-0.5 shrink-0 animate-pulse"/>}
                 <div className="flex-1">
-                    <p className="text-[10px] font-black uppercase mb-0.5">SITE ALERT LEVEL: {riskLevel.level}</p>
+                    <p className="text-[10px] font-black mb-0.5">현장 경보 단계: {riskLevel.level === 'NORMAL' ? '정상' : riskLevel.level === 'WARNING' ? '주의' : '긴급'}</p>
                     <p className="text-xs font-bold leading-tight">{riskLevel.msg}</p>
                 </div>
             </div>
@@ -343,7 +343,7 @@ const CommandActionCard = ({ onClick }: { onClick: () => void }) => (
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/10 backdrop-blur-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-[10px] font-bold text-emerald-300">SYSTEM READY</span>
+                <span className="text-[10px] font-bold text-emerald-300">시스템 준비 완료</span>
             </div>
         </div>
 
@@ -562,19 +562,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, normali
     return (
         <div className="space-y-4 md:space-y-6 pb-20 pt-0.5 md:pt-0 animate-fade-in font-sans text-slate-800">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-200 pb-3 md:pb-4 gap-2 md:gap-4">
-                <div>
+                <div className="min-w-0 w-full md:w-auto">
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                         <Activity className="text-indigo-600" size={24}/>
                         현장 통합 관제 센터
                     </h1>
-                    <p className="text-xs font-bold text-slate-500 mt-1">
-                        Site Command Center • Safety Monitoring System (v4.0.1)
+                    <p className="text-xs font-bold text-slate-500 mt-1 text-left break-words leading-relaxed">
+                        현장 지휘 통합 대시보드 · 안전 모니터링 시스템 (v4.0.1)
                     </p>
                     {hasNormalizationAlert && (
-                        <div className="mt-2 flex items-center gap-2">
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
                             <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black border ${hasCriticalNormalizationAlert ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
                                 <Siren size={12} />
-                                {hasCriticalNormalizationAlert ? 'CRITICAL' : 'WARNING'}
+                                {hasCriticalNormalizationAlert ? '긴급' : '주의'}
                             </span>
                             <button
                                 onClick={() => onNavigateToDataLab({ focusTarget: 'NORMALIZATION_WORKFLOW' })}
@@ -639,7 +639,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, normali
                                     <p className="text-[10px] text-slate-500">안전 트렌드 분석</p>
                                     {hasNormalizationAlert && (
                                         <p className={`text-[10px] font-black mt-0.5 ${hasCriticalNormalizationAlert ? 'text-red-600' : 'text-amber-600'}`}>
-                                            {hasCriticalNormalizationAlert ? 'CRITICAL' : 'WARNING'} · 정규화 경보 {normalizationAlertSummary!.criticalCount + normalizationAlertSummary!.warningCount}건
+                                            {hasCriticalNormalizationAlert ? '긴급' : '주의'} · 정규화 경보 {normalizationAlertSummary!.criticalCount + normalizationAlertSummary!.warningCount}건
                                         </p>
                                     )}
                                 </div>
@@ -659,15 +659,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, normali
                             </div>
                             <div>
                                 <p className={`text-xs font-black uppercase tracking-wider ${dailySummary.missingLinkedEntries.length > 0 || dailySummary.mismatchedEntries.length > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-                                    위험성평가 연계 점검
+                                    연계 점검
                                 </p>
                                 <p className="text-sm font-bold text-slate-800 mt-1">
                                     {dailySummary.missingLinkedEntries.length > 0 || dailySummary.mismatchedEntries.length > 0
-                                        ? '금일 TBM 중 일부가 동일월 위험성평가와 정확히 연결되지 않았습니다.'
-                                        : '금일 TBM이 모두 동일월 위험성평가와 연계되었습니다.'}
+                                        ? '금일 TBM 일부가 동일월 평가와 미정합 상태입니다.'
+                                        : '금일 TBM이 동일월 평가와 정상 연계되었습니다.'}
                                 </p>
                                 <p className="text-xs text-slate-600 mt-1">
-                                    미연계 {dailySummary.missingLinkedEntries.length}건 · 동일월 미일치 {dailySummary.mismatchedEntries.length}건 · 동일월 연계 {dailySummary.matchedEntries.length}건
+                                    미연계 {dailySummary.missingLinkedEntries.length}건 · 미일치 {dailySummary.mismatchedEntries.length}건 · 연계 {dailySummary.matchedEntries.length}건
                                 </p>
                             </div>
                         </div>
@@ -692,20 +692,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, normali
                                 onClick={() => selectedIssueTeamPrimaryEntry && onEdit(selectedIssueTeamPrimaryEntry)}
                                 className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
                             >
-                                <FileText size={14} /> {selectedIssueTeam ? `${selectedIssueTeam} 보정 바로가기` : '연계 보정 바로가기'}
+                                <FileText size={14} />
+                                <span className="truncate max-w-[180px]">{selectedIssueTeam ? `${selectedIssueTeam} 보정 이동` : '연계 보정 이동'}</span>
                             </button>
                             <button
                                 onClick={() => onNavigateToReports({ teamName: selectedIssueTeam, linkStatus: 'all' })}
                                 className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-white text-slate-700 border border-slate-200 text-xs font-bold hover:border-amber-300 hover:bg-amber-50 transition-colors"
                             >
-                                <ArrowRight size={14} /> 문서 보관소에서 전체 확인
+                                <ArrowRight size={14} /> 보관소 전체 확인
                             </button>
                             {dailySummary.missingLinkedEntries.length > 0 && (
                                 <button
                                     onClick={() => onNavigateToReports({ teamName: selectedIssueTeam, linkStatus: 'unlinked' })}
                                     className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold hover:bg-amber-200 transition-colors"
                                 >
-                                    미연계만 보기
+                                    미연계만
                                 </button>
                             )}
                             {dailySummary.mismatchedEntries.length > 0 && (
@@ -713,7 +714,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, normali
                                     onClick={() => onNavigateToReports({ teamName: selectedIssueTeam, linkStatus: 'mismatched' })}
                                     className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-violet-100 text-violet-700 border border-violet-200 text-xs font-bold hover:bg-violet-200 transition-colors"
                                 >
-                                    미일치만 보기
+                                    미일치만
                                 </button>
                             )}
                         </div>
@@ -731,7 +732,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, normali
                                             전체 보기
                                         </button>
                                     )}
-                                    <span className="text-[10px] text-slate-400">Top {dailySummary.issueTeamSummary.length}</span>
+                                    <span className="text-[10px] text-slate-400">상위 {dailySummary.issueTeamSummary.length}</span>
                                 </div>
                             </div>
                             <div className="space-y-2">
@@ -765,7 +766,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, normali
                             <BarChart2 size={18} className="text-indigo-500"/>
                             주간 팀별 세부 평가 추이
                         </h3>
-                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">Last 7 Days</span>
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">최근 7일</span>
                     </div>
                     
                     <div className="flex-1 overflow-x-auto custom-scrollbar pb-2">

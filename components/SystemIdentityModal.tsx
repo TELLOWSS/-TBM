@@ -75,7 +75,7 @@ export const SystemIdentityModal: React.FC<SystemIdentityModalProps> = ({ onClos
             <div className="p-8 pb-4 relative z-10 flex justify-between items-start">
                 <div>
                     <div className="flex items-center gap-2 mb-2">
-                        <span className="px-2 py-1 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-bold border border-indigo-500/30 uppercase tracking-widest">System Identity</span>
+                        <span className="px-2 py-1 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-bold border border-indigo-500/30 uppercase tracking-widest">시스템 아이덴티티</span>
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10B981]"></span>
                     </div>
                     <h2 id="system-identity-modal-title" className="text-3xl font-black text-white tracking-tight">HUIGANG <span className="text-slate-500">OS</span></h2>
@@ -108,7 +108,7 @@ export const SystemIdentityModal: React.FC<SystemIdentityModalProps> = ({ onClos
                         </div>
                         <div className="flex justify-between text-xs">
                             <span className="text-slate-500">평균 응답 시간</span>
-                            <span className="text-slate-300 font-mono">~0.7초 (Ultra Fast)</span>
+                            <span className="text-slate-300 font-mono">~0.7초 (초고속)</span>
                         </div>
                     </div>
                 </div>
@@ -128,11 +128,11 @@ export const SystemIdentityModal: React.FC<SystemIdentityModalProps> = ({ onClos
                         </div>
                         <div className="flex justify-between text-xs">
                             <span className="text-slate-500">데이터 무결성</span>
-                            <span className="text-emerald-400 font-mono">검증됨 (Verified)</span>
+                            <span className="text-emerald-400 font-mono">검증됨</span>
                         </div>
                         <div className="flex justify-between text-xs">
-                            <span className="text-slate-500">장애 조치 (Failover)</span>
-                            <span className="text-slate-300 font-mono">자동 백업 (Auto)</span>
+                            <span className="text-slate-500">장애 조치</span>
+                            <span className="text-slate-300 font-mono">자동 백업</span>
                         </div>
                     </div>
                 </div>
@@ -148,15 +148,15 @@ export const SystemIdentityModal: React.FC<SystemIdentityModalProps> = ({ onClos
                     <div className="space-y-2">
                         <div className="flex justify-between text-xs">
                             <span className="text-slate-500">UX 디자인</span>
-                            <span className="text-slate-300 font-mono">Bento Grid V3</span>
+                            <span className="text-slate-300 font-mono">벤토 그리드 V3</span>
                         </div>
                         <div className="flex justify-between text-xs">
                             <span className="text-slate-500">데이터 저장소</span>
-                            <span className="text-slate-300 font-mono">IndexedDB (High Perf)</span>
+                            <span className="text-slate-300 font-mono">IndexedDB (고성능)</span>
                         </div>
                         <div className="flex justify-between text-xs">
                             <span className="text-slate-500">렌더링 방식</span>
-                            <span className="text-slate-300 font-mono">Client-Side (CSR)</span>
+                            <span className="text-slate-300 font-mono">클라이언트 렌더링 (CSR)</span>
                         </div>
                     </div>
                 </div>

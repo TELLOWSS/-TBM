@@ -32,7 +32,7 @@ const RestoreOverlay = ({ progress }: { progress: number }) => {
                         <div className="absolute inset-0 rounded-full border-2 border-emerald-500 animate-ping opacity-20"></div>
                         <Database size={48} className="text-emerald-400 animate-pulse" />
                     </div>
-                    <h3 className="text-xl font-black mb-2">System Restoring...</h3>
+                    <h3 className="text-xl font-black mb-2">시스템 복구 중...</h3>
                     <p className="text-sm text-slate-400 mb-6 text-center">데이터베이스 트랜잭션 기록 중...<br/>안전한 저장을 위해 브라우저를 닫지 마세요.</p>
                     
                     <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden mb-2" role="progressbar" aria-label="데이터 복구 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
@@ -43,8 +43,8 @@ const RestoreOverlay = ({ progress }: { progress: number }) => {
                     </div>
                     <p className="sr-only">데이터 복구 진행률 {progress}%</p>
                     <span className="text-xs font-mono text-emerald-400 font-bold flex justify-between w-full">
-                        <span>Serializing & Saving...</span>
-                        <span>{progress}% Complete</span>
+                        <span>직렬화 및 저장 중...</span>
+                        <span>{progress}% 완료</span>
                     </span>
                 </div>
             </div>

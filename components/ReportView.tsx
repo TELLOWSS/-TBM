@@ -418,7 +418,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               if (zip) {
                   // [UPDATED] Use resolved name for filename as well
                   const resolvedTeam = teams.find(t => t.id === entries[i].teamId);
-                  const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[i].teamName || 'Team')).replace(/[\/\\?%*:|"<>]/g, '_');
+                  const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[i].teamName || '미지정')).replace(/[\/\\?%*:|"<>]/g, '_');
                   const fileName = `TBM_Report_${entries[i].date}_${safeTeamName}.jpg`;
                   zip.file(fileName, imgData.split(',')[1], { base64: true });
               } else {
@@ -447,7 +447,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               URL.revokeObjectURL(url);
           } else if (singleImageData) {
               const resolvedTeam = teams.find(t => t.id === entries[0].teamId);
-              const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[0].teamName || 'Team')).replace(/[\/\\?%*:|"<>]/g, '_');
+              const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[0].teamName || '미지정')).replace(/[\/\\?%*:|"<>]/g, '_');
               const link = document.createElement('a');
               link.href = singleImageData;
               link.setAttribute('download', `TBM_일지_${entries[0].date}_${safeTeamName}.jpg`);
@@ -665,8 +665,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     <div className="border-4 border-red-600 rounded-full w-24 h-24 flex items-center justify-center p-1">
                         <div className="border border-red-600 rounded-full w-full h-full flex flex-col items-center justify-center text-red-600 text-center">
                             <ShieldCheck size={20} strokeWidth={2.5}/>
-                            <span className="text-[8px] font-black uppercase mt-1 leading-none">Digital<br/>Integrity</span>
-                            <span className="text-[10px] font-black mt-1">VERIFIED</span>
+                            <span className="text-[8px] font-black uppercase mt-1 leading-none">전자<br/>무결성</span>
+                            <span className="text-[10px] font-black mt-1">검증 완료</span>
                             <span className="text-[6px] mt-1 font-mono tracking-tighter">HuiGang OS</span>
                         </div>
                     </div>
@@ -718,7 +718,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     {/* 3-A. Images Row */}
                     <div className="body-row-images">
                         <div className="col" style={{width: '50%'}}>
-                            <div className="section-header">1. TBM 일지 원본 (종합본/Master Log)</div>
+                            <div className="section-header">1. TBM 일지 원본 (종합본)</div>
                             <div className="h-[calc(100%-30px)] p-2 flex items-center justify-center">
                                 <SafeImage src={entry.originalLogImageUrl || ''} className="max-w-full max-h-full object-contain" />
                             </div>
@@ -822,7 +822,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                         </div>
                         
                         <div className="col last flex flex-col" style={{width: '50%'}}>
-                             <div className="section-header">4. AI Deep Insight (심층 정밀 진단)</div>
+                                <div className="section-header">4. AI 심층 정밀 진단</div>
                              <div className="flex-1 flex flex-col overflow-hidden">
                                 <div className="p-3 border-b border-black bg-slate-50/50">
                                     {entry.videoAnalysis ? (
@@ -863,7 +863,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                             {entry.videoAnalysis.leaderCoaching && (
                                                 <div className="bg-indigo-50 border border-indigo-200 rounded p-2 mb-1">
                                                     <div className="flex items-center gap-1 mb-0.5">
-                                                        <span className="text-[9px] font-black text-indigo-700 uppercase">Leader's Action</span>
+                                                        <span className="text-[9px] font-black text-indigo-700 uppercase">현장 리더 실천 항목</span>
                                                     </div>
                                                     <p className="text-[10px] font-bold text-slate-800 leading-snug">
                                                         "{entry.videoAnalysis.leaderCoaching.actionItem}"
@@ -911,7 +911,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                 <div className="h-footer flex justify-between items-center px-4 text-[9px] text-slate-500 font-mono">
                      <div>DOC-NO: TBM-{safeDate}-{index+1} (REV.0)</div>
                      <div className="font-bold text-slate-700">(주)휘강건설 스마트 안전관리 시스템</div>
-                     <div>Page {index + 1} / {entries.length}</div>
+                     <div>{index + 1} / {entries.length} 페이지</div>
                 </div>
                 
                 {/* Edit Controls */}

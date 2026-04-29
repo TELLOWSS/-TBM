@@ -627,7 +627,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
               date: item.date || defaultDate,
               time: item.time || '07:30',
               teamId: item.teamId || teams[0]?.id || '',
-              teamName: item.teamName || teams.find(t => t.id === (item.teamId || teams[0]?.id))?.name || 'Unknown',
+              teamName: item.teamName || teams.find(t => t.id === (item.teamId || teams[0]?.id))?.name || '미지정',
               leaderName: item.leaderName || '',
               attendeesCount: item.attendeesCount || 0,
               workDescription: item.workDescription || '',
@@ -650,7 +650,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
 
       // Filter out virtually empty items (e.g. initial placeholder if not touched)
       // We keep items that have at least an image OR a team name set
-      const validEntries = entriesToSave.filter(e => e.teamName !== 'Unknown' || e.tbmPhotoUrl || e.originalLogImageUrl);
+    const validEntries = entriesToSave.filter(e => e.teamName !== '미지정' || e.tbmPhotoUrl || e.originalLogImageUrl);
 
       if (validEntries.length === 0) {
           announceStatus('저장할 유효한 데이터가 없습니다.');
@@ -929,7 +929,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                             <Sparkles size={14}/> AI 진단 리포트 (수정 가능)
                                         </span>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-[10px] font-bold text-indigo-400">Total Score</span>
+                                            <span className="text-[10px] font-bold text-indigo-400">종합 점수</span>
                                             <span className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-lg font-black shadow-md shadow-indigo-200">{videoAnalysis.score}</span>
                                         </div>
                                     </div>
@@ -964,13 +964,13 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                         <div className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white p-4 rounded-xl mb-4 shadow-lg shadow-indigo-200">
                                             <div className="flex items-center gap-2 mb-2 border-b border-white/20 pb-2">
                                                 <Award size={16} className="text-yellow-300"/>
-                                                <span className="text-xs font-black uppercase tracking-wider">Leader's Action Card</span>
+                                                <span className="text-xs font-black uppercase tracking-wider">현장 리더 실천 카드</span>
                                             </div>
                                             <p className="text-sm font-bold leading-relaxed mb-2">
                                                 "{videoAnalysis.leaderCoaching.actionItem}"
                                             </p>
                                             <p className="text-[10px] bg-white/10 px-2 py-1 rounded inline-block text-indigo-100">
-                                                💡 Why: {videoAnalysis.leaderCoaching.rationale}
+                                                💡 배경: {videoAnalysis.leaderCoaching.rationale}
                                             </p>
                                         </div>
                                     )}
@@ -1002,7 +1002,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                         
                                         <div className="pt-2 border-t border-indigo-100">
                                             <label className="text-[10px] font-bold text-slate-500 mb-1 flex items-center gap-1">
-                                                <UserCheck size={12}/> 종합 의견 (Master Safety Review)
+                                                <UserCheck size={12}/> 종합 의견
                                             </label>
                                             <textarea 
                                                 value={videoAnalysis.evaluation}
@@ -1023,7 +1023,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                 <div className={`w-full xl:w-1/2 h-auto xl:h-full overflow-y-auto bg-white custom-scrollbar ${mobileSection === 'FORM' ? 'block' : 'hidden'} xl:block`}>
                     <div className="p-4 bg-slate-50 border-b border-slate-200 sticky top-0 z-10 flex items-center gap-2">
                         <FileText size={18} className="text-slate-500"/>
-                        <h3 className="font-black text-slate-700">입력 데이터 (Data Entry)</h3>
+                        <h3 className="font-black text-slate-700">입력 데이터</h3>
                     </div>
                     
                     <div className="p-6 md:p-8 space-y-8 max-w-2xl mx-auto">

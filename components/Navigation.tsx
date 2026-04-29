@@ -26,11 +26,11 @@ const BrandLogo = () => (
 
 export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentView, managerName, onOpenSettings, onShowHistory, onShowIdentity, onNewEntryClick }) => {
   const navItems = [
-    { id: 'dashboard', label: '통합 관제 대시보드', sub: 'Control Center', icon: <LayoutDashboard size={20} /> },
-    { id: 'new', label: '스마트 TBM 지휘', sub: 'Operation', icon: <PlusCircle size={20} /> },
-    { id: 'risk-assessment', label: '위험성평가 관리', sub: 'Risk Management', icon: <ShieldCheck size={20} /> },
-    { id: 'reports', label: '디지털 문서 보관소', sub: 'Secure Archive', icon: <FileText size={20} /> },
-    { id: 'data-lab', label: '안전데이터 심층연구', sub: 'Deep Analytics', icon: <Microscope size={20} /> },
+    { id: 'dashboard', label: '통합 관제 대시보드', sub: '관제 센터', icon: <LayoutDashboard size={20} /> },
+    { id: 'new', label: '스마트 TBM 지휘', sub: '작업 운영', icon: <PlusCircle size={20} /> },
+    { id: 'risk-assessment', label: '위험성평가 관리', sub: '위험 관리', icon: <ShieldCheck size={20} /> },
+    { id: 'reports', label: '디지털 문서 보관소', sub: '보안 보관소', icon: <FileText size={20} /> },
+    { id: 'data-lab', label: '안전데이터 심층연구', sub: '심층 분석', icon: <Microscope size={20} /> },
   ];
 
   const handleNavClick = (id: string) => {
@@ -84,18 +84,18 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
              <BrandLogo />
              <div>
                <h1 className="font-black text-xl leading-none text-white tracking-tight mb-1 font-sans">HUIGANG</h1>
-               <span className="text-[9px] font-bold text-slate-500 tracking-[0.2em] uppercase block">Partner Safety OS</span>
+               <span className="text-[9px] font-bold text-slate-500 tracking-[0.2em] uppercase block">협력사 안전 운영 체계</span>
              </div>
           </div>
           <div className="mt-4 flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wide">System Online</span>
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wide">시스템 정상 운영</span>
           </div>
         </div>
         
         {/* 2. Navigation List */}
         <div className="flex-1 px-4 py-2 relative z-10 overflow-y-auto custom-scrollbar space-y-1">
-          <p className="text-[10px] font-extrabold text-slate-600 px-4 mb-3 uppercase tracking-widest">Main Modules</p>
+          <p className="text-[10px] font-extrabold text-slate-600 px-4 mb-3 uppercase tracking-widest">주요 모듈</p>
           
           {navItems.map((item) => {
             const isActive = currentView === item.id;
@@ -133,7 +133,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
                 <div className="relative z-10">
                     <div className="flex items-center gap-2 mb-2 text-indigo-400">
                         <Sparkles size={16} className="animate-pulse"/>
-                        <span className="text-[10px] font-black uppercase tracking-widest">AI Vision Core</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest">AI 비전 코어</span>
                     </div>
                     <p className="text-[10px] text-slate-400 leading-relaxed font-medium">
                        현장 영상을 <span className="text-indigo-300 font-bold">실시간 분석</span>하여<br/>
@@ -160,17 +160,17 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, setCurrentV
              </div>
              <div className="flex-1 min-w-0">
                <p className="text-xs font-bold text-white truncate">{managerName || '현장 관리자'}</p>
-                <p className="text-[10px] text-slate-500 truncate">안전관리팀 / Head</p>
+               <p className="text-[10px] text-slate-500 truncate">안전관리팀 / 책임자</p>
              </div>
              <Settings size={16} className="text-slate-600 group-hover:text-slate-300 transition-colors"/>
           </div>
           
           <div className="flex justify-between items-center px-1">
               <button onClick={onShowHistory} className="text-[10px] text-slate-600 font-bold hover:text-slate-400 transition-colors flex items-center gap-1">
-                 <History size={10}/> Update Log
+                  <History size={10}/> 변경 이력
               </button>
               <button onClick={onShowIdentity} className="text-[10px] text-slate-600 font-bold hover:text-blue-400 transition-colors tracking-widest uppercase">
-                 System Identity
+                  시스템 아이덴티티
               </button>
           </div>
         </div>

@@ -90,7 +90,7 @@ const NeonDonutChart = ({ score, size = 160 }: { score: number, size?: number })
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
                 <span className="text-4xl font-black tracking-tighter" style={{ color }}>{score}</span>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Safety Score</span>
+                <span className="text-[10px] text-slate-400 font-bold tracking-widest">안전 점수</span>
             </div>
         </div>
     );
@@ -172,19 +172,19 @@ const TeamHeatmapCell: React.FC<TeamHeatmapCellProps> = ({ name, activity, score
                 borderColor: activity > 0 ? `rgba(99, 102, 241, ${intensity})` : '#334155'
             }}
         >
-            <div className="flex justify-between items-start">
-                <span className={`text-xs font-bold truncate ${activity > 0 ? 'text-white' : 'text-slate-500'}`}>{name}</span>
+            <div className="flex justify-between items-start min-w-0 gap-1">
+                <span className={`text-xs font-bold truncate min-w-0 pr-1 ${activity > 0 ? 'text-white' : 'text-slate-500'}`}>{name}</span>
                 {activity > 0 && (
-                    <span className={`text-[9px] font-mono px-1.5 rounded ${score >= 80 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                    <span className={`text-[9px] font-mono px-1.5 rounded shrink-0 ${score >= 80 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
                         {score}
                     </span>
                 )}
             </div>
             <div className="mt-2">
                 <div className="text-xl font-black text-white">{activity}</div>
-                <div className="text-[9px] text-slate-400">Activities</div>
+                <div className="text-[9px] text-slate-400">활동 건수</div>
             </div>
-            {activity === 0 && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><span className="text-[10px] text-slate-500 font-bold">No Data</span></div>}
+            {activity === 0 && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><span className="text-[10px] text-slate-500 font-bold">데이터 없음</span></div>}
         </div>
     );
 };
@@ -1589,6 +1589,20 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         DELAYED: '지연',
     };
 
+    const commandPriorityLabel: Record<SmartCommandPriority, string> = {
+        CRITICAL: '긴급',
+        HIGH: '높음',
+        MEDIUM: '보통',
+        LOW: '낮음',
+    };
+
+    const delayReasonLabelMap: Record<string, string> = {
+        MATERIAL: '자재',
+        MANPOWER: '인원',
+        WEATHER: '기상',
+        OTHER: '기타',
+    };
+
     const liveStatusMessage = isAnalyzing
         ? 'AI 지시 카드를 생성 중입니다.'
         : analyzeError
@@ -1604,7 +1618,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                 <div>
                     <div className="flex items-center gap-2 text-indigo-400 mb-2 animate-pulse">
                         <Activity size={20} />
-                        <span className="text-xs font-black uppercase tracking-[0.2em]">Safety Control Tower</span>
+                        <span className="text-xs font-black tracking-[0.2em]">안전 통합 관제</span>
                     </div>
                     <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight leading-none mb-2">
                         안전 데이터 <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">심층 연구소</span>
@@ -1683,11 +1697,11 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-[50px] pointer-events-none group-hover:bg-emerald-500/20 transition-all"></div>
                     
                     <div className="flex justify-between items-start mb-6">
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                            <Target size={16} className="text-emerald-400"/> Current Status
+                        <h3 className="text-sm font-bold text-slate-400 tracking-wider flex items-center gap-2">
+                            <Target size={16} className="text-emerald-400"/> 현재 현황
                         </h3>
                         <div className="px-2 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded text-[10px] font-bold text-emerald-400 animate-pulse">
-                            LIVE
+                            실시간
                         </div>
                     </div>
 
@@ -1697,14 +1711,14 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
 
                     <div className="grid grid-cols-2 gap-4 mt-6">
                         <div className="bg-slate-900/80 rounded-xl p-3 border border-slate-700/50 transition-colors hover:border-indigo-500/50">
-                            <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Activites</p>
+                            <p className="text-[10px] text-slate-500 font-bold mb-1">활동 건수</p>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-xl font-black text-white">{filteredAnalysis.totalEntries}</span>
                                 <span className="text-xs text-slate-500">건</span>
                             </div>
                         </div>
                         <div className="bg-slate-900/80 rounded-xl p-3 border border-slate-700/50 transition-colors hover:border-indigo-500/50">
-                            <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Workers</p>
+                            <p className="text-[10px] text-slate-500 font-bold mb-1">참여 인원</p>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-xl font-black text-white">{filteredAnalysis.totalPeople}</span>
                                 <span className="text-xs text-slate-500">명</span>
@@ -1716,9 +1730,9 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                         <div className="flex items-center justify-between gap-2 mb-3">
                             <div className="flex items-center gap-2">
                                 <ShieldCheck size={14} className="text-cyan-300" />
-                                <p className="text-[10px] text-cyan-300 font-black uppercase tracking-[0.2em]">Risk Linkage Usage</p>
+                                <p className="text-[10px] text-cyan-300 font-black tracking-[0.2em]">위험성평가 연계 현황</p>
                             </div>
-                            <span className="text-[10px] text-slate-400 font-mono">TBM ↔ RA</span>
+                            <span className="text-[10px] text-slate-400 font-mono">TBM ↔ 위험성평가</span>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             <div className="rounded-xl bg-slate-950/70 border border-slate-700/50 p-3">
@@ -1740,7 +1754,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                         {filteredAnalysis.teamLinkageStats.length > 0 && (
                             <div className="mt-3 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
                                 <div className="flex items-center justify-between gap-2 mb-2">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Team Linkage Top</p>
+                                    <p className="text-[10px] font-black tracking-[0.2em] text-slate-400">팀 연계 상위</p>
                                     <span className="text-[10px] text-slate-500">상위 {filteredAnalysis.teamLinkageStats.length}팀</span>
                                 </div>
                                 <div className="space-y-2">
@@ -1761,7 +1775,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                         )}
                         <div className="mt-3 rounded-xl border border-slate-700/50 bg-slate-950/40 p-3">
                             <div className="flex items-center justify-between gap-2 mb-2">
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Monthly Linkage Trend</p>
+                                <p className="text-[10px] font-black tracking-[0.2em] text-slate-400">월별 연계 추이</p>
                                 <div className="flex flex-col items-end gap-2">
                                     <div className="flex items-center gap-1">
                                         {(['3M', '6M', '12M'] as const).map(range => (
@@ -1831,10 +1845,10 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                 {/* 2. Risk Spectrum (Bar Chart) - Filter Trigger */}
                 <div className="col-span-12 md:col-span-4 bg-slate-800/50 rounded-3xl p-6 border border-slate-700 shadow-xl backdrop-blur-sm">
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                            <AlertTriangle size={16} className="text-amber-400"/> Risk Spectrum
+                        <h3 className="text-sm font-bold text-slate-400 tracking-wider flex items-center gap-2">
+                            <AlertTriangle size={16} className="text-amber-400"/> 위험 스펙트럼
                         </h3>
-                        <span className="text-[10px] text-slate-500 font-mono">Top 7 Factors</span>
+                        <span className="text-[10px] text-slate-500 font-mono">상위 7개 요인</span>
                     </div>
                     <div className="space-y-1">
                         {globalAnalysis.riskSpectrum.map((risk, idx) => (
@@ -1860,8 +1874,8 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                 {/* 3. Trend Combo Chart */}
                 <div className="col-span-12 md:col-span-4 bg-slate-800/50 rounded-3xl p-6 border border-slate-700 shadow-xl backdrop-blur-sm flex flex-col">
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                            <TrendingUp size={16} className="text-cyan-400"/> 7-Day Trend
+                        <h3 className="text-sm font-bold text-slate-400 tracking-wider flex items-center gap-2">
+                            <TrendingUp size={16} className="text-cyan-400"/> 최근 7일 추이
                         </h3>
                         {(filter.teamIds.length > 0 || filter.riskLabel || filter.period !== '30D') && <span className="text-[9px] text-indigo-400 font-bold">필터 적용됨</span>}
                     </div>
@@ -1904,11 +1918,11 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     </div>
                 </div>
 
-                {/* 4. Team Activity Heatmap - Filter Trigger */}
+                {/* 4. 팀 활동 히트맵 - 필터 트리거 */}
                 <div className="col-span-12 bg-slate-800/30 rounded-3xl p-6 border border-slate-700/50 shadow-xl">
                     <div className="flex items-center gap-2 mb-6">
                         <Layers size={18} className="text-violet-400"/>
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Team Activity Heatmap (Drill-Down)</h3>
+                        <h3 className="text-sm font-bold text-slate-300 break-words">팀 활동 히트맵 (드릴다운)</h3>
                     </div>
                     
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -1939,7 +1953,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                         <div className="flex items-center gap-2">
                             <Users size={16} className="text-amber-400"/>
-                            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Unknown Team Normalization Queue</h3>
+                            <h3 className="text-sm font-bold text-slate-300 break-words">미등록 팀 정규화 대기열</h3>
                         </div>
                         <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-full">
                             미정규 팀 {unknownTeamQueue.length}건
@@ -1984,7 +1998,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                         key={item.key}
                                         className={`px-2.5 py-1 rounded border text-[11px] font-bold ${item.level === 'critical' ? 'border-rose-500/40 bg-rose-600/20 text-rose-300' : 'border-amber-500/40 bg-amber-600/20 text-amber-300'}`}
                                     >
-                                        {item.level === 'critical' ? 'CRITICAL' : 'WARNING'} · {item.label}
+                                        {item.level === 'critical' ? '긴급' : '주의'} · {item.label}
                                     </span>
                                 ))}
                             </div>
@@ -2182,7 +2196,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                     onClick={handleExportNormalizationLogsCsv}
                                     className="px-2.5 py-1 rounded text-[10px] font-bold border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30"
                                 >
-                                    CSV
+                                    CSV 내보내기
                                 </button>
                             </div>
                         </div>
@@ -2242,8 +2256,8 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2">
                                 <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></div>
-                                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">AI Command Orders</span>
-                                <span className="text-[10px] text-indigo-400 font-mono">({aiCards.length} issued)</span>
+                                <span className="text-xs font-black text-slate-400 tracking-widest">AI 지시 목록</span>
+                                <span className="text-[10px] text-indigo-400 font-mono">({aiCards.length}건 발령)</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
@@ -2272,7 +2286,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2 text-green-400">
                                 <span className="animate-pulse">●</span>
-                                <span className="font-bold">AI_COMMAND_TERMINAL</span>
+                                <span className="font-bold">AI 지시 원문</span>
                             </div>
                             <button onClick={() => setAiRawFallback(null)} aria-label="터미널 닫기" className="text-slate-600 hover:text-slate-400"><XCircle size={14}/></button>
                         </div>
@@ -2285,9 +2299,9 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
                             <ShieldCheck size={16} className="text-cyan-400"/>
-                            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Smart TBM Command Briefing (Draft)</h3>
+                            <h3 className="text-sm font-bold text-slate-300 break-words">스마트 TBM 지휘 브리핑 (초안)</h3>
                         </div>
-                        <span className="text-[10px] font-bold text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2 py-1 rounded-full">Command Phase 1</span>
+                        <span className="text-[10px] font-bold text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2 py-1 rounded-full">지휘 1단계</span>
                     </div>
 
                     {commandBriefingDraft.length === 0 ? (
@@ -2299,12 +2313,12 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                             {commandBriefingDraft.map(item => (
                                 <div key={item.rank} className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 flex flex-col gap-2">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400">Top {item.rank}</span>
-                                        <span className="text-[10px] text-slate-500 font-mono">{item.count} cases</span>
+                                        <span className="text-[10px] font-black tracking-wider text-cyan-400">상위 {item.rank}</span>
+                                        <span className="text-[10px] text-slate-500 font-mono">{item.count}건</span>
                                     </div>
                                     <p className="text-sm font-bold text-white">{item.label}</p>
                                     <p className="text-xs text-slate-300 leading-relaxed">{item.instruction}</p>
-                                    <p className="text-[11px] text-emerald-400 font-semibold">KPI: {item.kpi}</p>
+                                    <p className="text-[11px] text-emerald-400 font-semibold">핵심지표: {item.kpi}</p>
                                 </div>
                             ))}
                         </div>
@@ -2315,9 +2329,9 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     <div className="flex items-center justify-between mb-4 gap-3">
                         <div className="flex items-center gap-2">
                             <ClipboardList size={16} className="text-indigo-400"/>
-                            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Smart TBM Command Workflow (Phase 2)</h3>
+                            <h3 className="text-sm font-bold text-slate-300 break-words">스마트 TBM 지휘 워크플로우</h3>
                         </div>
-                        <span className="text-[10px] font-bold text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-2 py-1 rounded-full">{visibleCommandTasks.length} Tasks</span>
+                        <span className="text-[10px] font-bold text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-2 py-1 rounded-full">{visibleCommandTasks.length}건</span>
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
@@ -2328,19 +2342,19 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                     onClick={handleGenerateValidationCommands}
                                     className="px-3 py-2 text-[11px] font-bold rounded-lg border border-cyan-500/40 bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 min-h-[40px]"
                                 >
-                                    검증용 5건 생성
+                                    검증 5건 생성
                                 </button>
                                 <button
                                     onClick={handleRunValidationTransitions}
                                     className="px-3 py-2 text-[11px] font-bold rounded-lg border border-amber-500/40 bg-amber-600/20 text-amber-300 hover:bg-amber-600/30 min-h-[40px]"
                                 >
-                                    상태전이 자동 검증
+                                    상태전이 검증
                                 </button>
                                 <button
                                     onClick={handleClearValidationCommands}
                                     className="px-3 py-2 text-[11px] font-bold rounded-lg border border-rose-500/40 bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 min-h-[40px] sm:col-span-2"
                                 >
-                                    검증용 데이터 정리
+                                    검증데이터 정리
                                 </button>
                             </div>
                             <input
@@ -2372,10 +2386,10 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                     onChange={(event) => setCommandForm(prev => ({ ...prev, priority: event.target.value as SmartCommandPriority }))}
                                     className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 min-h-[42px]"
                                 >
-                                    <option value="CRITICAL">우선순위: CRITICAL</option>
-                                    <option value="HIGH">우선순위: HIGH</option>
-                                    <option value="MEDIUM">우선순위: MEDIUM</option>
-                                    <option value="LOW">우선순위: LOW</option>
+                                    <option value="CRITICAL">우선순위: 긴급</option>
+                                    <option value="HIGH">우선순위: 높음</option>
+                                    <option value="MEDIUM">우선순위: 보통</option>
+                                    <option value="LOW">우선순위: 낮음</option>
                                 </select>
                             </div>
                             <input
@@ -2393,7 +2407,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                             <input
                                 value={commandForm.kpi}
                                 onChange={(event) => setCommandForm(prev => ({ ...prev, kpi: event.target.value }))}
-                                placeholder="KPI (선택)"
+                                placeholder="핵심지표 (선택)"
                                 className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-100 min-h-[42px]"
                             />
                             <button
@@ -2427,8 +2441,8 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                                 </button>
                                             </div>
                                             <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-                                                <span className={`px-2 py-1 rounded border ${commandStatusStyle[task.status]}`}>{task.status}</span>
-                                                <span className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-slate-300">{task.priority}</span>
+                                                <span className={`px-2 py-1 rounded border ${commandStatusStyle[task.status]}`}>{commandStatusLabel[task.status]}</span>
+                                                <span className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-slate-300">{commandPriorityLabel[task.priority]}</span>
                                                 <span className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-slate-300">{task.assigneeTeamName || '담당팀 미지정'}</span>
                                                 {task.dueAt && <span className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-slate-300">마감: {new Date(task.dueAt).toLocaleString('ko-KR')}</span>}
                                             </div>
@@ -2533,26 +2547,26 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                         <div className="flex items-center gap-2">
                             <BarChart2 size={16} className="text-violet-400"/>
-                            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Smart TBM Command Daily Report (Phase 4 Draft)</h3>
+                            <h3 className="text-sm font-bold text-slate-300 break-words">스마트 TBM 지휘 일일 리포트</h3>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={handleCopyCommandReport}
                                 className={`px-3 py-2 rounded-lg text-[11px] font-bold border min-h-[40px] ${commandShareDone ? 'bg-violet-600 text-white border-violet-500' : 'bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border-violet-500/40'}`}
                             >
-                                {commandShareDone ? '복사됨!' : '지휘 리포트 복사'}
+                                {commandShareDone ? '복사됨!' : '리포트 복사'}
                             </button>
                             <button
                                 onClick={handleCopyValidationLog}
                                 className={`px-3 py-2 rounded-lg text-[11px] font-bold border min-h-[40px] ${validationLogCopied ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/40'}`}
                             >
-                                {validationLogCopied ? '복사됨!' : '검증 로그 1줄 복사'}
+                                {validationLogCopied ? '복사됨!' : '검증로그 복사'}
                             </button>
                             <button
                                 onClick={handleCopyPhaseClearSummary}
                                 className={`px-3 py-2 rounded-lg text-[11px] font-bold border min-h-[40px] ${phaseClearLogCopied ? 'bg-cyan-600 text-white border-cyan-500' : 'bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border-cyan-500/40'}`}
                             >
-                                {phaseClearLogCopied ? '복사됨!' : '클리어 요약 1줄 복사'}
+                                {phaseClearLogCopied ? '복사됨!' : '클리어요약 복사'}
                             </button>
                         </div>
                     </div>
@@ -2604,7 +2618,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                             상태전이 누적: <span className="font-black text-white">{commandReport.totalStatusTransitions}</span>건
                         </div>
                         <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandReport.statusHistoryValidationPassed ? 'border-emerald-500/40 bg-emerald-600/20 text-emerald-300' : 'border-amber-500/40 bg-amber-600/20 text-amber-300'}`}>
-                            {commandReport.statusHistoryValidationPassed ? 'Phase3 이력검증 기준 충족(10건+)' : 'Phase3 이력검증 진행중(10건 미만)'}
+                            {commandReport.statusHistoryValidationPassed ? '3단계 이력검증 충족(10+)' : '3단계 이력검증 진행중'}
                         </span>
                     </div>
 
@@ -2633,7 +2647,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                             </span>
                         </div>
                         <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandValidationStatus.isDone ? 'border-emerald-500/40 bg-emerald-600/20 text-emerald-300' : 'border-amber-500/40 bg-amber-600/20 text-amber-300'}`}>
-                            {commandValidationStatus.isDone ? 'Phase3/4 통합 검증 완료 조건 충족' : 'Phase3/4 통합 검증 진행중'}
+                            {commandValidationStatus.isDone ? '3/4단계 통합검증 충족' : '3/4단계 통합검증 진행'}
                         </span>
                     </div>
 
@@ -2644,7 +2658,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                 <div className="flex flex-wrap gap-2">
                                     {commandReport.topDelayReasons.map(item => (
                                         <span key={`delay-${item.reason}`} className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-[11px] text-slate-300">
-                                            {item.reason} {item.count}건
+                                            {delayReasonLabelMap[item.reason] || item.reason} {item.count}건
                                         </span>
                                     ))}
                                 </div>
@@ -2676,7 +2690,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                     <div className="bg-slate-800/50 rounded-3xl p-6 border border-slate-700 shadow-xl">
                         <div className="flex items-center gap-2 mb-5">
                             <TrendingUp size={16} className="text-violet-400"/>
-                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Period Comparison</h3>
+                            <h3 className="text-sm font-bold text-slate-400 tracking-wider">기간 비교</h3>
                         </div>
                         <div className="grid grid-cols-1 gap-3">
                             {([
@@ -2698,7 +2712,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                                     {isPos ? '+' : ''}{item.diff}%
                                                 </span>
                                             ) : (
-                                                <span className="text-[11px] text-slate-600 font-mono">N/A</span>
+                                                <span className="text-[11px] text-slate-600 font-mono">없음</span>
                                             )}
                                         </div>
                                     </div>
