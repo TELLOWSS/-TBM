@@ -75,6 +75,9 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const [videoStatusMessage, setVideoStatusMessage] = useState<string>(''); 
     const [announceMessage, setAnnounceMessage] = useState('');
   const [isVideoAnalyzing, setIsVideoAnalyzing] = useState(false);
+    const [videoUploadState, setVideoUploadState] = useState<'IDLE' | 'CHECKING' | 'READY' | 'ERROR'>('IDLE');
+    const [videoUploadMessage, setVideoUploadMessage] = useState('');
+    const [videoAnalysisProgress, setVideoAnalysisProgress] = useState(0);
   const [isDocAnalyzing, setIsDocAnalyzing] = useState(false);
 
   const [editingFeedbackIndex, setEditingFeedbackIndex] = useState<number | null>(null);
@@ -419,6 +422,9 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   // 3. TBM Video
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
+          setVideoUploadState('CHECKING');
+          setVideoUploadMessage('영상 파일 확인 중...');
+
           // [FIX] Revoke previous blob URL before creating a new one
           if (videoBlobUrlRef.current) {
               URL.revokeObjectURL(videoBlobUrlRef.current);
@@ -426,17 +432,23 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           }
           const file = e.target.files[0];
           if (!isLikelyVideoFile(file)) {
+              setVideoUploadState('ERROR');
+              setVideoUploadMessage('동영상 형식을 확인해주세요.');
               announceStatus('동영상 파일만 업로드할 수 있습니다. (지원: MP4/MOV/M4V/3GP/WEBM 등)');
               e.target.value = '';
               return;
           }
           if (!file.size || file.size <= 0) {
+              setVideoUploadState('ERROR');
+              setVideoUploadMessage('파일 읽기에 실패했습니다. 다시 선택해주세요.');
               announceStatus('선택한 영상 파일을 읽을 수 없습니다. 다시 선택해주세요.');
               e.target.value = '';
               return;
           }
           // [FIX] 영상 파일 크기 제한 — 500MB 초과 시 메모리 압박 방지
           if (file.size > 500 * 1024 * 1024) {
+              setVideoUploadState('ERROR');
+              setVideoUploadMessage('파일이 너무 큽니다. 500MB 이하로 선택해주세요.');
               announceStatus('영상 파일이 너무 큽니다. 최대 500MB까지 업로드할 수 있습니다.');
               e.target.value = '';
               return;
@@ -444,6 +456,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
 
           // 새 영상 업로드 시 기존 분석/압축 캐시 초기화
           setVideoAnalysis(null);
+          setVideoAnalysisProgress(0);
           compressedVideoCacheRef.current = null;
 
           setTbmVideoFile(file);
@@ -454,6 +467,8 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           // [FIX] Do NOT persist blob URL to storage — blob URLs are session-only.
           // Store only the filename as evidence; the video content is analysed on upload.
           updateActiveItem({ tbmVideoUrl: null, tbmVideoFileName: file.name });
+          setVideoUploadState('READY');
+          setVideoUploadMessage(`업로드 완료: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
 
           // 모바일에서 동일 파일 재선택 시 change 이벤트가 누락되는 문제 방지
           e.target.value = '';
@@ -618,7 +633,10 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const handleRunVideoAnalysis = async () => {
     if (!tbmVideoFile) return;
     setIsVideoAnalyzing(true);
+    setVideoAnalysisProgress(10);
     setVideoStatusMessage("영상 최적화 준비 중...");
+    setVideoUploadState('CHECKING');
+    setVideoUploadMessage('AI 분석 준비 중...');
 
     try {
         const fileKey = `${tbmVideoFile.name}:${tbmVideoFile.size}:${tbmVideoFile.lastModified}`;
@@ -627,14 +645,19 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
         if (compressedVideoCacheRef.current?.key === fileKey) {
             compressionResult = compressedVideoCacheRef.current.result;
             setVideoStatusMessage(`압축 결과 재사용 (${compressionResult.profile.label})`);
+            setVideoAnalysisProgress(35);
         } else {
             setVideoStatusMessage('영상 자동 축소/고속 처리 중...');
+            setVideoAnalysisProgress(25);
             compressionResult = await compressVideo(tbmVideoFile);
             compressedVideoCacheRef.current = { key: fileKey, result: compressionResult };
+            setVideoAnalysisProgress(60);
         }
 
         const base64Video = await blobToBase64(compressionResult.blob);
+        setVideoAnalysisProgress(75);
         setVideoStatusMessage(`AI 분석 중 (${compressionResult.profile.label}, ${compressionResult.profile.playbackRate.toFixed(1)}x)`);
+        setVideoUploadMessage(`AI 분석 진행: ${compressionResult.profile.label} 프로파일`);
         
         const result = await evaluateTBMVideo(
             base64Video.split(',')[1],
@@ -642,6 +665,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
             { workDescription, riskFactors },
             effectiveGuidelines
         );
+        setVideoAnalysisProgress(95);
 
         setVideoAnalysis(result);
         updateActiveItem({ videoAnalysis: result });
@@ -654,10 +678,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
             setSafetyFeedback(currentFeedback);
             updateActiveItem({ safetyFeedback: currentFeedback });
         }
+        setVideoAnalysisProgress(100);
+        setVideoUploadState('READY');
+        setVideoUploadMessage('AI 분석 완료. 결과를 확인하세요.');
         announceStatus(`AI 분석 완료: ${compressionResult.originalSizeMB.toFixed(1)}MB → ${compressionResult.compressedSizeKB.toFixed(0)}KB (${compressionResult.profile.label})`);
     } catch (e: any) {
         console.error(e);
         const msg = e.message || '';
+        setVideoUploadState('ERROR');
+        setVideoUploadMessage('AI 분석 실패. 네트워크/파일 상태를 확인해주세요.');
         announceStatus(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : 'AI 분석에 실패했습니다.');
     } finally {
         setIsVideoAnalyzing(false);
@@ -958,6 +987,27 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                             <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
                                 대용량 영상은 자동으로 축소/고속 처리되어 빠른 코칭 분석에 사용됩니다.
                             </p>
+
+                            {(videoUploadState !== 'IDLE' || isVideoAnalyzing) && (
+                                <div className={`mt-2 rounded-lg border px-3 py-2 ${videoUploadState === 'ERROR' ? 'border-red-200 bg-red-50' : 'border-rose-200 bg-rose-50'}`}>
+                                    <div className="flex items-center gap-2">
+                                        {(isVideoAnalyzing || videoUploadState === 'CHECKING')
+                                            ? <Loader2 size={14} className="animate-spin text-rose-600"/>
+                                            : <CheckCircle2 size={14} className={videoUploadState === 'ERROR' ? 'text-red-500' : 'text-emerald-500'} />}
+                                        <span className={`text-[11px] font-bold ${videoUploadState === 'ERROR' ? 'text-red-700' : 'text-rose-700'}`}>
+                                            {isVideoAnalyzing ? (videoStatusMessage || 'AI 분석 진행 중...') : (videoUploadMessage || '영상 상태 확인 중')}
+                                        </span>
+                                    </div>
+                                    {isVideoAnalyzing && (
+                                        <div className="mt-2">
+                                            <div className="h-1.5 rounded-full bg-rose-100 overflow-hidden">
+                                                <div className="h-full bg-rose-500 transition-all duration-300" style={{ width: `${Math.max(8, videoAnalysisProgress)}%` }}></div>
+                                            </div>
+                                            <p className="mt-1 text-[10px] text-rose-600 font-semibold text-right">{videoAnalysisProgress}%</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             
                             {tbmVideoPreview && (
                                 <button 
