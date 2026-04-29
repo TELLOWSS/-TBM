@@ -340,6 +340,20 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
   const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
+                const invalidFiles = Array.from(files).filter(file => {
+                    const lowerName = file.name.toLowerCase();
+                    const isJsonMime = file.type === 'application/json' || file.type === 'text/json';
+                    const isJsonExt = lowerName.endsWith('.json');
+                    return !(isJsonMime || isJsonExt);
+                });
+
+                if (invalidFiles.length > 0) {
+                    setBackupStatusMessage(`복구 파일 형식 오류: JSON 파일만 업로드할 수 있습니다. (${invalidFiles.length}개 제외)`);
+                    announceStatus('위험성평가 복구는 JSON 파일만 지원합니다. PDF는 문서 분석에서 업로드하세요.');
+                    if (backupInputRef.current) backupInputRef.current.value = '';
+                    return;
+                }
+
                 setBackupStatusMessage(`복구 파일 ${files.length}개를 불러오는 중입니다...`);
         onRestoreData(files);
         if(backupInputRef.current) backupInputRef.current.value = '';
@@ -1022,15 +1036,15 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                        </div>
                        
                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
-                          <button onClick={() => handleUploadClick(activeAssessment.type === 'INITIAL' ? 'INITIAL' : 'MONTHLY')} aria-label={activeAssessment.type === 'INITIAL' ? '최초 위험성평가 문서 분석 또는 추가' : `${activeAssessment.month} 위험성평가 문서 분석 또는 추가`} className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 min-h-[48px] w-full sm:w-auto">
+                                  <button onClick={() => handleUploadClick(activeAssessment.type === 'INITIAL' ? 'INITIAL' : 'MONTHLY')} aria-label={activeAssessment.type === 'INITIAL' ? '최초 위험성평가 문서 분석(PDF/이미지) 또는 추가' : `${activeAssessment.month} 위험성평가 문서 분석(PDF/이미지) 또는 추가`} className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 min-h-[48px] w-full sm:w-auto">
                              <FileJson size={18}/>
-                             <span>문서 분석/추가</span>
+                                      <span>문서 분석(PDF/이미지)</span>
                           </button>
                           <div className="grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex sm:flex-col sm:gap-1">
-                              <button onClick={handleExportBackup} aria-label="위험성평가 데이터 백업 다운로드" className="p-3 bg-white border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold flex items-center justify-center min-h-[48px]" title="데이터 백업 (다운로드)">
+                              <button onClick={handleExportBackup} aria-label="위험성평가 데이터 백업 다운로드(JSON)" className="p-3 bg-white border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold flex items-center justify-center min-h-[48px]" title="데이터 백업(JSON) 다운로드">
                                       <Download size={16}/>
                                   </button>
-                              <button onClick={() => backupInputRef.current?.click()} aria-label="위험성평가 데이터 복구 파일 업로드" className="p-3 bg-white border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold flex items-center justify-center min-h-[48px]" title="데이터 복구 (업로드)">
+                              <button onClick={() => backupInputRef.current?.click()} aria-label="위험성평가 데이터 복구 파일 업로드(JSON)" className="p-3 bg-white border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold flex items-center justify-center min-h-[48px]" title="데이터 복구(JSON) 업로드">
                                       <Upload size={16}/>
                                   </button>
                               <button onClick={handleDeleteMonth} aria-label={`현재 선택된 ${activeAssessment.month} 위험성평가 삭제`} className="p-3 bg-white border border-slate-200 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors text-xs font-bold flex justify-center min-h-[48px]" title="현재 월 삭제">
@@ -1413,18 +1427,18 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                 
                      <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xl">
                    <button 
-                      onClick={() => handleUploadClick('INITIAL')} 
-                             aria-label="최초 위험성평가 문서 등록 시작"
+                     onClick={() => handleUploadClick('INITIAL')} 
+                         aria-label="최초 위험성평가 문서 등록 시작(PDF/이미지)"
                              className="px-6 py-4 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-200 flex items-center justify-center gap-3 transition-transform hover:scale-105 min-h-[52px]"
                    >
-                      <Plus size={18}/> 최초 위험성평가 등록 (Standard)
+                     <Plus size={18}/> 최초 위험성평가 등록(PDF/이미지)
                    </button>
                    <button 
                       onClick={() => backupInputRef.current?.click()} 
-                             aria-label="기존 위험성평가 데이터 복구 파일 업로드"
+                         aria-label="기존 위험성평가 데이터 복구 파일 업로드(JSON)"
                              className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-50 hover:border-slate-300 flex items-center justify-center gap-3 transition-colors min-h-[52px]"
                    >
-                      <Upload size={18}/> 기존 데이터 복구
+                     <Upload size={18}/> 기존 데이터 복구(JSON)
                    </button>
                 </div>
              </div>
