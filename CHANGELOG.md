@@ -65,8 +65,28 @@
   - 재발위험 지표(`recurrenceRiskScore`, `recurrenceRiskLevel`) 및 공유 텍스트 반영
   - 상태전이 누적 건수(`totalStatusTransitions`) 및 Phase3 기준 충족 배지(10건+) 추가
   - 검증 지원 액션 추가: `검증용 5건 생성`, `상태전이 자동 검증`
+  - 트래커 입력 지원 액션 추가: `검증 로그 1줄 복사`(Done/In Progress 자동 판정)
+  - 검증 운영 지원 액션 추가: `검증용 데이터 정리`(VALCMD 샘플 일괄 제거)
+  - 통합 검증 상태 카드 추가: 증빙/지연사유/리포트 데이터 충족 여부 및 완료 조건 시각화
+  - `클리어 요약 1줄 복사` 액션 추가: Command Phase3/4 Clear 후보 로그 자동 생성
 - `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`, `SAFETY_DATALAB_V2_TRACKER.md`
   - Command Phase 4 진행 상태(In Progress) 반영
+
+### ✅ 문서 상태 정합화
+- `SAFETY_DATALAB_V2_TRACKER.md`
+  - 스마트TBM지휘 구현 완료 로그를 `Done` 기준으로 정리
+  - 잔여 항목을 `Command Phase3/4 실검증 실행` 1건으로 축약
+- `SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md`
+  - 진행 상태 요약에 스마트TBM지휘 현재 단계(기능구현 완료 + 실검증 대기) 명시
+
+### ✅ 모바일 UX 개선 (등록/지휘)
+- `components/TBMForm.tsx`
+  - 모바일 우선 레이아웃으로 재구성(고정 2분할 → 세로 스택)
+  - 헤더 액션/대기열/입력 폼 그리드 반응형 조정 및 터치 조작성 개선
+  - 모바일 하단 고정 저장 바 및 현재 입력 요약/진척 표시 추가
+- `components/SafetyDataLab.tsx`
+  - 통합 검증 상태 카드에 `평가자 관점`/`실무자 관점` 충족 배지 추가
+  - 모바일 빠른 검증 액션 바(검증 로그 복사/클리어 요약 복사) 추가
 
 ### ✅ 전일 기록 확인 검증 및 후속 진행 착수
 - `SAFETY_DATALAB_V2_TRACKER.md`

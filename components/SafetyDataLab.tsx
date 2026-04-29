@@ -250,6 +250,9 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     });
     const [copyDone, setCopyDone] = useState(false);
     const [commandShareDone, setCommandShareDone] = useState(false);
+    const [validationLogCopied, setValidationLogCopied] = useState(false);
+    const [phaseClearLogCopied, setPhaseClearLogCopied] = useState(false);
+    const [commandReportCopiedOnce, setCommandReportCopiedOnce] = useState(false);
     const [commandTasks, setCommandTasks] = useState<SmartCommandTask[]>(() => {
         try { return JSON.parse(localStorage.getItem(COMMAND_TASK_STORAGE_KEY) || '[]'); } catch { return []; }
     });
@@ -466,6 +469,38 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
             topRisks,
         };
     }, [visibleCommandTasks, globalAnalysis.riskSpectrum]);
+
+    const commandValidationStatus = useMemo(() => {
+        const hasEvidence = visibleCommandTasks.some(task =>
+            (task.evidenceImageUrls?.length || 0) > 0 || (task.evidenceComment || '').trim().length > 0
+        );
+        const hasEvidenceImage = visibleCommandTasks.some(task => (task.evidenceImageUrls?.length || 0) > 0);
+        const hasDelayReason = visibleCommandTasks.some(task => !!task.delayReason);
+        const hasReportData = commandReport.totalCommands > 0;
+        const phase4MetricsReady =
+            commandReport.totalCommands >= 0 &&
+            commandReport.completedCommands >= 0 &&
+            commandReport.delayedCommands >= 0;
+
+        const phase3Ready = commandReport.statusHistoryValidationPassed && hasEvidence && hasDelayReason && hasEvidenceImage;
+        const phase4Ready = hasReportData && phase4MetricsReady && commandReportCopiedOnce;
+        const evaluatorReady = commandReport.statusHistoryValidationPassed && hasReportData && commandReportCopiedOnce;
+        const practitionerReady = hasEvidenceImage && hasDelayReason;
+        const isDone = phase3Ready && phase4Ready;
+
+        return {
+            hasEvidence,
+            hasEvidenceImage,
+            hasDelayReason,
+            hasReportData,
+            phase4MetricsReady,
+            phase3Ready,
+            phase4Ready,
+            evaluatorReady,
+            practitionerReady,
+            isDone,
+        };
+    }, [visibleCommandTasks, commandReport, commandReportCopiedOnce]);
 
     // --- [Phase 4] 비교 지표: 전주 대비 ---
     const compareAnalysis = useMemo(() => {
@@ -684,8 +719,33 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
 
         navigator.clipboard.writeText(text).then(() => {
             setCommandShareDone(true);
+            setCommandReportCopiedOnce(true);
             announceStatus('지휘 리포트 요약이 클립보드에 복사되었습니다.');
             setTimeout(() => setCommandShareDone(false), 2000);
+        });
+    };
+
+    const handleCopyValidationLog = () => {
+        const line = commandValidationStatus.isDone
+            ? `2026-04-29 | 스마트TBM지휘 검증 | Phase3/4 통합 검증 완료 | Done | 상태이력 ${commandReport.totalStatusTransitions}건, 증빙/지연사유 반영, 지휘리포트 복사 정상`
+            : `2026-04-29 | 스마트TBM지휘 검증 | Phase3/4 통합 검증 진행중 | In Progress | 상태이력 ${commandReport.totalStatusTransitions}건, 증빙:${commandValidationStatus.hasEvidence ? 'Y' : 'N'}, 지연사유:${commandValidationStatus.hasDelayReason ? 'Y' : 'N'}`;
+
+        navigator.clipboard.writeText(line).then(() => {
+            setValidationLogCopied(true);
+            announceStatus('검증 로그 1줄이 클립보드에 복사되었습니다.');
+            setTimeout(() => setValidationLogCopied(false), 2000);
+        });
+    };
+
+    const handleCopyPhaseClearSummary = () => {
+        const line = commandValidationStatus.isDone
+            ? `2026-04-29 | 스마트TBM지휘 Clear | Command Phase3/4 Clear 후보 | Done | Phase3/4 체크리스트 자동판정 충족`
+            : `2026-04-29 | 스마트TBM지휘 Clear | Command Phase3/4 Clear 후보 점검 | In Progress | P3:${commandValidationStatus.phase3Ready ? 'Y' : 'N'}, P4:${commandValidationStatus.phase4Ready ? 'Y' : 'N'}`;
+
+        navigator.clipboard.writeText(line).then(() => {
+            setPhaseClearLogCopied(true);
+            announceStatus('클리어 요약 1줄이 클립보드에 복사되었습니다.');
+            setTimeout(() => setPhaseClearLogCopied(false), 2000);
         });
     };
 
@@ -959,6 +1019,18 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
 
         persistCommandTasks(updatedTasks);
         announceStatus(`검증용 상태전이 ${transitionCount}건이 반영되었습니다.`);
+    };
+
+    const handleClearValidationCommands = () => {
+        const before = commandTasks.length;
+        const filtered = commandTasks.filter(task => !task.id.startsWith('VALCMD-'));
+        const removed = before - filtered.length;
+        if (removed === 0) {
+            announceStatus('정리할 검증용 데이터가 없습니다.');
+            return;
+        }
+        persistCommandTasks(filtered);
+        announceStatus(`검증용 데이터 ${removed}건을 정리했습니다.`);
     };
 
     const commandStatusStyle: Record<SmartCommandStatus, string> = {
@@ -1329,6 +1401,12 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                                 >
                                     상태전이 자동 검증
                                 </button>
+                                <button
+                                    onClick={handleClearValidationCommands}
+                                    className="px-3 py-2 text-[11px] font-bold rounded-lg border border-rose-500/40 bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 min-h-[40px] sm:col-span-2"
+                                >
+                                    검증용 데이터 정리
+                                </button>
                             </div>
                             <input
                                 value={commandForm.title}
@@ -1522,11 +1600,40 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                             <BarChart2 size={16} className="text-violet-400"/>
                             <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">Smart TBM Command Daily Report (Phase 4 Draft)</h3>
                         </div>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                onClick={handleCopyCommandReport}
+                                className={`px-3 py-2 rounded-lg text-[11px] font-bold border min-h-[40px] ${commandShareDone ? 'bg-violet-600 text-white border-violet-500' : 'bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border-violet-500/40'}`}
+                            >
+                                {commandShareDone ? '복사됨!' : '지휘 리포트 복사'}
+                            </button>
+                            <button
+                                onClick={handleCopyValidationLog}
+                                className={`px-3 py-2 rounded-lg text-[11px] font-bold border min-h-[40px] ${validationLogCopied ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/40'}`}
+                            >
+                                {validationLogCopied ? '복사됨!' : '검증 로그 1줄 복사'}
+                            </button>
+                            <button
+                                onClick={handleCopyPhaseClearSummary}
+                                className={`px-3 py-2 rounded-lg text-[11px] font-bold border min-h-[40px] ${phaseClearLogCopied ? 'bg-cyan-600 text-white border-cyan-500' : 'bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border-cyan-500/40'}`}
+                            >
+                                {phaseClearLogCopied ? '복사됨!' : '클리어 요약 1줄 복사'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="md:hidden mb-3 grid grid-cols-2 gap-2">
                         <button
-                            onClick={handleCopyCommandReport}
-                            className={`px-3 py-2 rounded-lg text-[11px] font-bold border min-h-[40px] ${commandShareDone ? 'bg-violet-600 text-white border-violet-500' : 'bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border-violet-500/40'}`}
+                            onClick={handleCopyValidationLog}
+                            className="px-3 py-3 rounded-xl text-[11px] font-bold border border-emerald-500/40 bg-emerald-600/20 text-emerald-300 min-h-[48px]"
                         >
-                            {commandShareDone ? '복사됨!' : '지휘 리포트 복사'}
+                            검증 로그 복사
+                        </button>
+                        <button
+                            onClick={handleCopyPhaseClearSummary}
+                            className="px-3 py-3 rounded-xl text-[11px] font-bold border border-cyan-500/40 bg-cyan-600/20 text-cyan-300 min-h-[48px]"
+                        >
+                            클리어 요약 복사
                         </button>
                     </div>
 
@@ -1563,6 +1670,35 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
                         </div>
                         <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandReport.statusHistoryValidationPassed ? 'border-emerald-500/40 bg-emerald-600/20 text-emerald-300' : 'border-amber-500/40 bg-amber-600/20 text-amber-300'}`}>
                             {commandReport.statusHistoryValidationPassed ? 'Phase3 이력검증 기준 충족(10건+)' : 'Phase3 이력검증 진행중(10건 미만)'}
+                        </span>
+                    </div>
+
+                    <div className="mt-3 rounded-xl border border-slate-700/60 bg-slate-900/60 p-3">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandValidationStatus.evaluatorReady ? 'border-cyan-500/40 bg-cyan-600/20 text-cyan-300' : 'border-slate-600 bg-slate-800 text-slate-300'}`}>
+                                평가자 관점 {commandValidationStatus.evaluatorReady ? '충족' : '대기'}
+                            </span>
+                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandValidationStatus.practitionerReady ? 'border-indigo-500/40 bg-indigo-600/20 text-indigo-300' : 'border-slate-600 bg-slate-800 text-slate-300'}`}>
+                                실무자 관점 {commandValidationStatus.practitionerReady ? '충족' : '대기'}
+                            </span>
+                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandValidationStatus.hasEvidence ? 'border-emerald-500/40 bg-emerald-600/20 text-emerald-300' : 'border-slate-600 bg-slate-800 text-slate-300'}`}>
+                                증빙 입력 {commandValidationStatus.hasEvidence ? '완료' : '대기'}
+                            </span>
+                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandValidationStatus.hasEvidenceImage ? 'border-emerald-500/40 bg-emerald-600/20 text-emerald-300' : 'border-slate-600 bg-slate-800 text-slate-300'}`}>
+                                증빙 이미지 {commandValidationStatus.hasEvidenceImage ? '완료' : '대기'}
+                            </span>
+                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandValidationStatus.hasDelayReason ? 'border-emerald-500/40 bg-emerald-600/20 text-emerald-300' : 'border-slate-600 bg-slate-800 text-slate-300'}`}>
+                                지연사유 입력 {commandValidationStatus.hasDelayReason ? '완료' : '대기'}
+                            </span>
+                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandValidationStatus.hasReportData ? 'border-emerald-500/40 bg-emerald-600/20 text-emerald-300' : 'border-slate-600 bg-slate-800 text-slate-300'}`}>
+                                리포트 데이터 {commandValidationStatus.hasReportData ? '확보' : '없음'}
+                            </span>
+                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandReportCopiedOnce ? 'border-emerald-500/40 bg-emerald-600/20 text-emerald-300' : 'border-slate-600 bg-slate-800 text-slate-300'}`}>
+                                리포트 복사 {commandReportCopiedOnce ? '완료' : '대기'}
+                            </span>
+                        </div>
+                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded border ${commandValidationStatus.isDone ? 'border-emerald-500/40 bg-emerald-600/20 text-emerald-300' : 'border-amber-500/40 bg-amber-600/20 text-amber-300'}`}>
+                            {commandValidationStatus.isDone ? 'Phase3/4 통합 검증 완료 조건 충족' : 'Phase3/4 통합 검증 진행중'}
                         </span>
                     </div>
 

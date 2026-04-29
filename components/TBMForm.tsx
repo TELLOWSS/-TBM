@@ -507,41 +507,42 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                         : (announceMessage || '')}
         </p>
         {/* Header */}
-        <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm shrink-0 z-50">
-           <div className="flex items-center gap-4">
+        <div className="min-h-16 bg-white border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between px-3 md:px-6 py-2 md:py-0 shadow-sm shrink-0 z-50 gap-2 md:gap-0">
+           <div className="flex items-center gap-3 md:gap-4 min-w-0 w-full md:w-auto">
               <button onClick={onCancel} className="text-slate-500 hover:text-slate-800 flex items-center gap-2 font-bold transition-colors">
                  <ArrowLeft size={20} />
                  <span>나가기</span>
               </button>
-              <div className="h-6 w-px bg-slate-200"></div>
-              <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
+              <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
+              <h1 className="text-sm md:text-xl font-black text-slate-800 flex items-center gap-2 truncate">
                  {mode === 'BATCH' ? <Layers className="text-indigo-600" size={24}/> : <FileText className="text-emerald-600" size={24}/>}
-                 <span>{mode === 'BATCH' ? '대량 일괄 등록 (Batch Mode)' : '스마트 TBM 지휘 및 등록'}</span>
+                 <span className="truncate">{mode === 'BATCH' ? '대량 일괄 등록 (Batch Mode)' : '스마트 TBM 지휘 및 등록'}</span>
               </h1>
            </div>
-           <div className="flex items-center gap-3">
+           <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
               {initialData && onDelete && (
-                  <button onClick={() => onDelete(String(initialData.id))} className="bg-white border border-red-200 text-red-500 px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-50 transition-colors flex items-center gap-2">
+                  <button onClick={() => onDelete(String(initialData.id))} className="bg-white border border-red-200 text-red-500 px-3 md:px-4 py-2 rounded-xl text-xs md:text-sm font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2 min-h-[40px]">
                       <Trash2 size={18} /> 삭제
                   </button>
               )}
-              <button onClick={handleSaveAll} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 shadow-lg flex items-center gap-2 transition-transform hover:scale-105">
+              <button onClick={handleSaveAll} className="flex-1 md:flex-none bg-slate-900 text-white px-4 md:px-6 py-2.5 rounded-xl text-xs md:text-sm font-bold hover:bg-slate-800 shadow-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 min-h-[42px]">
                   <Save size={18}/> {queue.length > 1 ? `전체 저장 완료 (${queue.length}건)` : '작성 완료'}
               </button>
            </div>
         </div>
 
         {/* Body Layout */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden flex-col lg:flex-row">
             {/* 1. Left Sidebar: Queue / List */}
-            <div className="w-72 bg-white border-r border-slate-200 flex flex-col shrink-0 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+            <div className="w-full lg:w-72 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col shrink-0 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
                 <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                     <h3 className="font-bold text-sm text-slate-600 uppercase tracking-wider flex items-center gap-2">
                         <Layers size={14}/> 대기열 (Queue)
                     </h3>
                     <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-[10px] font-black">{queue.length}</span>
                 </div>
-                <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+                <div className="overflow-x-auto lg:overflow-y-auto p-3 custom-scrollbar">
+                    <div className="flex lg:block gap-3 lg:space-y-3 min-w-max lg:min-w-0">
                     {queue.map((item, idx) => (
                         <div 
                             key={item.tempId}
@@ -555,7 +556,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                             role="button"
                             tabIndex={0}
                             aria-label={`${item.teamName || `항목 ${idx + 1}`} 선택`}
-                            className={`p-3 rounded-2xl cursor-pointer border-2 transition-all flex gap-3 items-center group relative ${activeId === item.tempId ? 'bg-indigo-50 border-indigo-500 shadow-md ring-2 ring-indigo-100' : 'bg-white border-transparent hover:border-slate-200 hover:bg-slate-50'}`}
+                            className={`min-w-[220px] lg:min-w-0 p-3 rounded-2xl cursor-pointer border-2 transition-all flex gap-3 items-center group relative ${activeId === item.tempId ? 'bg-indigo-50 border-indigo-500 shadow-md ring-2 ring-indigo-100' : 'bg-white border-transparent hover:border-slate-200 hover:bg-slate-50'}`}
                         >
                             <div className="w-12 h-12 rounded-xl bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center border border-slate-300">
                                 {item.originalLogPreview ? <img src={item.originalLogPreview} className="w-full h-full object-cover"/> : <FileText size={20} className="text-slate-400"/>}
@@ -592,14 +593,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                         <span className="text-xs font-bold">사진 추가 / 새 항목</span>
                     </div>
                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" multiple onChange={handleSidebarUpload}/>
+                    </div>
                 </div>
             </div>
 
             {/* 2. Main Work Area - Split View */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden flex-col xl:flex-row">
                 
                 {/* LEFT: Media Command Center */}
-                <div className="w-1/2 h-full flex flex-col border-r border-slate-200 bg-slate-100/80 overflow-y-auto custom-scrollbar">
+                <div className="w-full xl:w-1/2 h-auto xl:h-full flex flex-col xl:border-r border-slate-200 bg-slate-100/80 overflow-y-auto custom-scrollbar">
                     <div className="p-4 sticky top-0 bg-slate-100/90 backdrop-blur z-20 border-b border-slate-200">
                         <h3 className="font-black text-slate-700 flex items-center gap-2"><ImageIcon size={18}/> 미디어 증빙 센터 (Assets)</h3>
                     </div>
@@ -748,7 +750,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                     </div>
                                     
                                     {/* [UPDATED] Score Gauges (Sliders with Colors) */}
-                                    <div className="grid grid-cols-2 gap-3 mb-4 bg-white p-3 rounded-xl border border-indigo-100">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 bg-white p-3 rounded-xl border border-indigo-100">
                                         {[
                                             { key: 'logQuality', label: '일지 충실도', max: 30, icon: <FileText size={12}/>, color: 'accent-indigo-600', text: 'text-indigo-600' },
                                             { key: 'focus', label: '작업자 집중도', max: 30, icon: <Eye size={12}/>, color: 'accent-emerald-600', text: 'text-emerald-600' },
@@ -833,7 +835,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                 </div>
 
                 {/* RIGHT: Form Data (Scrollable) */}
-                <div className="w-1/2 h-full overflow-y-auto bg-white custom-scrollbar">
+                <div className="w-full xl:w-1/2 h-auto xl:h-full overflow-y-auto bg-white custom-scrollbar">
                     <div className="p-4 bg-slate-50 border-b border-slate-200 sticky top-0 z-10 flex items-center gap-2">
                         <FileText size={18} className="text-slate-500"/>
                         <h3 className="font-black text-slate-700">입력 데이터 (Data Entry)</h3>
@@ -841,7 +843,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                     
                     <div className="p-6 md:p-8 space-y-8 max-w-2xl mx-auto">
                         {/* Form Fields */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1">
                                 <label className="text-xs font-bold text-slate-500">작업 일자</label>
                                 <input type="date" value={entryDate} onChange={(e) => handleDateChange(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"/>
@@ -954,6 +956,21 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div className="fixed bottom-0 left-0 right-0 md:hidden z-[10000] border-t border-slate-200 bg-white/95 backdrop-blur px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
+            <div className="flex items-center gap-2">
+                <button onClick={onCancel} className="px-3 py-3 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold min-h-[48px] whitespace-nowrap">
+                    나가기
+                </button>
+                <div className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-slate-100">
+                    <p className="text-[10px] font-bold text-slate-500">현재 입력</p>
+                    <p className="text-xs font-black text-slate-800 truncate">{teams.find(t => t.id === teamId)?.name || '팀 미선택'} · {leaderName || '팀장 미입력'}</p>
+                </div>
+                <button onClick={handleSaveAll} className="px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-black min-h-[48px] whitespace-nowrap shadow-lg">
+                    {queue.length > 1 ? `전체 저장 ${queue.length}건` : '작성 완료'}
+                </button>
             </div>
         </div>
     </div>,
