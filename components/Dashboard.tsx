@@ -724,7 +724,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ entries, siteName, normali
                                     {selectedIssueTeam && (
                                         <button
                                             onClick={() => setSelectedIssueTeam(null)}
-                                            className="text-[10px] font-bold text-slate-500 px-3 py-2 min-h-[40px] rounded border border-slate-200 bg-white hover:border-slate-300"
+                                            className="text-[10px] font-bold text-slate-500 px-3 py-2 min-h-[44px] rounded border border-slate-200 bg-white hover:border-slate-300"
                                         >
                                             전체 보기
                                         </button>

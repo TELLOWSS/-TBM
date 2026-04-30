@@ -959,11 +959,11 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
            </div>
            <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
               {initialData && onDelete && (
-                  <button onClick={() => onDelete(String(initialData.id))} className="bg-white border border-red-200 text-red-500 px-3 md:px-4 py-2 rounded-xl text-xs md:text-sm font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2 min-h-[40px]">
+                  <button onClick={() => onDelete(String(initialData.id))} className="bg-white border border-red-200 text-red-500 px-3 md:px-4 py-2 rounded-xl text-xs md:text-sm font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
                       <Trash2 size={18} /> 삭제
                   </button>
               )}
-              <button onClick={handleSaveAll} className="flex-1 md:flex-none bg-slate-900 text-white px-4 md:px-6 py-2.5 rounded-xl text-xs md:text-sm font-bold hover:bg-slate-800 shadow-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 min-h-[42px]">
+              <button onClick={handleSaveAll} className="flex-1 md:flex-none bg-slate-900 text-white px-4 md:px-6 py-2.5 rounded-xl text-xs md:text-sm font-bold hover:bg-slate-800 shadow-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 min-h-[44px]">
                   <Save size={18}/> {queue.length > 1 ? `전체 저장 완료 (${queue.length}건)` : '작성 완료'}
               </button>
            </div>
@@ -1305,20 +1305,21 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                     <div className="space-y-3">
                                         {/* Editable Evaluation Fields */}
                                         {[
-                                            { key: 'evalLog', label: '일지 작성 평가', icon: <FileText size={12}/> },
-                                            { key: 'evalAttendance', label: '참석 및 참여도 평가', icon: <Users size={12}/> },
-                                            { key: 'evalFocus', label: '작업자 집중도 평가', icon: <Eye size={12}/> },
-                                            { key: 'evalLeader', label: '주관자(팀장) 리딩 평가', icon: <Mic size={12}/> },
+                                            { key: 'evalLog',        label: '일지 작성 평가',       icon: <FileText size={12}/>, num: '①' },
+                                            { key: 'evalAttendance', label: '참석 및 참여도 평가',   icon: <Users size={12}/>,    num: '②' },
+                                            { key: 'evalFocus',      label: '작업자 집중도 평가',   icon: <Eye size={12}/>,      num: '③' },
+                                            { key: 'evalLeader',     label: '주관자(팀장) 리딩 평가', icon: <Mic size={12}/>,    num: '④' },
                                         ].map((field) => (
                                             <div key={field.key} className="space-y-1">
-                                                <label className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                                                <label className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
+                                                    <span className="text-indigo-600 font-black">{field.num}</span>
                                                     {field.icon} {field.label}
                                                 </label>
                                                 <div className="relative group">
                                                     <textarea 
                                                         value={(videoAnalysis as any)[field.key] || ''}
                                                         onChange={(e) => handleAnalysisChange(field.key as any, e.target.value)}
-                                                        className="w-full text-xs font-medium text-slate-700 bg-white border border-indigo-100 rounded-lg p-2 focus:ring-2 focus:ring-indigo-300 outline-none resize-none h-16 shadow-sm transition-all"
+                                                        className="w-full text-xs font-medium text-slate-700 bg-white border border-indigo-100 rounded-lg p-2 focus:ring-2 focus:ring-indigo-300 outline-none resize-y min-h-[64px] shadow-sm transition-all"
                                                     />
                                                     <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
                                                         <Edit3 size={12} className="text-slate-400"/>

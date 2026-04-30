@@ -859,6 +859,23 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                 ))}
                                             </div>
 
+                                            {/* [NEW] 4-Point Text Evaluations */}
+                                            {(entry.videoAnalysis.evalLog || entry.videoAnalysis.evalAttendance || entry.videoAnalysis.evalFocus || entry.videoAnalysis.evalLeader) && (
+                                                <div className="grid grid-cols-2 gap-1 mb-1 text-[9px]">
+                                                    {[
+                                                        { label: '일지 작성', value: entry.videoAnalysis.evalLog },
+                                                        { label: '참석/참여도', value: entry.videoAnalysis.evalAttendance },
+                                                        { label: '작업자 집중', value: entry.videoAnalysis.evalFocus },
+                                                        { label: '팀장 리딩', value: entry.videoAnalysis.evalLeader },
+                                                    ].filter(f => !!f.value).map((f, i) => (
+                                                        <div key={i} className="bg-white border border-slate-100 rounded px-1.5 py-1 overflow-hidden">
+                                                            <span className="font-black text-indigo-700 block mb-0.5">{f.label}</span>
+                                                            <span className="text-slate-700 leading-tight line-clamp-2 break-keep">{f.value}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
                                             {/* [NEW] Leader Coaching (Reading to Leading) */}
                                             {entry.videoAnalysis.leaderCoaching && (
                                                 <div className="bg-indigo-50 border border-indigo-200 rounded p-2 mb-1">

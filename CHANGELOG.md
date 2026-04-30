@@ -24,6 +24,22 @@
   - `analyzeMasterLog`: `safeMimeType` 변수로 Gemini 미지원 MIME → `image/jpeg` 자동 폴백
   - `extractMonthlyPriorities`: PDF/이미지 MIME 정규화 동일 적용
 
+### ✅ 모바일 터치 타겟 44px 통일 + 채점 텍스트영역 리사이즈 허용
+- `components/Dashboard.tsx` — 팀별 보정 우선순위 "전체 보기" 버튼 `min-h-[40px]` → `min-h-[44px]`
+- `components/TBMForm.tsx`
+  - 삭제 버튼 `min-h-[40px]` → `min-h-[44px]`
+  - 작성 완료/전체 저장 버튼 `min-h-[42px]` → `min-h-[44px]`
+  - 4가지 채점 텍스트영역 `resize-none h-16` → `resize-y min-h-[64px]` (수직 리사이즈 허용)
+- `components/RiskAssessmentManager.tsx` — 전체/상위험만 필터 버튼 `min-h-[40px]` → `min-h-[44px]`
+
+### ✅ 동영상 채점 폼 UX 개선 + 출력 보고서 평가 텍스트 추가
+- `components/TBMForm.tsx`
+  - 4가지 채점 항목 라벨에 번호(①②③④) 추가 → 평가자 가독성 향상
+- `components/ReportView.tsx`
+  - `AI 심층 정밀 진단` 섹션에 evalLog/evalAttendance/evalFocus/evalLeader 텍스트 평가 블록 추가
+  - 루브릭 게이지 바 아래 2×2 카드 형태로 항목별 평가 텍스트 표시 (`line-clamp-2` 적용)
+  - 4가지 텍스트가 모두 비어 있으면 블록 미표시 (빈 화면 방지)
+
 ---
 
 ## 2026-04-29

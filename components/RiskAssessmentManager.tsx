@@ -1285,14 +1285,14 @@ export const RiskAssessmentManager: React.FC<RiskAssessmentManagerProps> = ({ as
                                         <button
                                             type="button"
                                             onClick={() => setMobileListFilter('ALL')}
-                                            className={`px-3 py-2 rounded-lg text-[11px] font-black border transition-colors min-h-[40px] ${mobileListFilter === 'ALL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200'}`}
+                                            className={`px-3 py-2 rounded-lg text-[11px] font-black border transition-colors min-h-[44px] ${mobileListFilter === 'ALL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200'}`}
                                         >
                                             전체
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setMobileListFilter('HIGH')}
-                                            className={`px-3 py-2 rounded-lg text-[11px] font-black border transition-colors min-h-[40px] ${mobileListFilter === 'HIGH' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-500 border-slate-200'}`}
+                                            className={`px-3 py-2 rounded-lg text-[11px] font-black border transition-colors min-h-[44px] ${mobileListFilter === 'HIGH' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-500 border-slate-200'}`}
                                         >
                                             상위험만
                                         </button>

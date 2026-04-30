@@ -1268,9 +1268,10 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     };
 
     const handleCopyValidationLog = () => {
+        const todayStr = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\. /g, '-').replace('.', '');
         const line = commandValidationStatus.isDone
-            ? `2026-04-29 | 스마트TBM지휘 검증 | Phase3/4 통합 검증 완료 | Done | 상태이력 ${commandReport.totalStatusTransitions}건, 증빙/지연사유 반영, 지휘리포트 복사 정상`
-            : `2026-04-29 | 스마트TBM지휘 검증 | Phase3/4 통합 검증 진행중 | In Progress | 상태이력 ${commandReport.totalStatusTransitions}건, 증빙:${commandValidationStatus.hasEvidence ? 'Y' : 'N'}, 지연사유:${commandValidationStatus.hasDelayReason ? 'Y' : 'N'}`;
+            ? `${todayStr} | 스마트TBM지휘 검증 | Phase3/4 통합 검증 완료 | Done | 상태이력 ${commandReport.totalStatusTransitions}건, 증빙/지연사유 반영, 지휘리포트 복사 정상`
+            : `${todayStr} | 스마트TBM지휘 검증 | Phase3/4 통합 검증 진행중 | In Progress | 상태이력 ${commandReport.totalStatusTransitions}건, 증빙:${commandValidationStatus.hasEvidence ? 'Y' : 'N'}, 지연사유:${commandValidationStatus.hasDelayReason ? 'Y' : 'N'}`;
 
         navigator.clipboard.writeText(line).then(() => {
             setValidationLogCopied(true);
@@ -1280,9 +1281,10 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     };
 
     const handleCopyPhaseClearSummary = () => {
+        const todayStr = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\. /g, '-').replace('.', '');
         const line = commandValidationStatus.isDone
-            ? `2026-04-29 | 스마트TBM지휘 Clear | Command Phase3/4 Clear 후보 | Done | Phase3/4 체크리스트 자동판정 충족`
-            : `2026-04-29 | 스마트TBM지휘 Clear | Command Phase3/4 Clear 후보 점검 | In Progress | P3:${commandValidationStatus.phase3Ready ? 'Y' : 'N'}, P4:${commandValidationStatus.phase4Ready ? 'Y' : 'N'}`;
+            ? `${todayStr} | 스마트TBM지휘 Clear | Command Phase3/4 Clear 후보 | Done | Phase3/4 체크리스트 자동판정 충족`
+            : `${todayStr} | 스마트TBM지휘 Clear | Command Phase3/4 Clear 후보 점검 | In Progress | P3:${commandValidationStatus.phase3Ready ? 'Y' : 'N'}, P4:${commandValidationStatus.phase4Ready ? 'Y' : 'N'}`;
 
         navigator.clipboard.writeText(line).then(() => {
             setPhaseClearLogCopied(true);
