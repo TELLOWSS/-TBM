@@ -47,6 +47,59 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
+// [RELIABILITY FIX] iOS HEIC/HEIF 및 비표준 이미지를 Gemini 지원 포맷(JPEG)으로 정규화
+const normalizeImageToJpeg = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                // 최대 해상도 제한 (4096px) — Gemini 안정 처리 범위
+                const MAX = 4096;
+                let w = img.naturalWidth;
+                let h = img.naturalHeight;
+                if (w > MAX || h > MAX) {
+                    const ratio = Math.min(MAX / w, MAX / h);
+                    w = Math.round(w * ratio);
+                    h = Math.round(h * ratio);
+                }
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Canvas context unavailable');
+                ctx.drawImage(img, 0, 0, w, h);
+                URL.revokeObjectURL(objectUrl);
+                resolve(canvas.toDataURL('image/jpeg', 0.92));
+            } catch (err) {
+                URL.revokeObjectURL(objectUrl);
+                reject(err);
+            }
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('이미지를 불러올 수 없습니다. 파일이 손상되었거나 지원하지 않는 형식일 수 있습니다.'));
+        };
+        img.src = objectUrl;
+    });
+};
+
+// [RELIABILITY FIX] API 키 사전 점검 — AI 기능 호출 전 공통 가드
+const checkApiKeyOrThrow = () => {
+    try {
+        const sessionKey = sessionStorage.getItem('tbm_session_api_key');
+        const storedConfig = localStorage.getItem('siteConfig');
+        const legacyKey = storedConfig ? (() => { try { return JSON.parse(storedConfig)?.userApiKey; } catch { return null; } })() : null;
+        const devProxy = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (!devProxy && !sessionKey?.trim() && !legacyKey?.trim()) {
+            throw new Error('API_KEY_MISSING');
+        }
+    } catch (e: any) {
+        if (e.message === 'API_KEY_MISSING') throw e;
+        // sessionStorage 접근 실패는 무시
+    }
+};
+
 export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuidelines, riskAssessments, linkedRiskAssessment, initialData, onDelete, teams, mode = 'ROUTINE' }) => {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -82,6 +135,9 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
         const [videoAnalysisEtaSec, setVideoAnalysisEtaSec] = useState<number | null>(null);
         const [videoEstimatedTotalSec, setVideoEstimatedTotalSec] = useState<number | null>(null);
   const [isDocAnalyzing, setIsDocAnalyzing] = useState(false);
+  // [RELIABILITY FIX] 화면에 보이는 오류/상태 토스트 배너 (기존 sr-only announceMessage 대체)
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const toastTimerRef = React.useRef<number | null>(null);
 
   const [editingFeedbackIndex, setEditingFeedbackIndex] = useState<number | null>(null);
   const [tempFeedbackText, setTempFeedbackText] = useState("");
@@ -206,11 +262,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       return Math.round(base * sizeFactor);
   };
 
-  const announceStatus = (message: string) => {
+  const announceStatus = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+      // 화면에 보이는 토스트로 표시 (기존 sr-only 병행 유지)
       setAnnounceMessage('');
       requestAnimationFrame(() => {
           setAnnounceMessage(message);
       });
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      setToastMessage({ text: message, type });
+      toastTimerRef.current = window.setTimeout(() => setToastMessage(null), type === 'error' ? 8000 : 4000);
   };
 
   const logInputRef = useRef<HTMLInputElement>(null);
@@ -440,11 +500,17 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           const file = e.target.files[0];
           // [FIX] 이미지 파일 크기 제한 — 10MB 초과 시 IndexedDB OOM 방지
           if (file.size > 10 * 1024 * 1024) {
-              announceStatus('이미지 파일이 너무 큽니다. 최대 10MB까지 업로드할 수 있습니다.');
+              announceStatus('이미지 파일이 너무 큽니다. 최대 10MB까지 업로드할 수 있습니다.', 'error');
               e.target.value = '';
               return;
           }
-          const preview = await blobToBase64(file);
+          // [RELIABILITY FIX] HEIC/HEIF/비표준 → JPEG 정규화 후 Gemini 전송 보장
+          let preview: string;
+          try {
+              preview = await normalizeImageToJpeg(file);
+          } catch {
+              preview = await blobToBase64(file);
+          }
           setOriginalLogPreview(preview);
           updateActiveItem({ originalLogFile: file, originalLogPreview: preview, originalLogImageUrl: preview });
       }
@@ -456,11 +522,16 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           const file = e.target.files[0];
           // [FIX] 이미지 파일 크기 제한 — 10MB 초과 시 IndexedDB OOM 방지
           if (file.size > 10 * 1024 * 1024) {
-              announceStatus('이미지 파일이 너무 큽니다. 최대 10MB까지 업로드할 수 있습니다.');
+              announceStatus('이미지 파일이 너무 큽니다. 최대 10MB까지 업로드할 수 있습니다.', 'error');
               e.target.value = '';
               return;
           }
-          const preview = await blobToBase64(file);
+          let preview: string;
+          try {
+              preview = await normalizeImageToJpeg(file);
+          } catch {
+              preview = await blobToBase64(file);
+          }
           setTbmPhotoPreview(preview);
           updateActiveItem({ tbmPhotoFile: file, tbmPhotoPreview: preview, tbmPhotoUrl: preview });
       }
@@ -613,14 +684,22 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
 
   const handleAnalyzeDocument = async () => {
     if (!originalLogPreview) {
-                announceStatus('분석할 수기 일지 사진이 없습니다.');
+        announceStatus('분석할 수기 일지 사진이 없습니다.', 'error');
+        return;
+    }
+    // [RELIABILITY FIX] API 키 사전 점검
+    try { checkApiKeyOrThrow(); } catch {
+        announceStatus('AI 분석을 사용하려면 [설정]에서 Gemini API 키를 먼저 등록해주세요.', 'error');
         return;
     }
     
     setIsDocAnalyzing(true);
     try {
+        // [RELIABILITY FIX] DataURL에서 MIME 추출 + 지원 형식 강제 정규화
+        const rawMime = originalLogPreview.split(';')[0].split(':')[1] || '';
+        const SUPPORTED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        const mimeType = SUPPORTED_MIMES.includes(rawMime) ? rawMime : 'image/jpeg';
         const base64Data = originalLogPreview.split(',')[1];
-        const mimeType = originalLogPreview.split(';')[0].split(':')[1];
 
         const results = await analyzeMasterLog(base64Data, mimeType, effectiveGuidelines, 'ROUTINE');
         
@@ -659,14 +738,24 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                 safetyFeedback: data.safetyFeedback
             });
 
-            announceStatus('수기 일지 내용이 자동으로 입력되었습니다.');
+            announceStatus('수기 일지 내용이 자동으로 입력되었습니다.', 'success');
         } else {
-            announceStatus('텍스트를 인식하지 못했습니다. 사진을 확인해주세요.');
+            announceStatus('텍스트를 인식하지 못했습니다. 사진이 선명한지 확인하고 다시 시도해주세요.', 'error');
         }
     } catch (e: any) {
-        console.error(e);
-        const msg = e.message || '';
-        announceStatus(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : '분석 중 오류가 발생했습니다.');
+        console.error('[OCR Error]', e);
+        const msg = (e.message || '') as string;
+        let userMsg = '';
+        if (msg.includes('API_KEY_MISSING') || msg.includes('API Key가 설정되지')) {
+            userMsg = '설정에서 Gemini API 키를 등록해주세요.';
+        } else if (msg.includes('429') || msg.includes('Quota') || msg.includes('제한') || msg.includes('Resource')) {
+            userMsg = 'AI 사용량 초과입니다. 잠시 후 다시 시도하거나 개인 API 키를 설정하세요.';
+        } else if (msg.includes('network') || msg.includes('fetch') || msg.includes('Failed to fetch')) {
+            userMsg = '네트워크 연결을 확인해주세요.';
+        } else {
+            userMsg = `분석 실패: ${msg.slice(0, 80) || '알 수 없는 오류'}`;
+        }
+        announceStatus(userMsg, 'error');
     } finally {
         setIsDocAnalyzing(false);
     }
@@ -690,9 +779,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
             announceStatus('생성된 코멘트가 없습니다. 작업 내용을 더 자세히 입력해보세요.');
         }
     } catch (e: any) {
-        console.error(e);
-        const msg = e.message || '';
-        announceStatus(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : 'AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        console.error('[Feedback Generation Error]', e);
+        const msg = (e.message || '') as string;
+        if (msg.includes('API_KEY_MISSING') || msg.includes('API Key가 설정되지')) {
+            announceStatus('설정에서 Gemini API 키를 등록해주세요.', 'error');
+        } else if (msg.includes('429') || msg.includes('Quota') || msg.includes('제한')) {
+            announceStatus('AI 사용량 초과입니다. 잠시 후 다시 시도하세요.', 'error');
+        } else {
+            announceStatus(`코멘트 생성 실패: ${msg.slice(0, 60) || '알 수 없는 오류'}`, 'error');
+        }
     } finally {
         setIsFeedbackGenerating(false);
     }
@@ -760,7 +855,13 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
         const msg = e.message || '';
         setVideoUploadState('ERROR');
         setVideoUploadMessage('AI 분석 실패. 네트워크/파일 상태를 확인해주세요.');
-        announceStatus(msg.includes('429') || msg.includes('Quota') || msg.includes('제한') ? msg : 'AI 분석에 실패했습니다.');
+        if (msg.includes('API_KEY_MISSING') || msg.includes('API Key가 설정되지')) {
+            announceStatus('설정에서 Gemini API 키를 등록해주세요.', 'error');
+        } else if (msg.includes('429') || msg.includes('Quota') || msg.includes('제한')) {
+            announceStatus('AI 사용량 초과입니다. 잠시 후 다시 시도하세요.', 'error');
+        } else {
+            announceStatus(`영상 분석 실패: ${msg.slice(0, 60) || '알 수 없는 오류'}`, 'error');
+        }
     } finally {
         setIsVideoAnalyzing(false);
         setVideoAnalysisStartedAt(null);
@@ -822,6 +923,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-[#F8FAFC] flex flex-col animate-fade-in text-slate-800 font-sans">
+        {/* 접근성용 sr-only 유지 */}
         <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
             {isDocAnalyzing
                 ? '수기 일지 내용을 분석 중입니다.'
@@ -831,6 +933,17 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                         ? '안전 코멘트를 생성 중입니다.'
                         : (announceMessage || '')}
         </p>
+        {/* [RELIABILITY FIX] 화면에 보이는 토스트 배너 — 모든 AI 작업 결과/오류를 표시 */}
+        {toastMessage && (
+            <div className={`fixed top-0 left-0 right-0 z-[10001] flex items-start justify-between gap-3 px-4 py-3 shadow-xl border-b text-sm font-bold animate-fade-in ${
+                toastMessage.type === 'error' ? 'bg-red-600 text-white border-red-700' :
+                toastMessage.type === 'success' ? 'bg-emerald-600 text-white border-emerald-700' :
+                'bg-indigo-600 text-white border-indigo-700'
+            }`}>
+                <span className="flex-1 leading-snug">{toastMessage.text}</span>
+                <button type="button" onClick={() => setToastMessage(null)} className="shrink-0 opacity-80 hover:opacity-100 ml-2 text-white font-black text-base leading-none">✕</button>
+            </div>
+        )}
         {/* Header */}
         <div className="min-h-16 bg-white border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between px-3 md:px-6 py-2 md:py-0 shadow-sm shrink-0 z-50 gap-2 md:gap-0">
            <div className="flex items-center gap-3 md:gap-4 min-w-0 w-full md:w-auto">

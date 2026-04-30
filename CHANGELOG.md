@@ -2,6 +2,30 @@
 
 이 문서는 프로젝트의 주요 변경 사항을 날짜 기준으로 관리합니다.
 
+## 2026-04-30
+
+### ✅ 모바일 3대 회귀 이슈 수정 (동영상 재생·채점·위험성평가 등록)
+- `components/TBMForm.tsx`
+  - 동영상 업로드 시 큐 아이템에 `tbmVideoFile`, `tbmVideoPreview`, `videoAnalysis` 동시 저장해 탭 전환 후 상태 소실 방지
+  - `<video>` 태그에 `playsInline preload="metadata"` 추가 → 모바일 인라인 재생 허용
+- `components/RiskAssessmentManager.tsx`
+  - `fileInputRef` 선택 시 JSON 파일을 감지해 복구 경로로 자동 분기
+  - 등록 파일 MIME 정규화 (`normalizedMime`) 후 Gemini 전달
+  - `accept` 속성에 `.json,application/json` 추가로 iOS/Android 탐색기 노출 보장
+
+### ✅ 수기 일지 OCR 분석 복구 + 신뢰성 구조 개선
+- `components/TBMForm.tsx`
+  - **근본 원인 제거**: `announceStatus`가 `sr-only` 전용이라 모든 AI 오류가 화면에 표시되지 않던 문제 → 화면 최상단 **토스트 배너** (`toastMessage` state)로 교체
+  - **HEIC/HEIF 자동 변환**: iOS 카메라 HEIC 사진을 `normalizeImageToJpeg()` 캔버스 함수로 JPEG 변환 후 전송 (4096px 최대 해상도 제한 포함)
+  - **API 키 사전 점검**: `checkApiKeyOrThrow()` → 키 미설정 시 분석 버튼 클릭 즉시 명확한 안내 메시지 표시
+  - **구체 오류 메시지**: API_KEY_MISSING / 429(사용량 초과) / network 오류를 각각 구분해 한글로 표시
+  - 오류 시 토스트 8초, 성공·정보는 4초 자동 소멸 + ✕ 수동 닫기
+- `services/geminiService.ts`
+  - `analyzeMasterLog`: `safeMimeType` 변수로 Gemini 미지원 MIME → `image/jpeg` 자동 폴백
+  - `extractMonthlyPriorities`: PDF/이미지 MIME 정규화 동일 적용
+
+---
+
 ## 2026-04-29
 
 ### ✅ TBM 동영상 관리자 직접 채점 기능 추가

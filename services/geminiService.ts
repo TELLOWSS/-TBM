@@ -581,6 +581,9 @@ export const extractMonthlyPriorities = async (
   mimeType: string,
   type: 'INITIAL' | 'MONTHLY' = 'MONTHLY'
 ): Promise<MonthlyExtractionResult> => {
+  // [RELIABILITY FIX] Gemini 지원 MIME 정규화 — PDF 허용, 이미지는 표준 타입만
+  const GEMINI_DOC_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  const safeMimeType = GEMINI_DOC_MIMES.includes(mimeType) ? mimeType : 'image/jpeg';
   try {
     const ai = getAiClient();
     const prompt = `
@@ -601,7 +604,7 @@ export const extractMonthlyPriorities = async (
     `;
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: GEMINI_MODEL,
-        contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: base64Data } }, { text: prompt }] }],
+        contents: [{ role: 'user', parts: [{ inlineData: { mimeType: safeMimeType, data: base64Data } }, { text: prompt }] }],
         config: {
             temperature: 0.1,
             responseMimeType: "application/json",
@@ -651,6 +654,9 @@ export const analyzeMasterLog = async (
     monthlyGuidelines: SafetyGuideline[] = [],
     mode: 'BATCH' | 'ROUTINE' = 'BATCH' 
   ): Promise<ExtractedTBMData[]> => {
+    // [RELIABILITY FIX] Gemini 미지원 MIME 유형 자동 정규화
+    const GEMINI_SUPPORTED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const safeMimeType = GEMINI_SUPPORTED_IMAGE_MIMES.includes(mimeType) ? mimeType : 'image/jpeg';
     try {
       const ai = getAiClient();
       let promptContext = "";
@@ -696,7 +702,7 @@ export const analyzeMasterLog = async (
   
       const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: GEMINI_MODEL,
-        contents: [{ role: "user", parts: [{ inlineData: { mimeType: mimeType, data: base64Data } }, { text: prompt }] }],
+        contents: [{ role: "user", parts: [{ inlineData: { mimeType: safeMimeType, data: base64Data } }, { text: prompt }] }],
         config: {
           temperature: 0.0,
           responseMimeType: "application/json",
