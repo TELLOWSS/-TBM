@@ -17,6 +17,11 @@ export interface MonthlyExtractionResult {
 
 const GEMINI_MODEL = 'gemini-2.5-flash';
 
+export interface GeminiConnectionValidationResult {
+  success: boolean;
+  message: string;
+}
+
 // [UPDATED] Smart API Key Resolution Strategy
 const getApiKey = () => {
   try {
@@ -117,10 +122,12 @@ const getAiClient = () => {
 };
 
 // [NEW] Validate Connection Function (Used in Settings)
-export const validateGeminiConnection = async (apiKey: string): Promise<boolean> => {
-    if (!apiKey) return false;
+export const validateGeminiConnection = async (apiKey: string): Promise<GeminiConnectionValidationResult> => {
+    if (!apiKey) return { success: false, message: 'API 키가 비어 있습니다.' };
     const cleanKey = apiKey.trim();
-    if (!cleanKey.startsWith('AIza')) return false;
+    if (!cleanKey.startsWith('AIza')) {
+      return { success: false, message: "API 키 형식이 올바르지 않습니다. ('AIza'로 시작 필요)" };
+    }
 
     try {
         // [FIX] Wrap constructor in try-catch to safely handle errors
@@ -129,18 +136,44 @@ export const validateGeminiConnection = async (apiKey: string): Promise<boolean>
             testClient = new GoogleGenAI({ apiKey: cleanKey });
         } catch (e) {
             console.error("GoogleGenAI Constructor Error in Validation:", e);
-            return false;
+            return { success: false, message: 'AI 클라이언트 초기화에 실패했습니다.' };
         }
 
-        const response = await testClient.models.generateContent({
-      model: GEMINI_MODEL,
+        const response = await promiseWithTimeout(
+          testClient.models.generateContent({
+            model: GEMINI_MODEL,
             contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
-        });
+          }),
+          12000,
+          '연결 확인 시간이 초과되었습니다. 네트워크 상태를 확인해주세요.'
+        );
         
-        return !!response; // Success if no error thrown
-    } catch (e) {
+        if (!response) {
+          return { success: false, message: '응답이 비어 있습니다. 잠시 후 다시 시도해주세요.' };
+        }
+
+        return { success: true, message: '연결 성공: 유효한 API 키입니다.' };
+    } catch (e: any) {
         console.error("Connection Test Failed:", e);
-        return false;
+
+        const status = e?.status || e?.code || e?.error?.code || 0;
+        const rawMessage = String(e?.message || e?.error?.message || '');
+        const lowerMessage = rawMessage.toLowerCase();
+
+        if (status === 400 || lowerMessage.includes('api key not valid') || lowerMessage.includes('invalid api key')) {
+          return { success: false, message: '연결 실패: API 키가 유효하지 않습니다.' };
+        }
+        if (status === 403 || lowerMessage.includes('permission') || lowerMessage.includes('forbidden')) {
+          return { success: false, message: '연결 실패: API 키 권한/리퍼러 설정을 확인해주세요.' };
+        }
+        if (status === 429 || lowerMessage.includes('resource_exhausted') || lowerMessage.includes('quota')) {
+          return { success: false, message: '연결 실패: 사용량 한도(429) 초과입니다.' };
+        }
+        if (lowerMessage.includes('timeout') || lowerMessage.includes('초과')) {
+          return { success: false, message: '연결 실패: 요청 시간이 초과되었습니다.' };
+        }
+
+        return { success: false, message: '연결 실패: 네트워크 또는 키 설정을 확인해주세요.' };
     }
 };
 
