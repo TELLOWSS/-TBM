@@ -248,3 +248,9 @@ export interface TeamNormalizationRequest {
   reviewedAt?: number;
   reviewedBy?: string;
 }
+
+export interface AppActivityLog {
+  id: string;
+  timestamp: number;
+  message: string;
+}

@@ -2,9 +2,11 @@
 import React, { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Rocket, Shield, BrainCircuit, LayoutDashboard, FileText, Video, Sparkles, History, GitCommit, Zap, Minimize2, Edit2, ListOrdered, Save, FileVideo, Presentation, CalendarRange, FolderInput, GraduationCap, Lock, Database, Compass, TrendingUp, Grid, Layers, Monitor, HardDrive } from 'lucide-react';
+import { AppActivityLog } from '../types';
 
 interface HistoryModalProps {
   onClose: () => void;
+  recentActivities?: AppActivityLog[];
 }
 
 const milestones = [
@@ -194,7 +196,35 @@ const milestones = [
   }
 ];
 
-export const HistoryModal: React.FC<HistoryModalProps> = ({ onClose }) => {
+const formatActivityTime = (timestamp: number) => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  return `${year}.${month}.${day} ${hour}:${minute}`;
+};
+
+const getActivityBadge = (message: string) => {
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes('삭제') || normalizedMessage.includes('제거')) {
+    return { label: '삭제', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+  }
+  if (normalizedMessage.includes('복구') || normalizedMessage.includes('백업') || normalizedMessage.includes('restore')) {
+    return { label: '복구/백업', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  }
+  if (normalizedMessage.includes('정규화') || normalizedMessage.includes('요청') || normalizedMessage.includes('승인') || normalizedMessage.includes('반려')) {
+    return { label: '정규화', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+  }
+  if (normalizedMessage.includes('저장') || normalizedMessage.includes('등록') || normalizedMessage.includes('적용')) {
+    return { label: '저장', className: 'bg-blue-50 text-blue-700 border-blue-200' };
+  }
+  return { label: '시스템', className: 'bg-slate-100 text-slate-700 border-slate-200' };
+};
+
+export const HistoryModal: React.FC<HistoryModalProps> = ({ onClose, recentActivities = [] }) => {
   const historyDialogRef = useRef<HTMLDivElement>(null);
   const historyCloseButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
@@ -284,6 +314,30 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ onClose }) => {
 
         {/* Timeline Content */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 custom-scrollbar">
+           {recentActivities.length > 0 && (
+             <div className="mb-6 bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
+               <div className="flex items-center justify-between mb-3">
+                 <h3 className="text-sm font-black text-indigo-900 flex items-center gap-2">
+                   <History size={14}/> 최근 작업 기록 (재시작 복원)
+                 </h3>
+                 <span className="text-[10px] font-bold text-indigo-500">최대 8건</span>
+               </div>
+               <div className="space-y-2">
+                 {recentActivities.slice(0, 8).map((activity) => {
+                   const badge = getActivityBadge(activity.message);
+                   return (
+                   <div key={activity.id} className="bg-white border border-indigo-100 rounded-xl px-3 py-2">
+                     <div className="flex items-center justify-between gap-2">
+                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${badge.className}`}>{badge.label}</span>
+                       <p className="text-[10px] text-slate-400">{formatActivityTime(activity.timestamp)}</p>
+                     </div>
+                     <p className="text-[11px] font-bold text-slate-700 break-keep mt-1">{activity.message}</p>
+                   </div>
+                 )})}
+               </div>
+             </div>
+           )}
+
            <div className="relative border-l-2 border-slate-200 ml-3 space-y-8 py-2">
               {milestones.map((milestone, idx) => {
                  const isLatest = idx === 0;

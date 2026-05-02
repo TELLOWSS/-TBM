@@ -17,7 +17,7 @@ import { hasSupportedBackupShape, validateBackupPayload, MAX_BACKUP_FILE_COUNT, 
 import { loadStoredSiteConfig, persistSiteConfig } from './utils/siteConfigStorage';
 import { StorageDB } from './utils/storageDB';
 import { useConfirmDialog } from './hooks/useConfirmDialog';
-import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig, TeamNormalizationLog, TeamNormalizationRequest, TeamNormalizationReasonCode } from './types';
+import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig, TeamNormalizationLog, TeamNormalizationRequest, TeamNormalizationReasonCode, AppActivityLog } from './types';
 import { Database } from 'lucide-react';
 
 // [UPDATED] Restore Progress Overlay Component
@@ -60,6 +60,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> => !!value &
 const getUsedHeapSize = () => (performance as HeapPerformance).memory?.usedJSHeapSize ?? null;
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : '알 수 없는 오류';
 const createLegacyId = () => `LEGACY-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+const LAST_VIEW_STORAGE_KEY = 'tbmLastView';
+const ALLOWED_VIEWS = new Set(['dashboard', 'new', 'risk-assessment', 'reports', 'data-lab']);
 
 const isRestoreEntry = (value: unknown): value is TBMEntry => {
     if (!isRecord(value)) return false;
@@ -116,12 +118,14 @@ const App = () => {
   const [isRestoring, setIsRestoring] = useState(false); 
   const [restoreProgress, setRestoreProgress] = useState(0); 
     const [appStatusMessage, setAppStatusMessage] = useState('');
+        const [activityLogs, setActivityLogs] = useState<AppActivityLog[]>([]);
 
   const [editingEntry, setEditingEntry] = useState<TBMEntry | null>(null);
   const [entryMode, setEntryMode] = useState<'ROUTINE' | 'BATCH'>('ROUTINE');
   const mountedRef = useRef(true);
     const normalizationLogsRef = useRef<TeamNormalizationLog[]>([]);
     const normalizationRequestsRef = useRef<TeamNormalizationRequest[]>([]);
+        const activityLogsRef = useRef<AppActivityLog[]>([]);
     const { confirmDialogState, requestConfirm, closeConfirmDialog } = useConfirmDialog();
 
     React.useEffect(() => {
@@ -132,7 +136,31 @@ const App = () => {
         normalizationRequestsRef.current = teamNormalizationRequests;
     }, [teamNormalizationRequests]);
 
-  const announceStatus = (message: string) => {
+    React.useEffect(() => {
+        activityLogsRef.current = activityLogs;
+    }, [activityLogs]);
+
+  const appendActivityLog = async (message: string) => {
+      const normalizedMessage = message.trim();
+      if (!normalizedMessage) return;
+
+      const latest = activityLogsRef.current[0];
+      if (latest && latest.message === normalizedMessage && Date.now() - latest.timestamp < 2000) {
+          return;
+      }
+
+      const nextLog: AppActivityLog = {
+          id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          timestamp: Date.now(),
+          message: normalizedMessage,
+      };
+      const updatedLogs = [nextLog, ...(activityLogsRef.current || [])].slice(0, 120);
+      activityLogsRef.current = updatedLogs;
+      if (mountedRef.current) setActivityLogs(updatedLogs);
+      await StorageDB.set('activityLogs', updatedLogs);
+  };
+
+  const announceStatus = (message: string, persist = true) => {
       if (!mountedRef.current) return;
       setAppStatusMessage('');
       requestAnimationFrame(() => {
@@ -140,11 +168,19 @@ const App = () => {
               setAppStatusMessage(message);
           }
       });
+      if (persist) {
+          void appendActivityLog(message);
+      }
   };
 
     React.useEffect(() => {
     mountedRef.current = true;
     const loadData = async () => {
+        const storedLastView = localStorage.getItem(LAST_VIEW_STORAGE_KEY);
+        if (storedLastView && ALLOWED_VIEWS.has(storedLastView) && mountedRef.current) {
+            setCurrentView(storedLastView);
+        }
+
         // 1. Critical Config (Sync Load priority)
         const loadedConfig = loadStoredSiteConfig({
             siteName: '용인 푸르지오 원클러스터 2,3단지',
@@ -181,10 +217,23 @@ const App = () => {
         if (storedNormalizationRequests && mountedRef.current) {
             setTeamNormalizationRequests(storedNormalizationRequests);
         }
+
+        const storedActivityLogs = await StorageDB.get<AppActivityLog[]>('activityLogs');
+        if (storedActivityLogs && storedActivityLogs.length > 0 && mountedRef.current) {
+            setActivityLogs(storedActivityLogs);
+            activityLogsRef.current = storedActivityLogs;
+            const latest = storedActivityLogs[0];
+            announceStatus(`직전 작업 복원: ${latest.message}`, false);
+        }
     };
     loadData();
         return () => { mountedRef.current = false; };
   }, []);
+
+  React.useEffect(() => {
+      if (!ALLOWED_VIEWS.has(currentView)) return;
+      localStorage.setItem(LAST_VIEW_STORAGE_KEY, currentView);
+  }, [currentView]);
 
   const handleSaveEntry = async (data: TBMEntry | TBMEntry[], shouldExit = true) => {
       let updatedEntries = [...entries];
@@ -1042,7 +1091,7 @@ const App = () => {
           />
       )}
 
-      {showHistory && <HistoryModal onClose={() => setShowHistory(false)} />}
+    {showHistory && <HistoryModal onClose={() => setShowHistory(false)} recentActivities={activityLogs} />}
       
       {showIdentity && <SystemIdentityModal onClose={() => setShowIdentity(false)} />}
       
