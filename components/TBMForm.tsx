@@ -3,6 +3,7 @@ import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { TBMEntry, RiskAssessmentItem, SafetyGuideline, TeamOption, TBMAnalysisResult, ScoreRubric, MonthlyRiskAssessment } from '../types';
 import { analyzeMasterLog, evaluateTBMVideo, generateSafetyFeedback } from '../services/geminiService';
+import { SESSION_API_KEY_STORAGE_KEY } from '../utils/siteConfigStorage';
 import { compressVideo, type VideoCompressionResult } from '../utils/videoUtils';
 import { Upload, Camera, FileText, X, Layers, ArrowLeft, Trash2, Film, Save, Plus, UserCheck, BrainCircuit, CheckCircle2, AlertCircle, Loader2, PlayCircle, Zap, Image as ImageIcon, Copy, Sparkles, Maximize, ScanText, ChevronRight, SplitSquareHorizontal, Paperclip, Users, Eye, Mic, Edit3, Sliders, Shield, Award, ClipboardCheck } from 'lucide-react';
 
@@ -87,7 +88,7 @@ const normalizeImageToJpeg = (file: File): Promise<string> => {
 // [RELIABILITY FIX] API 키 사전 점검 — AI 기능 호출 전 공통 가드
 const checkApiKeyOrThrow = () => {
     try {
-        const sessionKey = sessionStorage.getItem('tbm_session_api_key');
+        const sessionKey = sessionStorage.getItem(SESSION_API_KEY_STORAGE_KEY);
         const storedConfig = localStorage.getItem('siteConfig');
         const legacyKey = storedConfig ? (() => { try { return JSON.parse(storedConfig)?.userApiKey; } catch { return null; } })() : null;
         const devProxy = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
