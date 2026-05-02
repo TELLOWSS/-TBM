@@ -85,6 +85,167 @@ const normalizeImageToJpeg = (file: File): Promise<string> => {
     });
 };
 
+// ============================================================
+// 공종별 수기 입력 예시 코멘트 사전
+// ============================================================
+interface WorkTypeExample {
+    type: string;
+    work: string;
+    risks: { risk: string; measure: string }[];
+    feedback: string[];
+    videoEvals: { evalLog: string; evalAttendance: string; evalFocus: string; evalLeader: string; evaluation: string };
+}
+
+export const WORK_TYPE_EXAMPLES: WorkTypeExample[] = [
+    {
+        type: '토공/굴착',
+        work: '굴착기를 이용한 터파기 작업 및 토사 반출',
+        risks: [
+            { risk: '굴착 중 지반 붕괴 및 비탈면 파괴', measure: '비탈면 기울기 기준 준수, 흙막이 지보공 설치 및 일일 점검' },
+            { risk: '굴착장비 선회 반경 내 작업자 접근', measure: '유도원 배치, 접근금지선 설치, 굴착장비 경광등 작동 확인' },
+            { risk: '굴착 지반 지하매설물 파손', measure: '작업 전 지하매설물 도면 확인, 매설물 주변 수작업 전환' },
+        ],
+        feedback: [
+            '굴착 작업 전 주변 지하매설물(가스·수도·전기) 위치 확인 필수',
+            '우천 후 굴착면 상태 점검 및 붕괴 위험 구간 추가 지보공 설치',
+            '장비 반경 5m 이내 작업자 접근 금지 철저 준수',
+        ],
+        videoEvals: {
+            evalLog: '작업 일지에 굴착 구역 및 장비 배치가 명확히 기재됨. 지하매설물 확인 서명란 포함 여부 보완 필요.',
+            evalAttendance: '작업 참석 인원 점호 진행 확인. 유도원 포함 전원 참석.',
+            evalFocus: '중장비 작업 특성상 집중도 유지가 중요하며 전반적으로 집중된 자세 확인.',
+            evalLeader: '팀장이 굴착 위험 구간을 직접 지적하며 안전 사항을 명확히 전달함.',
+            evaluation: '토공/굴착 공종 TBM 전반적으로 양호. 지하매설물 확인 절차 반복 교육 권고.',
+        }
+    },
+    {
+        type: '콘크리트 타설',
+        work: '기초·슬라브 콘크리트 타설 및 양생 작업',
+        risks: [
+            { risk: '콘크리트 타설 중 거푸집 붕괴', measure: '타설 전 거푸집 동바리 체결 상태 확인, 콘크리트 타설 속도 준수' },
+            { risk: '레미콘 차량 후진 시 작업자 충돌', measure: '차량 유도원 배치, 차량 이동 경로 작업자 통제' },
+            { risk: '콘크리트 직접 접촉으로 인한 피부염', measure: '고무장갑·방호복 착용, 눈·피부 접촉 시 즉시 물로 세척' },
+        ],
+        feedback: [
+            '타설 전 철근 피복 두께 및 동바리 간격 최종 점검 실시',
+            '야간 타설 작업 시 조명 확보 및 감독자 상주',
+            '하절기 콘크리트 양생 중 급격한 건조 방지를 위한 양생포 덮기 철저',
+        ],
+        videoEvals: {
+            evalLog: '타설 수량 및 타설 구역 일지 기재 확인. 품질시험 결과 첨부 여부 확인 권고.',
+            evalAttendance: '콘크리트 타설 팀 전원 참석. 레미콘 기사 포함 교육 실시 여부 확인.',
+            evalFocus: '타설 특성상 연속 작업으로 집중도 유지 중요. 전반적 집중 양호.',
+            evalLeader: '팀장이 타설 순서와 동바리 안전 확인 절차를 직접 시연함.',
+            evaluation: '콘크리트 타설 공종 TBM 양호. 레미콘 차량 후진 시 유도원 모든 대기 상태 재확인 권고.',
+        }
+    },
+    {
+        type: '철근/거푸집',
+        work: '기둥·보 철근 배근 및 거푸집 조립·해체 작업',
+        risks: [
+            { risk: '철근 운반 및 배근 중 찔림·베임', measure: '장갑 착용 의무화, 절단면 캡 설치, 2인 1조 운반' },
+            { risk: '거푸집 해체 시 낙하 및 전도', measure: '해체 순서 준수, 하부 출입금지 구역 설정, 안전띠 착용' },
+            { risk: '고소 작업 중 추락', measure: '안전띠 체결 확인, 비계 발판 고정 상태 점검' },
+        ],
+        feedback: [
+            '철근 선단부 캡 설치 여부 작업 시작 전 확인 필수',
+            '거푸집 해체 전 동바리 최종 지지 상태 확인 후 단계별 해체',
+            '고소 작업 구간 안전 난간 설치 적정 여부 점검',
+        ],
+        videoEvals: {
+            evalLog: '배근 도면 배포 여부 및 거푸집 조립도 현장 비치 확인 권고.',
+            evalAttendance: '팀 전원 참석 확인. 신규 투입 인원 안전 교육 실시 여부 재확인.',
+            evalFocus: '철근 배근 시 집중도 중요. 작업자 대부분 집중된 자세 유지.',
+            evalLeader: '팀장이 추락 위험 구간을 직접 지목하며 안전띠 체결 상태를 점검함.',
+            evaluation: '철근/거푸집 공종 TBM 전반 양호. 고소 안전띠 체결 지적 사항 이행 여부 추적 관리 권고.',
+        }
+    },
+    {
+        type: '비계/가설구조물',
+        work: '강관 비계 및 시스템 비계 설치·해체 작업',
+        risks: [
+            { risk: '비계 발판 탈락으로 인한 추락', measure: '발판 고정핀 체결 확인, 작업 전 점검표 작성' },
+            { risk: '비계 설치 중 자재 낙하', measure: '낙하물 방지망 설치, 하부 출입금지, 안전모 착용' },
+            { risk: '강풍 시 비계 도괴', measure: '풍속 초과 시 작업 중단 기준 준수, 벽연결재 설치 간격 확인' },
+        ],
+        feedback: [
+            '비계 작업 시작 전 조립 상태 정기 점검표 작성 및 서명 완료',
+            '비계 발판 3점 지지 원칙 및 안전발판 이탈 방지 장치 확인',
+            '강풍 경보 발령 시 즉시 작업 중지 및 안전 상태 확인',
+        ],
+        videoEvals: {
+            evalLog: '일일 비계 점검표 기재 여부 및 결함 사항 조치 이력 확인.',
+            evalAttendance: '비계 작업 해당 팀원 전원 참석. 고소 작업자 안전 교육 이수 현황 확인.',
+            evalFocus: '안전 규정 전달 시 집중도 양호. 고소 위험 인지 교육 효과적.',
+            evalLeader: '팀장이 벽연결재 설치 간격 및 발판 고정 상태를 현장에서 직접 점검함.',
+            evaluation: '비계/가설구조물 공종 TBM 양호. 강풍 기상 조건 대응 절차를 매일 반복 전달 권고.',
+        }
+    },
+    {
+        type: '도장/마감',
+        work: '내외부 도장 및 마감 작업',
+        risks: [
+            { risk: '도료 흡입으로 인한 호흡기 유해물질 노출', measure: '방독마스크 착용, 작업 구역 환기 유지' },
+            { risk: '사다리 사용 중 추락', measure: '사다리 발 고정 확인, 2인 1조 작업(1인 보조)' },
+            { risk: '유기용제 인화로 인한 화재', measure: '인화성 도료 사용 시 발화원 제거, 소화기 비치' },
+        ],
+        feedback: [
+            '밀폐 구역 도장 작업 전 산소 농도 측정 및 환기 확인',
+            '도료 보관 시 직사광선·열원 차단, 밀폐 보관',
+            '도장 작업 종료 후 잔여 도료 및 솔벤트 안전 폐기',
+        ],
+        videoEvals: {
+            evalLog: '사용 도료 MSDS 게시 여부 및 보호구 착용 기준 일지 기재 확인.',
+            evalAttendance: '도장 팀 전원 참석 및 환기 담당자 배정 여부 확인.',
+            evalFocus: '흡입 위험 인지 교육 집중도 양호.',
+            evalLeader: '팀장이 방독 마스크 착용 상태를 1인씩 확인하는 절차 시행.',
+            evaluation: '도장/마감 공종 TBM 양호. 밀폐 작업 허가제 적용 여부 재확인 권고.',
+        }
+    },
+    {
+        type: '전기/기계설비',
+        work: '전기 배선 및 기계설비 설치·유지보수 작업',
+        risks: [
+            { risk: '활선 작업 중 감전', measure: '전원 차단 후 LOTO(잠금제어) 적용, 절연 장갑·절연공구 사용' },
+            { risk: '배선 작업 중 고소 추락', measure: '안전발판 또는 사다리 고정 후 사용, 안전띠 착용' },
+            { risk: '기계 회전부 접촉으로 인한 협착', measure: '정비 전 전원 차단 및 가드 제거 금지, 방호 덮개 원복 확인' },
+        ],
+        feedback: [
+            '전기 작업 전 분전함 차단기 OFF 및 표지판 부착 확인',
+            'LOTO(잠금-태그아웃) 절차 반드시 준수 및 이행 확인',
+            '기계 점검 완료 후 방호장치 복원 여부 최종 확인',
+        ],
+        videoEvals: {
+            evalLog: '작업 허가서(PTW) 발급 및 서명 여부, LOTO 절차 기재 확인.',
+            evalAttendance: '전기·기계 팀 전원 참석 확인. 자격 보유자 작업 배정 여부 확인.',
+            evalFocus: '감전 위험 구간 집중 교육 효과적. 전반 집중도 양호.',
+            evalLeader: '팀장이 LOTO 절차를 순서대로 직접 시연하며 팀원이 따라 하도록 유도.',
+            evaluation: '전기/기계설비 공종 TBM 양호. 자격증 미보유자 활선 접근 금지 재확인 필요.',
+        }
+    },
+    {
+        type: '공통 일반',
+        work: '현장 공통 안전관리 및 일반 작업',
+        risks: [
+            { risk: '개인 보호구 미착용으로 인한 상해', measure: '안전모·안전화·안전조끼 착용 의무화 및 일일 점검' },
+            { risk: '작업장 정리 불량으로 인한 전도', measure: '작업 전·중·후 정리정돈, 통로 확보' },
+            { risk: '신호/연락 체계 불량으로 인한 사고', measure: '무전기 또는 신호 체계 사전 확인, 유도원 배치' },
+        ],
+        feedback: [
+            '오늘 작업 전 개인 보호구 착용 상태 상호 점검 실시',
+            '작업 구역 내 불필요한 자재 즉시 정리 및 통로 확보',
+            '작업 중 이상 상황(울림·균열·낙하) 발생 즉시 작업 중지 및 보고',
+        ],
+        videoEvals: {
+            evalLog: '작업 일지 기재 항목 기본 양식 충족. 특이 사항 및 서명란 확인.',
+            evalAttendance: '팀 전원 참석 확인. 신규 투입자 별도 소개 여부 확인.',
+            evalFocus: '발 표시 및 시선 처리 기준으로 집중도 전반 양호.',
+            evalLeader: '팀장이 오늘 주요 위험 요인을 명확히 전달하고 질의응답 진행.',
+            evaluation: '일반 공종 TBM 전반 양호. 일일 안전 점검 체크리스트 활용 지속 권고.',
+        }
+    },
+];
+
 // [RELIABILITY FIX] API 키 사전 점검 — AI 기능 호출 전 공통 가드
 const checkApiKeyOrThrow = () => {
     try {
@@ -144,6 +305,13 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const [tempFeedbackText, setTempFeedbackText] = useState("");
   const [newFeedbackInput, setNewFeedbackInput] = useState("");
   const [isFeedbackGenerating, setIsFeedbackGenerating] = useState(false);
+
+  // [수기 직접 입력] OCR 대신 수기 입력 모드 토글 및 공종 선택
+  const [showManualOcrInput, setShowManualOcrInput] = useState(false);
+  const [selectedWorkTypeIndex, setSelectedWorkTypeIndex] = useState(0);
+  // [동영상 수기 채점] 공종별 예시 코멘트 확장 패널
+  const [showVideoExamplePanel, setShowVideoExamplePanel] = useState(false);
+  const [videoExampleWorkTypeIndex, setVideoExampleWorkTypeIndex] = useState(0);
 
   const resolvedLinkedRiskAssessment = React.useMemo(() => {
       const validAssessments = (riskAssessments || []).filter(assessment => Array.isArray(assessment.priorities) && assessment.priorities.length > 0);
@@ -872,6 +1040,54 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
     }
   };
 
+  // [수기 직접 입력] 공종 예시 선택 시 폼 자동 채우기
+  const handleApplyWorkTypeExample = (mode: 'ALL' | 'RISK_ONLY' | 'FEEDBACK_ONLY' | 'VIDEO_EVAL') => {
+      const example = WORK_TYPE_EXAMPLES[selectedWorkTypeIndex];
+      if (!example) return;
+
+      if (mode === 'ALL' || mode === 'RISK_ONLY') {
+          if (mode === 'ALL') {
+              setWorkDescription(example.work);
+              updateActiveItem({ workDescription: example.work });
+          }
+          setRiskFactors(example.risks);
+          updateActiveItem({ riskFactors: example.risks });
+      }
+      if (mode === 'ALL' || mode === 'FEEDBACK_ONLY') {
+          const merged = Array.from(new Set([...safetyFeedback, ...example.feedback]));
+          setSafetyFeedback(merged);
+          updateActiveItem({ safetyFeedback: merged });
+      }
+      if (mode === 'VIDEO_EVAL') {
+          const ex = WORK_TYPE_EXAMPLES[videoExampleWorkTypeIndex];
+          if (!ex) return;
+          const updated: TBMAnalysisResult = {
+              ...(videoAnalysis || {
+                  score: 0, evaluation: '', evalLog: '', evalAttendance: '',
+                  evalFocus: '', evalLeader: '', analysisSource: 'VIDEO' as const,
+                  rubric: { logQuality: 0, focus: 0, voice: 0, ppe: 0, deductions: [] },
+                  leaderCoaching: { actionItem: '', rationale: '' },
+                  details: { participation: 'GOOD' as const, voiceClarity: 'CLEAR' as const, ppeStatus: 'GOOD' as const, interaction: false },
+                  focusAnalysis: { overall: 0, distractedCount: 0, focusZones: { front: 'HIGH' as const, back: 'HIGH' as const, side: 'HIGH' as const } },
+                  insight: { mentionedTopics: [], missingTopics: [], suggestion: '' },
+                  feedback: []
+              }),
+              evalLog: ex.videoEvals.evalLog,
+              evalAttendance: ex.videoEvals.evalAttendance,
+              evalFocus: ex.videoEvals.evalFocus,
+              evalLeader: ex.videoEvals.evalLeader,
+              evaluation: ex.videoEvals.evaluation,
+          };
+          setVideoAnalysis(updated);
+          updateActiveItem({ videoAnalysis: updated });
+          announceStatus(`[${ex.type}] 공종 예시 평가가 채점 폼에 반영되었습니다. 내용을 수정해 사용하세요.`, 'success');
+          return;
+      }
+      announceStatus(`[${example.type}] 공종 예시가 반영되었습니다. 내용을 수정해 사용하세요.`, 'success');
+      setShowManualOcrInput(false);
+      setMobileSection('FORM');
+  };
+
   // [UPDATED] Save All Items in Queue (Batch Save Logic)
     const handleSaveAll = async () => {
       if (queue.length === 0) return;
@@ -1135,6 +1351,90 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                     )}
                                 </button>
                             )}
+
+                            {/* [수기 직접 입력] API 초과 시 수기로 직접 입력 */}
+                            <button
+                                type="button"
+                                onClick={() => setShowManualOcrInput(v => !v)}
+                                className="w-full mt-2 py-2.5 border-2 border-dashed border-slate-300 text-slate-600 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:border-indigo-400 hover:text-indigo-700 hover:bg-indigo-50 transition-all"
+                            >
+                                <Edit3 size={14}/> {showManualOcrInput ? '▲ 수기 직접 입력 접기' : '✏️ 수기 직접 입력 (API 초과 시 사용)'}
+                            </button>
+
+                            {showManualOcrInput && (
+                                <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-4 animate-fade-in">
+                                    <div>
+                                        <p className="text-xs font-black text-indigo-800 mb-2 flex items-center gap-1.5">
+                                            <Layers size={13}/> 공종 선택 → 예시 내용으로 빠른 채우기
+                                        </p>
+                                        <select
+                                            value={selectedWorkTypeIndex}
+                                            onChange={(e) => setSelectedWorkTypeIndex(Number(e.target.value))}
+                                            className="w-full border border-indigo-200 bg-white rounded-xl px-3 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-400"
+                                        >
+                                            {WORK_TYPE_EXAMPLES.map((ex, i) => (
+                                                <option key={ex.type} value={i}>{ex.type}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* 선택된 공종 예시 미리보기 */}
+                                    <div className="rounded-xl border border-indigo-100 bg-white p-3 space-y-2">
+                                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wider">예시 내용 미리보기</p>
+                                        <p className="text-xs font-bold text-slate-700">📋 작업 내용</p>
+                                        <p className="text-xs text-slate-600 bg-slate-50 rounded p-2 leading-relaxed">{WORK_TYPE_EXAMPLES[selectedWorkTypeIndex].work}</p>
+
+                                        <p className="text-xs font-bold text-slate-700 pt-1">⚠️ 위험 요인 예시</p>
+                                        <div className="space-y-1">
+                                            {WORK_TYPE_EXAMPLES[selectedWorkTypeIndex].risks.map((r, i) => (
+                                                <div key={i} className="text-[11px] text-slate-600 bg-red-50 rounded p-2">
+                                                    <span className="font-bold text-red-600">위험: </span>{r.risk}<br/>
+                                                    <span className="font-bold text-blue-600">대책: </span>{r.measure}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <p className="text-xs font-bold text-slate-700 pt-1">💬 안전 코멘트 예시</p>
+                                        <div className="space-y-1">
+                                            {WORK_TYPE_EXAMPLES[selectedWorkTypeIndex].feedback.map((fb, i) => (
+                                                <p key={i} className="text-[11px] text-slate-600 bg-emerald-50 rounded p-2">✓ {fb}</p>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleApplyWorkTypeExample('ALL')}
+                                            className="py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-indigo-700 shadow-md shadow-indigo-100 min-h-[44px]"
+                                        >
+                                            <CheckCircle2 size={14}/> 전체 반영
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleApplyWorkTypeExample('RISK_ONLY')}
+                                            className="py-3 border border-indigo-300 text-indigo-700 bg-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-indigo-50 min-h-[44px]"
+                                        >
+                                            <AlertCircle size={14}/> 위험요인만
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleApplyWorkTypeExample('FEEDBACK_ONLY')}
+                                            className="py-3 border border-emerald-300 text-emerald-700 bg-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-emerald-50 min-h-[44px]"
+                                        >
+                                            <UserCheck size={14}/> 코멘트만
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowManualOcrInput(false); setMobileSection('FORM'); }}
+                                            className="py-3 border border-slate-200 text-slate-500 bg-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-slate-50 min-h-[44px]"
+                                        >
+                                            <X size={14}/> 닫기
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-indigo-500 text-center">반영 후 우측 입력 데이터 탭에서 내용을 수정하세요.</p>
+                                </div>
+                            )}
                         </div>
 
                         {/* Section 2: Action Photo */}
@@ -1247,6 +1547,63 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                         </>
                                     )}
                                 </button>
+                            )}
+
+                            {/* [수기 직접 채점] AI 없이 공종별 예시로 직접 채점 */}
+                            {tbmVideoPreview && !isVideoAnalyzing && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowVideoExamplePanel(v => !v)}
+                                    className="w-full mt-2 py-2.5 border-2 border-dashed border-slate-300 text-slate-600 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:border-rose-400 hover:text-rose-700 hover:bg-rose-50 transition-all"
+                                >
+                                    <Edit3 size={14}/> {showVideoExamplePanel ? '▲ 수기 직접 채점 접기' : '✏️ 수기 직접 채점 (API 초과 시 사용)'}
+                                </button>
+                            )}
+
+                            {showVideoExamplePanel && (
+                                <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-4 space-y-3 animate-fade-in">
+                                    <p className="text-xs font-black text-rose-800 flex items-center gap-1.5">
+                                        <ClipboardCheck size={13}/> 공종별 평가 예시 → 채점 폼 자동 채우기
+                                    </p>
+                                    <select
+                                        value={videoExampleWorkTypeIndex}
+                                        onChange={(e) => setVideoExampleWorkTypeIndex(Number(e.target.value))}
+                                        className="w-full border border-rose-200 bg-white rounded-xl px-3 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-rose-400"
+                                    >
+                                        {WORK_TYPE_EXAMPLES.map((ex, i) => (
+                                            <option key={ex.type} value={i}>{ex.type}</option>
+                                        ))}
+                                    </select>
+
+                                    {/* 예시 미리보기 */}
+                                    <div className="rounded-xl border border-rose-100 bg-white p-3 space-y-2 text-[11px]">
+                                        <p className="text-[10px] font-black text-rose-500 uppercase tracking-wider">평가 예시 미리보기</p>
+                                        {[
+                                            { label: '① 일지 작성 평가', val: WORK_TYPE_EXAMPLES[videoExampleWorkTypeIndex].videoEvals.evalLog },
+                                            { label: '② 참석·참여도 평가', val: WORK_TYPE_EXAMPLES[videoExampleWorkTypeIndex].videoEvals.evalAttendance },
+                                            { label: '③ 작업자 집중도 평가', val: WORK_TYPE_EXAMPLES[videoExampleWorkTypeIndex].videoEvals.evalFocus },
+                                            { label: '④ 팀장 리딩 평가', val: WORK_TYPE_EXAMPLES[videoExampleWorkTypeIndex].videoEvals.evalLeader },
+                                            { label: '종합 의견', val: WORK_TYPE_EXAMPLES[videoExampleWorkTypeIndex].videoEvals.evaluation },
+                                        ].map(item => (
+                                            <div key={item.label}>
+                                                <p className="font-bold text-slate-600">{item.label}</p>
+                                                <p className="text-slate-500 bg-slate-50 rounded p-2 leading-relaxed mt-0.5">{item.val}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            handleApplyWorkTypeExample('VIDEO_EVAL');
+                                            setShowVideoExamplePanel(false);
+                                        }}
+                                        className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-rose-700 shadow-md shadow-rose-100 min-h-[44px]"
+                                    >
+                                        <CheckCircle2 size={14}/> 이 예시로 채점 폼 채우기
+                                    </button>
+                                    <p className="text-[10px] text-rose-500 text-center">채운 내용은 아래 채점 폼에서 수정 가능합니다.</p>
+                                </div>
                             )}
                             
                             {/* AI Analysis Results (After Analysis) */}
