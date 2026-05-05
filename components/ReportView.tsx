@@ -364,7 +364,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return riskScore;
   };
 
-  const isCanvasLikelyBlank = (canvas: HTMLCanvasElement) => {
+    const isCanvasLikelyBlank = (canvas: HTMLCanvasElement, threshold = 0.992) => {
       const context = canvas.getContext('2d', { willReadFrequently: true });
       if (!context) return false;
 
@@ -386,7 +386,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
       if (sampled === 0) return false;
       const blankRatio = blankish / sampled;
-      return blankRatio >= 0.992;
+      return blankRatio >= threshold;
   };
 
   const rasterizeRightPanelForPdf = async (clone: HTMLElement) => {
@@ -411,7 +411,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           backgroundColor: '#ffffff',
       });
 
-      if (isCanvasLikelyBlank(panelCanvas)) return;
+    if (isCanvasLikelyBlank(panelCanvas, 0.999)) return;
 
       const dataUrl = panelCanvas.toDataURL('image/png');
       const snapshot = document.createElement('img');
@@ -432,6 +432,18 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       const bodyText = clone.querySelector<HTMLElement>('.body-row-text');
       if (!bodyText) return;
 
+      if (document.fonts?.status !== 'loaded') {
+          await document.fonts.ready;
+      }
+      await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+
+      bodyText.querySelectorAll<HTMLElement>('*').forEach((node) => {
+          node.style.transform = 'none';
+          node.style.textShadow = 'none';
+      });
+
       const rect = bodyText.getBoundingClientRect();
       const width = Math.max(1, Math.round(rect.width));
       const height = Math.max(1, Math.round(rect.height));
@@ -449,7 +461,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           backgroundColor: '#ffffff',
       });
 
-      if (isCanvasLikelyBlank(bodyCanvas)) return;
+    if (isCanvasLikelyBlank(bodyCanvas, 0.9997)) return;
 
       const dataUrl = bodyCanvas.toDataURL('image/png');
       const snapshot = document.createElement('img');
