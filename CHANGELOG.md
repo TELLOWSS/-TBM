@@ -2,6 +2,25 @@
 
 이 문서는 프로젝트의 주요 변경 사항을 날짜 기준으로 관리합니다.
 
+## 2026-05-05
+
+### ✅ 백업/복구 범위 확장 + 심층연구소 복구 동기화
+- `App.tsx`
+  - 전체 백업(`ALL`) 범위에 `activityLogs`, 심층연구소 스냅샷(`labSnapshots`), 스마트TBM 지시 워크플로우(`commandTasks`) 포함
+  - 복구 시 위 3개 데이터도 병합/중복제거 후 저장하도록 확장
+  - 심층연구소 화면이 열려 있는 상태에서도 복구 직후 로컬 저장 데이터가 즉시 반영되도록 `storageRevision` 동기화 추가
+- `components/SafetyDataLab.tsx`
+  - 스냅샷/지시 워크플로우 로컬 저장값 재동기화 유틸 추가
+  - 복구 후 즉시 화면 반영을 위한 `storageRevision` prop 대응
+- `utils/backupValidation.ts`, `types.ts`
+  - 백업 스키마에 `activityLogs`, `labSnapshots`, `commandTasks` 타입 검증 추가
+
+### ✅ 출력 보고서 모달 안정화
+- `components/ReportView.tsx`
+  - 깨진 `useEffect` 구문 정리로 정적 오류 제거
+  - 모달 오픈 시 포커스 이동, `ESC` 닫기, 닫을 때 이전 포커스 복원 추가
+  - 모바일 폭 기준 미리보기 축소 스케일 자동 보정
+
 ## 2026-04-30
 
 ### ✅ 모바일 3대 회귀 이슈 수정 (동영상 재생·채점·위험성평가 등록)

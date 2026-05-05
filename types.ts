@@ -254,6 +254,23 @@ export interface TeamNormalizationRequest {
   reviewedBy?: string;
 }
 
+export interface LabSnapshot {
+  id: string;
+  label: string;
+  savedAt: string;
+  filter: {
+    teamIds: string[];
+    riskLabel: string | null;
+    period: '7D' | '30D' | 'THIS_MONTH' | 'CUSTOM' | 'ALL';
+    customStart: string;
+    customEnd: string;
+  };
+  avgScore: number;
+  totalEntries: number;
+  totalPeople: number;
+  topRisk: string;
+}
+
 export interface AppActivityLog {
   id: string;
   timestamp: number;

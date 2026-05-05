@@ -7,7 +7,7 @@ import { TBMForm } from './components/TBMForm';
 import { RiskAssessmentManager } from './components/RiskAssessmentManager';
 import { ReportView } from './components/ReportView';
 import { ReportCenter } from './components/ReportCenter';
-import { SafetyDataLab } from './components/SafetyDataLab';
+import { SafetyDataLab, SNAPSHOT_STORAGE_KEY, COMMAND_TASK_STORAGE_KEY } from './components/SafetyDataLab';
 import { HistoryModal } from './components/HistoryModal';
 import { SettingsModal } from './components/SettingsModal'; 
 import { SystemIdentityModal } from './components/SystemIdentityModal';
@@ -17,7 +17,7 @@ import { hasSupportedBackupShape, validateBackupPayload, MAX_BACKUP_FILE_COUNT, 
 import { loadStoredSiteConfig, persistSiteConfig } from './utils/siteConfigStorage';
 import { StorageDB } from './utils/storageDB';
 import { useConfirmDialog } from './hooks/useConfirmDialog';
-import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig, TeamNormalizationLog, TeamNormalizationRequest, TeamNormalizationReasonCode, AppActivityLog } from './types';
+import { TBMEntry, TeamOption, MonthlyRiskAssessment, SafetyGuideline, SiteConfig, TeamNormalizationLog, TeamNormalizationRequest, TeamNormalizationReasonCode, AppActivityLog, LabSnapshot, CommandTask as SmartCommandTask } from './types';
 import { Database } from 'lucide-react';
 
 // [UPDATED] Restore Progress Overlay Component
@@ -87,6 +87,47 @@ const sanitizeAssessment = (assessment: Partial<MonthlyRiskAssessment> & Record<
     createdAt: typeof assessment.createdAt === 'number' ? assessment.createdAt : Date.now(),
 });
 
+const readStoredArray = <T,>(storageKey: string): T[] => {
+    try {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed as T[] : [];
+    } catch {
+        return [];
+    }
+};
+
+const COMMAND_STATUSES = new Set(['NOT_STARTED', 'IN_PROGRESS', 'DONE', 'DELAYED']);
+const COMMAND_PRIORITIES = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
+
+const isRestoreActivityLog = (value: unknown): value is AppActivityLog => {
+    if (!isRecord(value)) return false;
+    return typeof value.id === 'string' && typeof value.timestamp === 'number' && typeof value.message === 'string';
+};
+
+const isRestoreLabSnapshot = (value: unknown): value is LabSnapshot => {
+    if (!isRecord(value)) return false;
+    return typeof value.id === 'string'
+        && typeof value.label === 'string'
+        && typeof value.savedAt === 'string'
+        && isRecord(value.filter);
+};
+
+const isRestoreCommandTask = (value: unknown): value is SmartCommandTask => {
+    if (!isRecord(value)) return false;
+    return typeof value.id === 'string'
+        && typeof value.title === 'string'
+        && typeof value.instruction === 'string'
+        && typeof value.rationale === 'string'
+        && typeof value.createdAt === 'number'
+        && typeof value.updatedAt === 'number'
+        && typeof value.status === 'string'
+        && COMMAND_STATUSES.has(value.status)
+        && typeof value.priority === 'string'
+        && COMMAND_PRIORITIES.has(value.priority);
+};
+
 type DataLabFocusTarget = 'NORMALIZATION_WORKFLOW' | null;
 
 const App = () => {
@@ -119,6 +160,7 @@ const App = () => {
   const [restoreProgress, setRestoreProgress] = useState(0); 
     const [appStatusMessage, setAppStatusMessage] = useState('');
         const [activityLogs, setActivityLogs] = useState<AppActivityLog[]>([]);
+        const [dataLabStorageRevision, setDataLabStorageRevision] = useState(0);
 
   const [editingEntry, setEditingEntry] = useState<TBMEntry | null>(null);
   const [entryMode, setEntryMode] = useState<'ROUTINE' | 'BATCH'>('ROUTINE');
@@ -545,6 +587,9 @@ const App = () => {
               backupData.signatures = signatures;
               backupData.teamNormalizationLogs = teamNormalizationLogs;
               backupData.teamNormalizationRequests = teamNormalizationRequests;
+              backupData.activityLogs = activityLogs;
+              backupData.labSnapshots = readStoredArray<LabSnapshot>(SNAPSHOT_STORAGE_KEY);
+              backupData.commandTasks = readStoredArray<SmartCommandTask>(COMMAND_TASK_STORAGE_KEY);
               // [SECURITY FIX] Exclude API key from backup file to prevent credential leakage
               const { userApiKey: _stripped, ...siteConfigSafe } = siteConfig;
               backupData.siteConfig = siteConfigSafe;
@@ -608,6 +653,9 @@ const App = () => {
       let mergedConfig = { ...siteConfig };
     let mergedTeamNormalizationLogs = [...teamNormalizationLogs];
             let mergedTeamNormalizationRequests = [...teamNormalizationRequests];
+            let mergedActivityLogs = [...activityLogs];
+            let mergedLabSnapshots = readStoredArray<LabSnapshot>(SNAPSHOT_STORAGE_KEY);
+            let mergedCommandTasks = readStoredArray<SmartCommandTask>(COMMAND_TASK_STORAGE_KEY);
       
       let totalFound = 0;
 
@@ -680,6 +728,24 @@ const App = () => {
                           });
                           mergedTeamNormalizationRequests = [...validRequests, ...mergedTeamNormalizationRequests];
                           totalFound += validRequests.length;
+                          fileFound = true;
+                      }
+                      if (Array.isArray(payloadObject.activityLogs)) {
+                          const validActivityLogs = payloadObject.activityLogs.filter(isRestoreActivityLog);
+                          mergedActivityLogs = [...validActivityLogs, ...mergedActivityLogs];
+                          totalFound += validActivityLogs.length;
+                          fileFound = true;
+                      }
+                      if (Array.isArray(payloadObject.labSnapshots)) {
+                          const validSnapshots = payloadObject.labSnapshots.filter(isRestoreLabSnapshot);
+                          mergedLabSnapshots = [...validSnapshots, ...mergedLabSnapshots];
+                          totalFound += validSnapshots.length;
+                          fileFound = true;
+                      }
+                      if (Array.isArray(payloadObject.commandTasks)) {
+                          const validCommandTasks = payloadObject.commandTasks.filter(isRestoreCommandTask);
+                          mergedCommandTasks = [...validCommandTasks, ...mergedCommandTasks];
+                          totalFound += validCommandTasks.length;
                           fileFound = true;
                       }
                       if (isRecord(payloadObject.signatures)) {
@@ -804,6 +870,38 @@ const App = () => {
               .sort((a, b) => b.requestedAt - a.requestedAt)
               .slice(0, 300);
 
+          const uniqueActivityLogMap = new Map<string, AppActivityLog>();
+          mergedActivityLogs.forEach(log => {
+              if (!log?.id) return;
+              if (!uniqueActivityLogMap.has(log.id)) {
+                  uniqueActivityLogMap.set(log.id, log);
+              }
+          });
+          const finalActivityLogs = Array.from(uniqueActivityLogMap.values())
+              .sort((a, b) => b.timestamp - a.timestamp)
+              .slice(0, 120);
+
+          const uniqueSnapshotMap = new Map<string, LabSnapshot>();
+          mergedLabSnapshots.forEach(snapshot => {
+              if (!snapshot?.id) return;
+              if (!uniqueSnapshotMap.has(snapshot.id)) {
+                  uniqueSnapshotMap.set(snapshot.id, snapshot);
+              }
+          });
+          const finalLabSnapshots = Array.from(uniqueSnapshotMap.values())
+              .sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''))
+              .slice(0, 10);
+
+          const uniqueCommandTaskMap = new Map<string, SmartCommandTask>();
+          mergedCommandTasks.forEach(task => {
+              if (!task?.id) return;
+              if (!uniqueCommandTaskMap.has(task.id)) {
+                  uniqueCommandTaskMap.set(task.id, task);
+              }
+          });
+          const finalCommandTasks = Array.from(uniqueCommandTaskMap.values())
+              .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+
           if (mountedRef.current) setRestoreProgress(70);
 
           // Save to DB
@@ -813,6 +911,9 @@ const App = () => {
           await StorageDB.set('signatures', mergedSignatures);
           await StorageDB.set('teamNormalizationLogs', finalNormalizationLogs);
           await StorageDB.set('teamNormalizationRequests', finalNormalizationRequests);
+          await StorageDB.set('activityLogs', finalActivityLogs);
+          localStorage.setItem(SNAPSHOT_STORAGE_KEY, JSON.stringify(finalLabSnapshots));
+          localStorage.setItem(COMMAND_TASK_STORAGE_KEY, JSON.stringify(finalCommandTasks));
           // [SECURITY FIX] API 키는 sessionStorage에만 보관
           persistSiteConfig(mergedConfig);
 
@@ -828,6 +929,9 @@ const App = () => {
               setSiteConfig(mergedConfig);
               setTeamNormalizationLogs(finalNormalizationLogs);
               setTeamNormalizationRequests(finalNormalizationRequests);
+              setActivityLogs(finalActivityLogs);
+              activityLogsRef.current = finalActivityLogs;
+              setDataLabStorageRevision(prev => prev + 1);
           }
           
           if (mountedRef.current) {
@@ -1076,6 +1180,7 @@ const App = () => {
                         normalizationRequests={teamNormalizationRequests}
                                                 focusTarget={dataLabFocusTarget}
                                                 onFocusTargetHandled={() => setDataLabFocusTarget(null)}
+                        storageRevision={dataLabStorageRevision}
                     />;
                   default:
                     return <Dashboard 

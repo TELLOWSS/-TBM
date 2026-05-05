@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom';
 import { TBMEntry, TeamOption } from '../types';
 import { Printer, X, Download, Loader2, Edit3, Trash2, Sparkles, UserCheck, AlertOctagon, Eye, Users, Video, FileVideo, ImageOff, CheckCircle2, XCircle, Image as ImageIcon, Package, FileText, Mic, ShieldCheck, Lock } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 
 interface ReportViewProps {
@@ -24,7 +23,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
     const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('TEXT');
   const [statusMessage, setStatusMessage] = useState("");
     const [announceMessage, setAnnounceMessage] = useState('');
-    const pdfExportStrategy: 'native-print' | 'direct-original' | 'body-raster' | 'legacy' = 'native-print';
   const [scale, setScale] = useState(1);
   const reportDialogRef = useRef<HTMLDivElement>(null);
   const reportCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -37,228 +35,54 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       });
   };
 
-    React.useEffect(() => {
-      previouslyFocusedElementRef.current = document.activeElement as HTMLElement | null;
-      window.setTimeout(() => {
+  React.useEffect(() => {
+      previouslyFocusedElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+
+      const focusTimer = window.setTimeout(() => {
           reportCloseButtonRef.current?.focus();
       }, 0);
 
-      const handleEscClose = (event: KeyboardEvent) => {
+      const handleKeyDown = (event: KeyboardEvent) => {
           if (event.key === 'Escape') {
+              event.preventDefault();
               onClose();
           }
       };
 
-      window.addEventListener('keydown', handleEscClose);
+      window.addEventListener('keydown', handleKeyDown);
+
       return () => {
-          window.removeEventListener('keydown', handleEscClose);
-          window.setTimeout(() => {
-              previouslyFocusedElementRef.current?.focus();
-          }, 0);
+          window.clearTimeout(focusTimer);
+          window.removeEventListener('keydown', handleKeyDown);
+          document.body.style.overflow = originalOverflow;
+          previouslyFocusedElementRef.current?.focus();
       };
   }, [onClose]);
 
-  const handleReportDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'Tab') return;
-
-      const dialogNode = reportDialogRef.current;
-      if (!dialogNode) return;
-
-      const focusableElements = dialogNode.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
-
-      if (focusableElements.length === 0) return;
-
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
-      const activeElement = document.activeElement as HTMLElement | null;
-
-      if (event.shiftKey) {
-          if (activeElement === firstElement || !dialogNode.contains(activeElement)) {
-              event.preventDefault();
-              lastElement.focus();
-          }
-          return;
-      }
-
-      if (activeElement === lastElement) {
-          event.preventDefault();
-          firstElement.focus();
-      }
-  };
-
-    const formatLocationSummary = (entry: TBMEntry) => {
-            return [entry.locationBuildingScope, entry.locationArea, entry.locationDetail]
-                    .map(value => value?.trim())
-                    .filter(Boolean)
-                    .join(' / ');
-    };
-
-  // Auto-scale for mobile/tablet screens
-    React.useEffect(() => {
-      const handleResize = () => {
-          const maxWidth = Math.min(window.innerWidth - 32, 794); // -32 for padding
-          const newScale = Math.min(1, maxWidth / 794);
-          setScale(newScale);
+  React.useEffect(() => {
+      const updateScale = () => {
+          const nextScale = window.innerWidth < 860
+              ? Math.max(0.62, Number((window.innerWidth / 860).toFixed(2)))
+              : 1;
+          setScale(nextScale);
       };
-      
-      handleResize();
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
+
+      updateScale();
+      window.addEventListener('resize', updateScale);
+      return () => window.removeEventListener('resize', updateScale);
   }, []);
 
-  // [REFACTORED] Robust Solid Image Converter for Icons
-  // This ensures SVGs don't shift or disappear during html2canvas capture
-  const convertSvgToImage = async (element: HTMLElement) => {
-      const svgs = element.querySelectorAll('svg');
-      for (const svg of Array.from(svgs)) {
-          try {
-              const style = window.getComputedStyle(svg);
-              const rect = svg.getBoundingClientRect();
-              
-              // Determine exact dimensions
-              // Fallback to 24px if detection fails
-              const width = rect.width > 0 ? rect.width : (parseFloat(style.width) || 24);
-              const height = rect.height > 0 ? rect.height : (parseFloat(style.height) || 24);
-              
-              const color = style.color || '#000000';
-              const fill = style.fill !== 'none' ? style.fill : 'none';
-              
-              let svgData = '';
-              try {
-                  svgData = new XMLSerializer().serializeToString(svg);
-              } catch (e) {
-                  console.warn("XMLSerializer failed", e);
-                  continue;
-              }
-              
-              // In-line styles to ensure render consistency
-              if (color) {
-                  svgData = svgData.replace(/currentColor/g, color);
-                  // Ensure stroke is applied if not overridden
-                  if (!svgData.includes('stroke=')) svgData = svgData.replace(/<svg/, `<svg stroke="${color}"`);
-              }
-
-              const canvas = document.createElement('canvas');
-              // High resolution canvas for sharp icons
-              const scaleFactor = 3; 
-              canvas.width = width * scaleFactor; 
-              canvas.height = height * scaleFactor;
-              
-              const ctx = canvas.getContext('2d');
-              // [FIX] Use document.createElement for safer image creation to avoid Illegal Constructor
-              const img = document.createElement('img'); 
-              
-              const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
-              const url = URL.createObjectURL(svgBlob);
-
-              await new Promise((resolve) => {
-                  img.onload = () => {
-                      if (ctx) {
-                          ctx.clearRect(0, 0, canvas.width, canvas.height);
-                          // Smooth scaling
-                          ctx.imageSmoothingEnabled = true;
-                          ctx.imageSmoothingQuality = 'high';
-                          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                      }
-                      URL.revokeObjectURL(url);
-                      resolve(null);
-                  };
-                  img.onerror = () => {
-                      console.warn("SVG Load Error", svg);
-                      URL.revokeObjectURL(url); // Ensure cleanup on error
-                      resolve(null);
-                  };
-                  img.src = url;
-              });
-
-              const replacementImg = document.createElement('img');
-              replacementImg.src = canvas.toDataURL('image/png');
-              
-              // Force exact dimensions on the replacement image
-              replacementImg.style.width = `${width}px`;
-              replacementImg.style.height = `${height}px`;
-              replacementImg.style.minWidth = `${width}px`; // Critical for flex containers
-              replacementImg.style.minHeight = `${height}px`;
-              replacementImg.style.display = style.display === 'block' ? 'block' : 'inline-block';
-              replacementImg.style.verticalAlign = style.verticalAlign || 'middle';
-              replacementImg.style.margin = style.margin;
-              replacementImg.style.padding = style.padding;
-              
-              // Replace in DOM
-              if (svg.parentNode) {
-                  svg.parentNode.replaceChild(replacementImg, svg);
-              }
-          } catch (e) {
-              console.warn("SVG Conversion Error", e);
-          }
-      }
-  };
-
-  // [EXPORT STABILITY] Lock computed layout to reduce PDF/image drift
-  const lockExportLayout = (element: HTMLElement) => {
-      const page = element;
-      page.style.width = '794px';
-      page.style.height = '1123px';
-      page.style.boxSizing = 'border-box';
-
-      const frameSelectors = ['.row', '.body-row-images', '.body-row-text', '.col'];
-      frameSelectors.forEach((selector) => {
-          element.querySelectorAll(selector).forEach((node) => {
-              const target = node as HTMLElement;
-              const rect = target.getBoundingClientRect();
-              const computed = window.getComputedStyle(target);
-
-              if (rect.width > 0) {
-                  const width = `${rect.width.toFixed(3)}px`;
-                  target.style.width = width;
-                  target.style.minWidth = width;
-                  target.style.maxWidth = width;
-              }
-
-              if (selector === '.row' || selector === '.body-row-images') {
-                  if (rect.height > 0) {
-                      const height = `${rect.height.toFixed(3)}px`;
-                      target.style.height = height;
-                      target.style.minHeight = height;
-                      target.style.maxHeight = height;
-                  }
-              }
-
-              if (computed.display === 'inline') {
-                  target.style.display = 'inline-block';
-              }
-          });
-      });
-
-      element.querySelectorAll('img').forEach((node) => {
-          const img = node as HTMLElement;
-          const rect = img.getBoundingClientRect();
-          const computed = window.getComputedStyle(img);
-          img.style.display = 'block';
-          img.style.objectFit = 'contain';
-          if (rect.width > 0) {
-              const width = `${rect.width.toFixed(3)}px`;
-              img.style.width = width;
-              img.style.maxWidth = width;
-          }
-          if (rect.height > 0) {
-              img.style.maxHeight = `${rect.height.toFixed(3)}px`;
-          }
-          img.style.verticalAlign = computed.verticalAlign || 'middle';
-      });
-  };
-
-        const fitTextForExport = (element: HTMLElement, density: 'standard' | 'compact') => {
-            const regions = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .left-text-col'));
+  const fitTextForExport = (element: HTMLElement, density: 'standard' | 'compact') => {
+      const regions = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .left-text-col'));
       if (regions.length === 0) return;
 
-            const textTargets = Array.from(element.querySelectorAll<HTMLElement>('.left-text-col .text-wrap-fix, .left-text-col .text-cell span, .left-text-col .risk-line-text'));
+      const textTargets = Array.from(element.querySelectorAll<HTMLElement>('.left-text-col .text-wrap-fix, .left-text-col .text-cell span, .left-text-col .risk-line-text'));
       if (textTargets.length === 0) return;
 
-        const minFontSizePx = density === 'compact' ? 8.4 : 8.8;
-        const maxIterations = density === 'compact' ? 5 : 4;
+      const minFontSizePx = density === 'compact' ? 8.4 : 8.8;
+      const maxIterations = density === 'compact' ? 5 : 4;
 
       for (let iteration = 0; iteration < maxIterations; iteration += 1) {
           const hasOverflow = regions.some((region) => region.scrollHeight > (region.clientHeight + 1));
@@ -339,221 +163,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return textCols.some((col) => col.scrollHeight > (col.clientHeight + 1));
   };
 
-  const detectPdfExportRisk = (element: HTMLElement) => {
-      const selectors = [
-          '.right-ai-col .ai-summary-block',
-          '.right-ai-col .ai-metric-grid',
-          '.right-ai-col .ai-metric-row',
-          '.right-ai-col .ai-metric-label',
-          '.right-ai-col .ai-eval-grid',
-          '.right-ai-col .ai-eval-card',
-          '.right-ai-col .ai-eval-text',
-          '.right-ai-col .manager-feedback-block',
-      ];
-
-      let riskScore = 0;
-      selectors.forEach((selector) => {
-          element.querySelectorAll<HTMLElement>(selector).forEach((node) => {
-              const overflowY = node.scrollHeight > (node.clientHeight + 1);
-              const overflowX = node.scrollWidth > (node.clientWidth + 1);
-              if (overflowY || overflowX) {
-                  riskScore += 1;
-              }
-          });
-      });
-
-      return riskScore;
-  };
-
-  const collectPageAlignmentDiagnostics = (element: HTMLElement) => {
-      const checks = [
-          '.right-ai-col .ai-score-header',
-          '.right-ai-col .ai-metric-row',
-          '.right-ai-col .ai-eval-card',
-          '.right-ai-col .overall-opinion-text',
-          '.left-text-col .risk-line-text',
-      ];
-
-      let overflowIssues = 0;
-      checks.forEach((selector) => {
-          element.querySelectorAll<HTMLElement>(selector).forEach((node) => {
-              if (node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1) {
-                  overflowIssues += 1;
-              }
-          });
-      });
-
-      return {
-          overflowIssues,
-          riskScore: detectPdfExportRisk(element),
-      };
-  };
-
-    const isCanvasLikelyBlank = (canvas: HTMLCanvasElement, threshold = 0.992, minNonBlankSamples = 16) => {
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      if (!context) return false;
-
-      const sampleStep = 16;
-      let sampled = 0;
-      let blankish = 0;
-      let nonBlank = 0;
-
-      for (let y = 0; y < canvas.height; y += sampleStep) {
-          for (let x = 0; x < canvas.width; x += sampleStep) {
-              const pixel = context.getImageData(x, y, 1, 1).data;
-              const alpha = pixel[3];
-              const isWhite = pixel[0] >= 248 && pixel[1] >= 248 && pixel[2] >= 248;
-              if (alpha === 0 || isWhite) {
-                  blankish += 1;
-              } else {
-                  nonBlank += 1;
-              }
-              sampled += 1;
-          }
-      }
-
-      if (sampled === 0) return false;
-      const blankRatio = blankish / sampled;
-      return blankRatio >= threshold && nonBlank < minNonBlankSamples;
-  };
-
-  const countNonBlankSamples = (canvas: HTMLCanvasElement) => {
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      if (!context) return 0;
-
-      const sampleStep = 16;
-      let nonBlank = 0;
-
-      for (let y = 0; y < canvas.height; y += sampleStep) {
-          for (let x = 0; x < canvas.width; x += sampleStep) {
-              const pixel = context.getImageData(x, y, 1, 1).data;
-              const alpha = pixel[3];
-              const isWhite = pixel[0] >= 248 && pixel[1] >= 248 && pixel[2] >= 248;
-              if (!(alpha === 0 || isWhite)) {
-                  nonBlank += 1;
-              }
-          }
-      }
-
-      return nonBlank;
-  };
-
-  const rasterizeRightPanelForPdf = async (clone: HTMLElement, sourcePage?: HTMLElement) => {
-      const panel = clone.querySelector<HTMLElement>('.right-ai-col');
-      const sourcePanel = (sourcePage || clone).querySelector<HTMLElement>('.right-ai-col');
-      if (!panel || !sourcePanel) return;
-
-      const rect = sourcePanel.getBoundingClientRect();
-      const width = Math.max(1, Math.round(rect.width));
-      const height = Math.max(1, Math.round(rect.height));
-
-      if (width < 10 || height < 10) return;
-
-      const panelCanvas = await html2canvas(sourcePanel, {
-          scale: 2,
-          useCORS: true,
-          foreignObjectRendering: false,
-          logging: false,
-          width,
-          height,
-          x: 0,
-          y: 0,
-          backgroundColor: '#ffffff',
-      });
-
-    if (isCanvasLikelyBlank(panelCanvas, 0.999, 10)) return;
-
-      const dataUrl = panelCanvas.toDataURL('image/png');
-      const snapshot = document.createElement('img');
-    snapshot.className = 'pdf-raster-right';
-      snapshot.src = dataUrl;
-      snapshot.style.width = '100%';
-      snapshot.style.height = '100%';
-      snapshot.style.display = 'block';
-      snapshot.style.objectFit = 'fill';
-      snapshot.style.imageRendering = 'auto';
-
-      panel.innerHTML = '';
-      panel.style.padding = '0';
-      panel.style.overflow = 'hidden';
-      panel.appendChild(snapshot);
-  };
-
-      const rasterizeBodyTextForPdf = async (clone: HTMLElement, sourcePage?: HTMLElement): Promise<boolean> => {
-          const bodyText = clone.querySelector<HTMLElement>('.body-row-text');
-          const sourceBodyText = (sourcePage || clone).querySelector<HTMLElement>('.body-row-text');
-          if (!bodyText || !sourceBodyText) return false;
-
-      if (document.fonts?.status !== 'loaded') {
-          await document.fonts.ready;
-      }
-      await new Promise<void>((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      });
-
-      sourceBodyText.querySelectorAll<HTMLElement>('*').forEach((node) => {
-          node.style.fontFamily = '"Malgun Gothic", "맑은 고딕", "Segoe UI", sans-serif';
-          node.style.fontKerning = 'none';
-          node.style.textRendering = 'geometricPrecision';
-          node.style.transform = 'none';
-          node.style.textShadow = 'none';
-      });
-
-      sourceBodyText.querySelectorAll<HTMLElement>('.ai-score-title, .ai-metric-label, .ai-metric-score, .ai-eval-text, .report-pane-title, .report-pane-subtitle').forEach((node) => {
-          node.style.lineHeight = '1.28';
-      });
-
-      const rect = sourceBodyText.getBoundingClientRect();
-      const width = Math.max(1, Math.round(rect.width));
-      const height = Math.max(1, Math.round(rect.height));
-      if (width < 50 || height < 50) return;
-
-      const captureBody = (scale: number, foreignObjectRendering: boolean) => html2canvas(sourceBodyText, {
-          scale,
-          useCORS: true,
-          foreignObjectRendering,
-          logging: false,
-          width,
-          height,
-          x: 0,
-          y: 0,
-          backgroundColor: '#ffffff',
-      });
-
-      const passA = await captureBody(2.5, false);
-      await new Promise<void>((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      });
-      const passB = await captureBody(2, true);
-
-      const scoreA = countNonBlankSamples(passA);
-      const scoreB = countNonBlankSamples(passB);
-      const bodyCanvas = scoreB > scoreA ? passB : passA;
-      if (isCanvasLikelyBlank(bodyCanvas, 0.999, 12)) return false;
-
-      const dataUrl = bodyCanvas.toDataURL('image/png');
-      const snapshot = document.createElement('img');
-    snapshot.className = 'pdf-raster-body';
-      snapshot.src = dataUrl;
-      snapshot.style.width = '100%';
-      snapshot.style.height = '100%';
-      snapshot.style.display = 'block';
-      snapshot.style.objectFit = 'fill';
-      snapshot.style.imageRendering = 'auto';
-
-      bodyText.innerHTML = '';
-      bodyText.style.display = 'block';
-      bodyText.style.overflow = 'hidden';
-      bodyText.appendChild(snapshot);
-      return true;
-  };
-
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
     if (generatingMode) return;
     setGeneratingMode(mode);
     setStatusMessage(mode === 'PDF' ? "PDF 생성 중..." : "이미지 변환 중...");
 
-    if (mode === 'PDF' && pdfExportStrategy === 'native-print') {
+        if (mode === 'PDF') {
       const originalTitle = document.title;
       try {
           await document.fonts.ready;
@@ -604,17 +219,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             }
       await document.fonts.ready;
 
-      let pdf: any = null;
-      if (mode === 'PDF') {
-          try {
-              pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true, precision: 16 });
-          } catch (e) {
-              throw new Error("PDF 초기화 실패: 브라우저 호환성 문제");
-          }
-      }
-      
       let zip: any = null;
-      if (mode === 'IMAGE' && originalPages.length > 1) {
+      if (originalPages.length > 1) {
           try {
               zip = new JSZip();
           } catch (e) {
@@ -624,69 +230,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       
       let singleImageData: string | null = null;
       const pageDensityLog: Array<'standard' | 'compact'> = [];
-            const pageStabilityLog: Array<'normal' | 'pdf-safe'> = [];
-            const pageDiagnosticsLog: Array<{ overflowIssues: number; riskScore: number }> = [];
 
       for (let i = 0; i < originalPages.length; i++) {
-          setStatusMessage(`${mode === 'PDF' ? 'PDF 생성 중...' : '이미지 변환 중...'} (${i + 1}/${originalPages.length})`);
+          setStatusMessage(`이미지 변환 중... (${i + 1}/${originalPages.length})`);
           const originalPage = originalPages[i] as HTMLElement;
-
-          if (mode === 'PDF' && pdfExportStrategy === 'direct-original' && pdf) {
-              const previousTransform = originalPage.style.transform;
-              const previousMarginBottom = originalPage.style.marginBottom;
-              const previousBoxShadow = originalPage.style.boxShadow;
-
-              try {
-                  originalPage.style.transform = 'none';
-                  originalPage.style.marginBottom = '0';
-                  originalPage.style.boxShadow = 'none';
-
-                  await document.fonts.ready;
-                  await new Promise<void>((resolve) => {
-                      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-                  });
-
-                  const captureOriginal = (scale: number, foreignObjectRendering: boolean) => html2canvas(originalPage, {
-                      scale,
-                      useCORS: true,
-                      foreignObjectRendering,
-                      logging: false,
-                      width: 794,
-                      height: 1123,
-                      x: 0,
-                      y: 0,
-                      windowWidth: 794,
-                      windowHeight: 1123,
-                      backgroundColor: '#ffffff',
-                      ignoreElements: (element) => {
-                          if (!(element instanceof HTMLElement)) return false;
-                          return element.classList.contains('no-print-ui') || element.classList.contains('edit-overlay');
-                      },
-                  });
-
-                  let canvas = await captureOriginal(2, false);
-                  if (isCanvasLikelyBlank(canvas, 0.9995, 10)) {
-                      canvas = await captureOriginal(2, true);
-                  }
-                  if (isCanvasLikelyBlank(canvas, 0.9995, 10)) {
-                      canvas = await captureOriginal(3, false);
-                  }
-
-                  const imgData = canvas.toDataURL('image/png');
-                  if (i > 0) pdf.addPage();
-                  pdf.addImage(imgData, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
-
-                  pageDensityLog.push('standard');
-                  pageStabilityLog.push('normal');
-                  pageDiagnosticsLog.push(collectPageAlignmentDiagnostics(originalPage));
-              } finally {
-                  originalPage.style.transform = previousTransform;
-                  originalPage.style.marginBottom = previousMarginBottom;
-                  originalPage.style.boxShadow = previousBoxShadow;
-              }
-
-              continue;
-          }
 
           // Deep clone
           const clone = originalPage.cloneNode(true) as HTMLElement;
@@ -702,9 +249,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           clone.style.backgroundColor = '#ffffff';
           clone.style.border = '2px solid black'; // Preserve outer border
           clone.classList.add('export-mode');
-          if (mode === 'PDF') {
-              clone.classList.add('export-pdf-canonical');
-          }
           
           // Remove UI controls
           clone.querySelectorAll('.edit-overlay, .no-print-ui').forEach(el => el.remove());
@@ -734,19 +278,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               rebalanceBodyForExport(clone, activeDensity);
           }
 
-          const useTextProfile = mode === 'IMAGE' && renderProfile === 'TEXT';
-
-          if (mode === 'PDF' && !useTextProfile) {
-              const riskScore = detectPdfExportRisk(clone);
-              if (riskScore > 0) {
-                  clone.classList.add('export-pdf-safe');
-                  pageStabilityLog.push('pdf-safe');
-              } else {
-                  pageStabilityLog.push('normal');
-              }
-          } else if (mode === 'PDF') {
-              pageStabilityLog.push('normal');
-          }
+          const useTextProfile = renderProfile === 'TEXT';
 
           pageDensityLog.push(activeDensity);
 
@@ -772,32 +304,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           // Brief pause for rendering stabilization
           await new Promise(resolve => setTimeout(resolve, 220));
 
-          if (mode === 'PDF') {
-              const beforeDiag = collectPageAlignmentDiagnostics(clone);
-              pageDiagnosticsLog.push(beforeDiag);
-
-              if (pdfExportStrategy === 'body-raster') {
-                  try {
-                      const bodyRasterized = await rasterizeBodyTextForPdf(clone, originalPage);
-                      if (!bodyRasterized) {
-                          setStatusMessage(`PDF 생성 중... (${i + 1}/${originalPages.length}) 본문 안정화 재시도`);
-                          await rasterizeRightPanelForPdf(clone, originalPage);
-                      }
-                  } catch (error) {
-                      console.warn('Body text rasterize fallback skipped:', error);
-                      await rasterizeRightPanelForPdf(clone, originalPage);
-                  }
-              }
-
-              await new Promise<void>((resolve) => {
-                  requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-              });
-          }
-
                     // 3. Capture with html2canvas
-                    const applyCloneOverrides = mode !== 'PDF';
+                    const applyCloneOverrides = true;
                     const capturePage = (foreignObjectRendering: boolean) => html2canvas(clone, {
-                        scale: mode === 'PDF' ? 2 : Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
+                        scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
                         useCORS: true,
                         foreignObjectRendering,
                         logging: false,
@@ -1021,143 +531,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   .report-page.export-ultra-tight .integrity-seal {
                       display: none !important;
                   }
-                  .report-page.export-pdf-safe .right-pane-stack {
-                      overflow: visible !important;
-                  }
-                  .report-page.export-pdf-safe .right-ai-col .ai-summary-block,
-                  .report-page.export-pdf-safe .right-ai-col .manager-feedback-block {
-                      overflow: visible !important;
-                      flex-shrink: 0 !important;
-                  }
-                  .report-page.export-pdf-safe .right-ai-col .ai-metric-grid {
-                      row-gap: 7px !important;
-                  }
-                  .report-page.export-pdf-safe .right-ai-col .ai-metric-row {
-                      display: grid !important;
-                      grid-template-columns: 66px minmax(0, 1fr) 22px !important;
-                      align-items: center !important;
-                      column-gap: 6px !important;
-                      min-height: 16px !important;
-                      line-height: 1.36 !important;
-                      font-size: 9.6px !important;
-                  }
-                  .report-page.export-pdf-safe .right-ai-col .ai-metric-label,
-                  .report-page.export-pdf-safe .right-ai-col .ai-metric-score {
-                      display: block !important;
-                      line-height: 1.36 !important;
-                      white-space: nowrap !important;
-                      overflow: visible !important;
-                      text-overflow: clip !important;
-                  }
-                  .report-page.export-pdf-safe .right-ai-col .ai-metric-bar {
-                      height: 7px !important;
-                      margin: 0 !important;
-                  }
-                  .report-page.export-pdf-safe .right-ai-col .ai-eval-card {
-                      min-height: 42px !important;
-                  }
-                  .report-page.export-pdf-safe .right-ai-col .ai-eval-text {
-                      line-height: 1.3 !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col,
-                  .report-page.export-pdf-canonical .right-pane-stack,
-                  .report-page.export-pdf-canonical .right-ai-col .ai-summary-block,
-                  .report-page.export-pdf-canonical .right-ai-col .manager-feedback-block {
-                      overflow: visible !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-score-header {
-                      display: grid !important;
-                      grid-template-columns: minmax(0, 1fr) auto !important;
-                      min-height: 26px !important;
-                      align-items: center !important;
-                      column-gap: 8px !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-score-title-wrap {
-                      display: inline-flex !important;
-                      align-items: center !important;
-                      gap: 6px !important;
-                      min-width: 0 !important;
-                      line-height: 1.2 !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-score-icon {
-                      width: 14px !important;
-                      height: 14px !important;
-                      display: block !important;
-                      flex-shrink: 0 !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-score-title {
-                      font-size: 11px !important;
-                      line-height: 1.2 !important;
-                      letter-spacing: 0 !important;
-                      white-space: nowrap !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-score-badge {
-                      display: inline-flex !important;
-                      align-items: center !important;
-                      justify-content: center !important;
-                      min-height: 20px !important;
-                      line-height: 1 !important;
-                      padding-top: 0 !important;
-                      padding-bottom: 0 !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-grid {
-                      display: grid !important;
-                      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-                      column-gap: 10px !important;
-                      row-gap: 6px !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-row {
-                      display: table !important;
-                      width: 100% !important;
-                      table-layout: fixed !important;
-                      height: 16px !important;
-                      min-height: 16px !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-label,
-                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-bar,
-                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-score {
-                      display: table-cell !important;
-                      vertical-align: middle !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-label {
-                      width: 66px !important;
-                      font-size: 9.6px !important;
-                      line-height: 1.25 !important;
-                      white-space: nowrap !important;
-                      overflow: hidden !important;
-                      text-overflow: clip !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-bar {
-                      height: 6px !important;
-                      padding: 0 6px !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-score {
-                      width: 22px !important;
-                      font-size: 9.6px !important;
-                      line-height: 1.25 !important;
-                      text-align: right !important;
-                      white-space: nowrap !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-eval-grid {
-                      display: grid !important;
-                      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-                      gap: 4px !important;
-                      align-items: stretch !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-eval-card {
-                      min-height: 42px !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .ai-eval-text {
-                      display: block !important;
-                      line-height: 1.28 !important;
-                      max-height: 2.6em !important;
-                      overflow: hidden !important;
-                      -webkit-line-clamp: unset !important;
-                  }
-                  .report-page.export-pdf-canonical .right-ai-col .overall-opinion-text,
-                  .report-page.export-pdf-canonical .right-ai-col .feedback-line-text {
-                      line-height: 1.28 !important;
-                  }
                   .report-page.export-mode .integrity-seal {
                       top: 6px !important;
                       right: 6px !important;
@@ -1182,45 +555,22 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       object-fit: contain !important;
                       image-rendering: -webkit-optimize-contrast !important;
                   }
-                  .pdf-raster-body,
-                  .pdf-raster-right {
-                      width: 100% !important;
-                      height: 100% !important;
-                      max-width: none !important;
-                      object-fit: fill !important;
-                      image-rendering: auto !important;
-                      display: block !important;
-                  }
                `;
                                 doc.head.appendChild(style);
                             }) : undefined
                     });
 
-                        let canvas = await capturePage(useTextProfile);
-                        if (mode === 'PDF' && isCanvasLikelyBlank(canvas, 0.9995, 10)) {
-                            setStatusMessage(`PDF 생성 중... (${i + 1}/${originalPages.length}) 페이지 캡처 재시도`);
-                            canvas = await capturePage(false);
-                        }
+                        const canvas = await capturePage(useTextProfile);
 
-          const imgData = mode === 'PDF'
-              ? canvas.toDataURL('image/png')
-              : canvas.toDataURL('image/jpeg', 0.95);
+          const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
-          if (mode === 'PDF' && pdf) {
-              const imgWidth = 210; // A4 Width in mm
-              const imgHeight = 297; // A4 Height in mm
-              if (i > 0) pdf.addPage();
-              pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
-          } else if (mode === 'IMAGE') {
-              if (zip) {
-                  // [UPDATED] Use resolved name for filename as well
-                  const resolvedTeam = teams.find(t => t.id === entries[i].teamId);
-                  const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[i].teamName || '미지정')).replace(/[\/\\?%*:|"<>]/g, '_');
-                  const fileName = `TBM_Report_${entries[i].date}_${safeTeamName}.jpg`;
-                  zip.file(fileName, imgData.split(',')[1], { base64: true });
-              } else {
-                  singleImageData = imgData;
-              }
+          if (zip) {
+              const resolvedTeam = teams.find(t => t.id === entries[i].teamId);
+              const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[i].teamName || '미지정')).replace(/[\/\\?%*:|"<>]/g, '_');
+              const fileName = `TBM_Report_${entries[i].date}_${safeTeamName}.jpg`;
+              zip.file(fileName, imgData.split(',')[1], { base64: true });
+          } else {
+              singleImageData = imgData;
           }
           
           ghostContainer.removeChild(clone);
@@ -1228,39 +578,30 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
       const dateStr = new Date().toISOString().slice(0,10);
 
-      if (mode === 'PDF' && pdf) {
-          pdf.save(`TBM_일지_통합본_${dateStr}.pdf`);
-      } else if (mode === 'IMAGE') {
-          if (zip) {
-              const content = await zip.generateAsync({ type: "blob" });
-              const url = URL.createObjectURL(content);
-              const link = document.createElement('a');
-              link.href = url;
-              link.setAttribute('download', `TBM_일지_이미지모음_${dateStr}.zip`);
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              // [FIX] Revoke object URL to release memory after download
-              URL.revokeObjectURL(url);
-          } else if (singleImageData) {
-              const resolvedTeam = teams.find(t => t.id === entries[0].teamId);
-              const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[0].teamName || '미지정')).replace(/[\/\\?%*:|"<>]/g, '_');
-              const link = document.createElement('a');
-              link.href = singleImageData;
-              link.setAttribute('download', `TBM_일지_${entries[0].date}_${safeTeamName}.jpg`);
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-          }
+      if (zip) {
+          const content = await zip.generateAsync({ type: "blob" });
+          const url = URL.createObjectURL(content);
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `TBM_일지_이미지모음_${dateStr}.zip`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+      } else if (singleImageData) {
+          const resolvedTeam = teams.find(t => t.id === entries[0].teamId);
+          const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[0].teamName || '미지정')).replace(/[\/\\?%*:|"<>]/g, '_');
+          const link = document.createElement('a');
+          link.href = singleImageData;
+          link.setAttribute('download', `TBM_일지_${entries[0].date}_${safeTeamName}.jpg`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
       }
 
             const compactCount = pageDensityLog.filter((density) => density === 'compact').length;
             const standardCount = pageDensityLog.length - compactCount;
-            const safeCount = pageStabilityLog.filter((modeTag) => modeTag === 'pdf-safe').length;
-            const totalOverflow = pageDiagnosticsLog.reduce((sum, item) => sum + item.overflowIssues, 0);
-            const stabilityText = mode === 'PDF' ? `, 안정화 ${safeCount}페이지` : '';
-            const diagnosticText = mode === 'PDF' ? `, 진단이슈 ${totalOverflow}` : '';
-            announceStatus(`내보내기 완료: 표준 ${standardCount}페이지, 압축 ${compactCount}페이지${stabilityText}${diagnosticText}`);
+            announceStatus(`내보내기 완료: 표준 ${standardCount}페이지, 압축 ${compactCount}페이지`);
 
     } catch (error) {
       console.error("Generation failed", error);

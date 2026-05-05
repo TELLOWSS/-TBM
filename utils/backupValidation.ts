@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const MAX_BACKUP_FILE_SIZE = 50 * 1024 * 1024;
 export const MAX_BACKUP_FILE_COUNT = 20;
-export const KNOWN_BACKUP_KEYS = ['version', 'backupDate', 'scope', 'entries', 'assessments', 'teams', 'signatures', 'siteConfig', 'teamNormalizationLogs', 'teamNormalizationRequests'] as const;
+export const KNOWN_BACKUP_KEYS = ['version', 'backupDate', 'scope', 'entries', 'assessments', 'teams', 'signatures', 'siteConfig', 'teamNormalizationLogs', 'teamNormalizationRequests', 'activityLogs', 'labSnapshots', 'commandTasks'] as const;
 
 // ============================================
 // Zod Schemas for Runtime Backup Validation
@@ -93,6 +93,60 @@ const TeamNormalizationRequestSchema = z.object({
   reviewedBy: z.string().optional(),
 }).passthrough();
 
+const AppActivityLogSchema = z.object({
+  id: z.string(),
+  timestamp: z.number(),
+  message: z.string(),
+}).passthrough();
+
+const LabSnapshotSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  savedAt: z.string(),
+  filter: z.object({
+    teamIds: z.array(z.string()).optional(),
+    riskLabel: z.string().nullable().optional(),
+    period: z.enum(['7D', '30D', 'THIS_MONTH', 'CUSTOM', 'ALL']).optional(),
+    customStart: z.string().optional(),
+    customEnd: z.string().optional(),
+  }).passthrough().optional(),
+  avgScore: z.number().optional(),
+  totalEntries: z.number().optional(),
+  totalPeople: z.number().optional(),
+  topRisk: z.string().optional(),
+}).passthrough();
+
+const CommandStatusHistoryItemSchema = z.object({
+  from: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'DONE', 'DELAYED']),
+  to: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'DONE', 'DELAYED']),
+  changedAt: z.number(),
+  note: z.string().optional(),
+}).passthrough();
+
+const CommandTaskSchema = z.object({
+  id: z.string(),
+  date: z.string(),
+  title: z.string(),
+  instruction: z.string(),
+  assigneeTeamId: z.string().optional(),
+  assigneeTeamName: z.string().optional(),
+  assigneeName: z.string().optional(),
+  dueAt: z.string().optional(),
+  priority: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']),
+  status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'DONE', 'DELAYED']),
+  rationale: z.string(),
+  kpi: z.string().optional(),
+  evidenceImageUrls: z.array(z.string()).optional(),
+  evidenceComment: z.string().optional(),
+  delayReason: z.enum(['MATERIAL', 'MANPOWER', 'WEATHER', 'OTHER']).optional(),
+  delayComment: z.string().optional(),
+  statusHistory: z.array(CommandStatusHistoryItemSchema).optional(),
+  sourceAnalysisSnapshotId: z.string().optional(),
+  sourceEntryIds: z.array(z.string()).optional(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+}).passthrough();
+
 /** Full typed backup payload schema */
 export const BackupPayloadSchema = z.object({
   version: z.string().optional(),
@@ -105,6 +159,9 @@ export const BackupPayloadSchema = z.object({
   siteConfig: SiteConfigSchema.optional(),
   teamNormalizationLogs: z.array(TeamNormalizationLogSchema).optional(),
   teamNormalizationRequests: z.array(TeamNormalizationRequestSchema).optional(),
+  activityLogs: z.array(AppActivityLogSchema).optional(),
+  labSnapshots: z.array(LabSnapshotSchema).optional(),
+  commandTasks: z.array(CommandTaskSchema).optional(),
 }).passthrough();
 
 export type BackupPayload = z.infer<typeof BackupPayloadSchema>;

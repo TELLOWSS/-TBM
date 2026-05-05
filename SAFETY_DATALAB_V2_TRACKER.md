@@ -2,6 +2,10 @@
 
 관련 문서: [SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md](SAFETY_DATALAB_V2_IMPLEMENTATION_PLAN.md)
 
+## 최근 세션 인수인계
+- 2026-05-05 종료 전 정리 메모: [SESSION_HANDOFF_2026-05-05.md](SESSION_HANDOFF_2026-05-05.md)
+- 다음 세션 시작 시 위 문서를 먼저 확인하고 모바일 E2E / 스마트TBM지휘 Phase 3·4 실검증부터 재개
+
 ## Phase 상태 보드
 - [x] Phase 1 — 필터/탐색 고도화 ✅ 2026-04-28 Cleared
 - [x] Phase 2 — 분석 정확도 강화 ✅ 2026-04-28 Cleared

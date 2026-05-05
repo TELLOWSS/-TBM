@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { TBMEntry, TeamOption, CommandTask as SmartCommandTask, CommandPriority as SmartCommandPriority, CommandStatus as SmartCommandStatus, CommandStatusHistoryItem, SiteConfig, TeamNormalizationLog, TeamNormalizationRequest, TeamNormalizationReasonCode } from '../types';
+import { TBMEntry, TeamOption, CommandTask as SmartCommandTask, CommandPriority as SmartCommandPriority, CommandStatus as SmartCommandStatus, CommandStatusHistoryItem, SiteConfig, TeamNormalizationLog, TeamNormalizationRequest, TeamNormalizationReasonCode, LabSnapshot } from '../types';
 import { BarChart2, TrendingUp, BrainCircuit, Activity, Database, Info, Hexagon, Radar, ShieldCheck, Upload, HardDrive, Search, AlertTriangle, Users, Zap, Layers, FileText, Download, Share2, Target, CheckCircle2, XCircle, Filter, ClipboardList, Plus, Trash2 } from 'lucide-react';
 import { generateGeneralInsight } from '../services/geminiService';
 
@@ -17,6 +17,7 @@ interface SafetyDataLabProps {
     normalizationRequests?: TeamNormalizationRequest[];
     focusTarget?: 'NORMALIZATION_WORKFLOW' | null;
     onFocusTargetHandled?: () => void;
+    storageRevision?: number;
 }
 
 type PeriodFilter = '7D' | '30D' | 'THIS_MONTH' | 'CUSTOM' | 'ALL';
@@ -192,19 +193,26 @@ const TeamHeatmapCell: React.FC<TeamHeatmapCellProps> = ({ name, activity, score
 // ============================================================
 // [Phase 4] 스냅샷 타입
 // ============================================================
-interface LabSnapshot {
-    id: string;
-    label: string;
-    savedAt: string;
-    filter: LabFilterState;
-    avgScore: number;
-    totalEntries: number;
-    totalPeople: number;
-    topRisk: string;
-}
+export const SNAPSHOT_STORAGE_KEY = 'safetylab_snapshots_v1';
+export const COMMAND_TASK_STORAGE_KEY = 'smart_tbm_command_tasks_v1';
 
-const SNAPSHOT_STORAGE_KEY = 'safetylab_snapshots_v1';
-const COMMAND_TASK_STORAGE_KEY = 'smart_tbm_command_tasks_v1';
+const readStoredSnapshots = (): LabSnapshot[] => {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(SNAPSHOT_STORAGE_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+};
+
+const readStoredCommandTasks = (): SmartCommandTask[] => {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(COMMAND_TASK_STORAGE_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+};
 
 // ============================================================
 // [Phase 3] AI 지시 카드 스키마
@@ -253,16 +261,14 @@ const CommandOrderCard: React.FC<{ order: CommandOrder; index: number }> = ({ or
     );
 };
 
-export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, onBackupData, onRestoreData, siteConfig, onRequestNormalization, onApproveNormalizationRequest, onRejectNormalizationRequest, normalizationLogs = [], normalizationRequests = [], focusTarget, onFocusTargetHandled }) => {
+export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, onBackupData, onRestoreData, siteConfig, onRequestNormalization, onApproveNormalizationRequest, onRejectNormalizationRequest, normalizationLogs = [], normalizationRequests = [], focusTarget, onFocusTargetHandled, storageRevision = 0 }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiCards, setAiCards] = useState<CommandOrder[] | null>(null);
     const [aiRawFallback, setAiRawFallback] = useState<string | null>(null);
     const [analyzeError, setAnalyzeError] = useState(false);
     const [announceMessage, setAnnounceMessage] = useState('');
     // [Phase 4] 스냅샷 / 공유 상태
-    const [snapshots, setSnapshots] = useState<LabSnapshot[]>(() => {
-        try { return JSON.parse(localStorage.getItem(SNAPSHOT_STORAGE_KEY) || '[]'); } catch { return []; }
-    });
+    const [snapshots, setSnapshots] = useState<LabSnapshot[]>(() => readStoredSnapshots());
     const [copyDone, setCopyDone] = useState(false);
     const [commandShareDone, setCommandShareDone] = useState(false);
     const [validationLogCopied, setValidationLogCopied] = useState(false);
@@ -276,9 +282,7 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     const [reviewReasonMap, setReviewReasonMap] = useState<Record<string, TeamNormalizationReasonCode>>({});
     const [reviewCommentMap, setReviewCommentMap] = useState<Record<string, string>>({});
     const [normalizationLogRange, setNormalizationLogRange] = useState<'TODAY' | '7D' | '30D'>('7D');
-    const [commandTasks, setCommandTasks] = useState<SmartCommandTask[]>(() => {
-        try { return JSON.parse(localStorage.getItem(COMMAND_TASK_STORAGE_KEY) || '[]'); } catch { return []; }
-    });
+    const [commandTasks, setCommandTasks] = useState<SmartCommandTask[]>(() => readStoredCommandTasks());
     const [commandForm, setCommandForm] = useState({
         title: '',
         instruction: '',
@@ -318,6 +322,11 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
             setLinkageTargetRate(siteConfig.linkageTargetRate);
         }
     }, [siteConfig?.linkageTargetRate]);
+
+    React.useEffect(() => {
+        setSnapshots(readStoredSnapshots());
+        setCommandTasks(readStoredCommandTasks());
+    }, [storageRevision]);
 
     React.useEffect(() => {
         if (focusTarget !== 'NORMALIZATION_WORKFLOW') return;
