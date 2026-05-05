@@ -705,9 +705,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       await rasterizeRightPanelForPdf(clone);
                   }
               }
+
+              await new Promise<void>((resolve) => {
+                  requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+              });
           }
 
-                    // 3. Capture with html2canvas (TEXT profile first, fallback to COMPAT when blank)
+                    // 3. Capture with html2canvas
+                    const applyCloneOverrides = mode !== 'PDF';
                     const capturePage = (foreignObjectRendering: boolean) => html2canvas(clone, {
                         scale: mode === 'PDF' ? 2 : Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
                         useCORS: true,
@@ -720,7 +725,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                         windowWidth: 794,
                         windowHeight: 1123,
                         backgroundColor: '#ffffff',
-                        onclone: (doc) => {
+                            onclone: applyCloneOverrides ? ((doc) => {
                              const style = doc.createElement('style');
                              style.innerHTML = `
                   .report-page, .report-page * {
@@ -1104,8 +1109,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       display: block !important;
                   }
                `;
-                             doc.head.appendChild(style);
-                        }
+                                doc.head.appendChild(style);
+                            }) : undefined
                     });
 
                         let canvas = await capturePage(useTextProfile);
