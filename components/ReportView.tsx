@@ -21,8 +21,7 @@ interface ReportViewProps {
 export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName, onClose, signatures, onUpdateSignature, onEdit, onDelete }) => {
   const [generatingMode, setGeneratingMode] = useState<'PDF' | 'IMAGE' | null>(null);
         const [exportDensity, setExportDensity] = useState<'auto' | 'standard' | 'compact'>('auto');
-    const [baselineTune, setBaselineTune] = useState<'auto' | 'low' | 'mid' | 'high'>('auto');
-    const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('TEXT');
+    const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('COMPAT');
   const [statusMessage, setStatusMessage] = useState("");
     const [announceMessage, setAnnounceMessage] = useState('');
   const [scale, setScale] = useState(1);
@@ -340,32 +339,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return textCols.some((col) => col.scrollHeight > (col.clientHeight + 1));
   };
 
-  const getBaselineOffsets = (tune: 'low' | 'mid' | 'high') => {
-      const textShift = tune === 'low' ? -0.85 : tune === 'high' ? -1.35 : -1.1;
-      const headerShift = tune === 'low' ? -0.45 : tune === 'high' ? -0.85 : -0.65;
-      return {
-          textShift,
-          textShiftTight: Number((textShift - 0.2).toFixed(2)),
-          headerShift,
-          headerShiftTight: Number((headerShift - 0.2).toFixed(2)),
-      };
-  };
-
-  const resolveBaselineTuneForClone = (
-      element: HTMLElement,
-      density: 'standard' | 'compact',
-      selected: 'auto' | 'low' | 'mid' | 'high'
-  ): 'low' | 'mid' | 'high' => {
-      if (selected !== 'auto') return selected;
-
-      const bodyTextLength = (element.querySelector('.body-row-text')?.textContent || '').replace(/\s+/g, '').length;
-      const overflow = hasBodyOverflow(element);
-
-      if (overflow || density === 'compact' || bodyTextLength >= 900) return 'high';
-      if (bodyTextLength >= 450) return 'mid';
-      return 'mid';
-  };
-
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
     if (generatingMode) return;
     setGeneratingMode(mode);
@@ -419,7 +392,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       
       let singleImageData: string | null = null;
       const pageDensityLog: Array<'standard' | 'compact'> = [];
-    const pageBaselineLog: Array<'low' | 'mid' | 'high'> = [];
 
       for (let i = 0; i < originalPages.length; i++) {
           setStatusMessage(`${mode === 'PDF' ? 'PDF 생성 중...' : '이미지 변환 중...'} (${i + 1}/${originalPages.length})`);
@@ -466,14 +438,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               clone.classList.add('export-compact');
               rebalanceBodyForExport(clone, activeDensity);
           }
-          const appliedBaseline = resolveBaselineTuneForClone(clone, activeDensity, baselineTune);
-          const baselineOffsets = getBaselineOffsets(appliedBaseline);
-          clone.style.setProperty('--export-text-shift', `${baselineOffsets.textShift}px`);
-          clone.style.setProperty('--export-text-shift-tight', `${baselineOffsets.textShiftTight}px`);
-          clone.style.setProperty('--export-header-shift', `${baselineOffsets.headerShift}px`);
-          clone.style.setProperty('--export-header-shift-tight', `${baselineOffsets.headerShiftTight}px`);
           pageDensityLog.push(activeDensity);
-          pageBaselineLog.push(appliedBaseline);
 
           // 1. Convert SVGs to PNGs (Critical for icon alignment)
           await convertSvgToImage(clone);
@@ -517,9 +482,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   .report-page, .report-page * {
                       box-sizing: border-box !important;
                       -webkit-font-smoothing: antialiased !important;
-                      text-rendering: geometricPrecision !important;
-                      font-family: ${renderProfile === 'TEXT' ? '"Malgun Gothic", "맑은 고딕", "Segoe UI", sans-serif' : '-apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif'} !important;
-                      font-kerning: none !important;
                   }
                   .report-page {
                       width: 794px !important;
@@ -591,94 +553,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   .body-row-text .section-header {
                       color: #111827 !important;
                       letter-spacing: 0 !important;
-                  }
-                  .report-page.export-mode .report-pane-title,
-                  .report-page.export-mode .report-pane-subtitle,
-                  .report-page.export-mode .text-wrap-fix,
-                  .report-page.export-mode .dense-export-text,
-                  .report-page.export-mode .risk-line-text,
-                  .report-page.export-mode .feedback-line-text,
-                  .report-page.export-mode .overall-opinion-text,
-                  .report-page.export-mode .text-cell span,
-                  .report-page.export-mode .section-header {
-                      position: relative !important;
-                      top: var(--export-text-shift, -1.1px) !important;
-                      line-height: 1.24 !important;
-                  }
-                  .report-page.export-mode .h-header .p-4,
-                  .report-page.export-mode .h-header .section-header,
-                  .report-page.export-mode .h-info .flex-center,
-                  .report-page.export-mode .h-info .px-3 {
-                      position: relative !important;
-                      top: var(--export-header-shift, -0.6px) !important;
-                  }
-                  .report-page.export-tight .report-pane-title,
-                  .report-page.export-tight .report-pane-subtitle,
-                  .report-page.export-tight .text-wrap-fix,
-                  .report-page.export-tight .dense-export-text,
-                  .report-page.export-tight .risk-line-text,
-                  .report-page.export-tight .feedback-line-text,
-                  .report-page.export-tight .overall-opinion-text,
-                  .report-page.export-tight .text-cell span,
-                  .report-page.export-tight .section-header,
-                  .report-page.export-ultra-tight .report-pane-title,
-                  .report-page.export-ultra-tight .report-pane-subtitle,
-                  .report-page.export-ultra-tight .text-wrap-fix,
-                  .report-page.export-ultra-tight .dense-export-text,
-                  .report-page.export-ultra-tight .risk-line-text,
-                  .report-page.export-ultra-tight .feedback-line-text,
-                  .report-page.export-ultra-tight .overall-opinion-text,
-                  .report-page.export-ultra-tight .text-cell span,
-                  .report-page.export-ultra-tight .section-header {
-                      position: relative !important;
-                      line-height: 1.22 !important;
-                      top: var(--export-text-shift-tight, -1.4px) !important;
-                  }
-                  .report-page.export-tight .h-header .p-4,
-                  .report-page.export-tight .h-header .section-header,
-                  .report-page.export-tight .h-info .flex-center,
-                  .report-page.export-tight .h-info .px-3,
-                  .report-page.export-ultra-tight .h-header .p-4,
-                  .report-page.export-ultra-tight .h-header .section-header,
-                  .report-page.export-ultra-tight .h-info .flex-center,
-                  .report-page.export-ultra-tight .h-info .px-3 {
-                      position: relative !important;
-                      top: var(--export-header-shift-tight, -0.9px) !important;
-                  }
-                  .report-page.export-mode h1,
-                  .report-page.export-mode h2,
-                  .report-page.export-mode h3,
-                  .report-page.export-mode p,
-                  .report-page.export-mode span,
-                  .report-page.export-mode strong,
-                  .report-page.export-mode b,
-                  .report-page.export-mode small,
-                  .report-page.export-mode td,
-                  .report-page.export-mode th {
-                      position: relative !important;
-                      top: var(--export-text-shift, -1.1px) !important;
-                  }
-                  .report-page.export-tight h1,
-                  .report-page.export-tight h2,
-                  .report-page.export-tight h3,
-                  .report-page.export-tight p,
-                  .report-page.export-tight span,
-                  .report-page.export-tight strong,
-                  .report-page.export-tight b,
-                  .report-page.export-tight small,
-                  .report-page.export-tight td,
-                  .report-page.export-tight th,
-                  .report-page.export-ultra-tight h1,
-                  .report-page.export-ultra-tight h2,
-                  .report-page.export-ultra-tight h3,
-                  .report-page.export-ultra-tight p,
-                  .report-page.export-ultra-tight span,
-                  .report-page.export-ultra-tight strong,
-                  .report-page.export-ultra-tight b,
-                  .report-page.export-ultra-tight small,
-                  .report-page.export-ultra-tight td,
-                  .report-page.export-ultra-tight th {
-                      top: var(--export-text-shift-tight, -1.4px) !important;
                   }
                   .text-wrap-fix { white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; line-height: 1.35 !important; }
                   .break-keep { word-break: keep-all !important; overflow-wrap: anywhere !important; }
@@ -813,10 +687,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
             const compactCount = pageDensityLog.filter((density) => density === 'compact').length;
             const standardCount = pageDensityLog.length - compactCount;
-            const lowCount = pageBaselineLog.filter((level) => level === 'low').length;
-            const midCount = pageBaselineLog.filter((level) => level === 'mid').length;
-            const highCount = pageBaselineLog.filter((level) => level === 'high').length;
-            announceStatus(`내보내기 완료: 표준 ${standardCount}페이지, 압축 ${compactCount}페이지 / 기준선 약 ${lowCount}, 중 ${midCount}, 강 ${highCount}`);
+            announceStatus(`내보내기 완료: 표준 ${standardCount}페이지, 압축 ${compactCount}페이지`);
 
     } catch (error) {
       console.error("Generation failed", error);
@@ -1028,43 +899,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                 className={`px-2.5 py-1 text-[10px] font-bold transition-colors border-l border-slate-500 ${exportDensity === 'compact' ? 'bg-indigo-200 text-indigo-900' : 'bg-slate-700 text-slate-200'} ${generatingMode !== null ? 'opacity-60 cursor-not-allowed' : ''}`}
                             >
                                 압축
-                            </button>
-                        </div>
-                    </div>
-                    <div className="mt-2 flex items-center gap-2">
-                        <span className="text-[10px] text-slate-300 font-semibold">기준선 보정</span>
-                        <div className="inline-flex rounded border border-slate-500 overflow-hidden">
-                            <button
-                                type="button"
-                                onClick={() => setBaselineTune('auto')}
-                                disabled={generatingMode !== null}
-                                className={`px-2.5 py-1 text-[10px] font-bold transition-colors ${baselineTune === 'auto' ? 'bg-amber-200 text-amber-900' : 'bg-slate-700 text-slate-200'} ${generatingMode !== null ? 'opacity-60 cursor-not-allowed' : ''}`}
-                            >
-                                자동
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setBaselineTune('low')}
-                                disabled={generatingMode !== null}
-                                className={`px-2.5 py-1 text-[10px] font-bold transition-colors border-l border-slate-500 ${baselineTune === 'low' ? 'bg-sky-200 text-sky-900' : 'bg-slate-700 text-slate-200'} ${generatingMode !== null ? 'opacity-60 cursor-not-allowed' : ''}`}
-                            >
-                                약
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setBaselineTune('mid')}
-                                disabled={generatingMode !== null}
-                                className={`px-2.5 py-1 text-[10px] font-bold transition-colors border-l border-slate-500 ${baselineTune === 'mid' ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-700 text-slate-200'} ${generatingMode !== null ? 'opacity-60 cursor-not-allowed' : ''}`}
-                            >
-                                중
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setBaselineTune('high')}
-                                disabled={generatingMode !== null}
-                                className={`px-2.5 py-1 text-[10px] font-bold transition-colors border-l border-slate-500 ${baselineTune === 'high' ? 'bg-rose-200 text-rose-900' : 'bg-slate-700 text-slate-200'} ${generatingMode !== null ? 'opacity-60 cursor-not-allowed' : ''}`}
-                            >
-                                강
                             </button>
                         </div>
                     </div>
