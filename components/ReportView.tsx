@@ -341,8 +341,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
   };
 
   const getBaselineOffsets = (tune: 'low' | 'mid' | 'high') => {
-      const textShift = tune === 'low' ? -0.5 : tune === 'high' ? -1.0 : -0.75;
-      const headerShift = tune === 'low' ? -0.25 : tune === 'high' ? -0.55 : -0.4;
+      const textShift = tune === 'low' ? -0.85 : tune === 'high' ? -1.35 : -1.1;
+      const headerShift = tune === 'low' ? -0.45 : tune === 'high' ? -0.85 : -0.65;
       return {
           textShift,
           textShiftTight: Number((textShift - 0.2).toFixed(2)),
@@ -363,7 +363,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
       if (overflow || density === 'compact' || bodyTextLength >= 900) return 'high';
       if (bodyTextLength >= 450) return 'mid';
-      return 'low';
+      return 'mid';
   };
 
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
