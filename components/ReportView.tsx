@@ -253,11 +253,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       const regions = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .col'));
       if (regions.length === 0) return;
 
-      const textTargets = Array.from(element.querySelectorAll<HTMLElement>('.text-wrap-fix, .text-cell span, .ai-eval-text'));
+            const textTargets = Array.from(element.querySelectorAll<HTMLElement>('.text-wrap-fix, .text-cell span, .feedback-line-text, .risk-line-text, .overall-opinion-text'));
       if (textTargets.length === 0) return;
 
-    const minFontSizePx = density === 'compact' ? 7.8 : 8.2;
-    const maxIterations = density === 'compact' ? 8 : 6;
+        const minFontSizePx = density === 'compact' ? 8.4 : 8.8;
+        const maxIterations = density === 'compact' ? 5 : 4;
 
       for (let iteration = 0; iteration < maxIterations; iteration += 1) {
           const hasOverflow = regions.some((region) => region.scrollHeight > (region.clientHeight + 1));
@@ -297,21 +297,20 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       const maxIterations = density === 'compact' ? 8 : 6;
 
       for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-          fitTextForExport(element, density);
-
           const hasOverflow = textCols.some((col) => col.scrollHeight > (col.clientHeight + 1));
           if (!hasOverflow) break;
 
-          imageHeight = Math.max(minImageHeight, imageHeight - step);
-          const nextHeight = `${imageHeight}px`;
-          bodyRowImages.style.height = nextHeight;
-          bodyRowImages.style.minHeight = nextHeight;
-          bodyRowImages.style.maxHeight = nextHeight;
-
-          if (imageHeight <= minImageHeight) {
-              fitTextForExport(element, density);
-              break;
+          if (imageHeight > minImageHeight) {
+              imageHeight = Math.max(minImageHeight, imageHeight - step);
+              const nextHeight = `${imageHeight}px`;
+              bodyRowImages.style.height = nextHeight;
+              bodyRowImages.style.minHeight = nextHeight;
+              bodyRowImages.style.maxHeight = nextHeight;
+              continue;
           }
+
+          fitTextForExport(element, density);
+          break;
       }
 
       if (hasBodyOverflow(element)) {
@@ -588,7 +587,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   .ai-metric-row {
                       display: flex !important;
                       align-items: center !important;
-                      min-height: 12px !important;
+                      min-height: 10px !important;
                       line-height: 1.2 !important;
                   }
                   .ai-metric-label,
@@ -606,13 +605,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       gap: 4px !important;
                   }
                   .ai-eval-card {
-                      min-height: 46px !important;
+                      min-height: 38px !important;
                   }
                   .ai-eval-text {
                       display: block !important;
                       line-height: 1.25 !important;
                       word-break: keep-all !important;
                       overflow-wrap: anywhere !important;
+                      -webkit-line-clamp: unset !important;
+                      -webkit-box-orient: initial !important;
+                      overflow: visible !important;
                   }
                   .text-wrap-fix { white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; line-height: 1.35 !important; }
                   .break-keep { word-break: keep-all !important; overflow-wrap: anywhere !important; }
@@ -923,7 +925,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
         .ai-metric-row {
             display: flex;
             align-items: center;
-            min-height: 12px;
+            min-height: 10px;
             line-height: 1.2;
         }
         .ai-metric-label,
@@ -941,13 +943,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             gap: 4px;
         }
         .ai-eval-card {
-            min-height: 46px;
+            min-height: 38px;
         }
         .ai-eval-text {
             display: block;
             line-height: 1.25;
             word-break: keep-all;
             overflow-wrap: anywhere;
+            -webkit-line-clamp: unset;
+            -webkit-box-orient: initial;
+            overflow: visible;
         }
         
         /* Text Handling */
