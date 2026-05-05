@@ -438,17 +438,18 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return nonBlank;
   };
 
-  const rasterizeRightPanelForPdf = async (clone: HTMLElement) => {
+  const rasterizeRightPanelForPdf = async (clone: HTMLElement, sourcePage?: HTMLElement) => {
       const panel = clone.querySelector<HTMLElement>('.right-ai-col');
-      if (!panel) return;
+      const sourcePanel = (sourcePage || clone).querySelector<HTMLElement>('.right-ai-col');
+      if (!panel || !sourcePanel) return;
 
-      const rect = panel.getBoundingClientRect();
+      const rect = sourcePanel.getBoundingClientRect();
       const width = Math.max(1, Math.round(rect.width));
       const height = Math.max(1, Math.round(rect.height));
 
       if (width < 10 || height < 10) return;
 
-      const panelCanvas = await html2canvas(panel, {
+      const panelCanvas = await html2canvas(sourcePanel, {
           scale: 2,
           useCORS: true,
           foreignObjectRendering: false,
@@ -478,9 +479,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       panel.appendChild(snapshot);
   };
 
-    const rasterizeBodyTextForPdf = async (clone: HTMLElement): Promise<boolean> => {
-      const bodyText = clone.querySelector<HTMLElement>('.body-row-text');
-      if (!bodyText) return false;
+      const rasterizeBodyTextForPdf = async (clone: HTMLElement, sourcePage?: HTMLElement): Promise<boolean> => {
+          const bodyText = clone.querySelector<HTMLElement>('.body-row-text');
+          const sourceBodyText = (sourcePage || clone).querySelector<HTMLElement>('.body-row-text');
+          if (!bodyText || !sourceBodyText) return false;
 
       if (document.fonts?.status !== 'loaded') {
           await document.fonts.ready;
@@ -489,7 +491,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       });
 
-      bodyText.querySelectorAll<HTMLElement>('*').forEach((node) => {
+      sourceBodyText.querySelectorAll<HTMLElement>('*').forEach((node) => {
           node.style.fontFamily = '"Malgun Gothic", "맑은 고딕", "Segoe UI", sans-serif';
           node.style.fontKerning = 'none';
           node.style.textRendering = 'geometricPrecision';
@@ -497,16 +499,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           node.style.textShadow = 'none';
       });
 
-      bodyText.querySelectorAll<HTMLElement>('.ai-score-title, .ai-metric-label, .ai-metric-score, .ai-eval-text, .report-pane-title, .report-pane-subtitle').forEach((node) => {
+      sourceBodyText.querySelectorAll<HTMLElement>('.ai-score-title, .ai-metric-label, .ai-metric-score, .ai-eval-text, .report-pane-title, .report-pane-subtitle').forEach((node) => {
           node.style.lineHeight = '1.28';
       });
 
-      const rect = bodyText.getBoundingClientRect();
+      const rect = sourceBodyText.getBoundingClientRect();
       const width = Math.max(1, Math.round(rect.width));
       const height = Math.max(1, Math.round(rect.height));
       if (width < 50 || height < 50) return;
 
-      const captureBody = (scale: number, foreignObjectRendering: boolean) => html2canvas(bodyText, {
+      const captureBody = (scale: number, foreignObjectRendering: boolean) => html2canvas(sourceBodyText, {
           scale,
           useCORS: true,
           foreignObjectRendering,
@@ -695,14 +697,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
               if (pdfExportStrategy === 'body-raster') {
                   try {
-                      const bodyRasterized = await rasterizeBodyTextForPdf(clone);
+                      const bodyRasterized = await rasterizeBodyTextForPdf(clone, originalPage);
                       if (!bodyRasterized) {
                           setStatusMessage(`PDF 생성 중... (${i + 1}/${originalPages.length}) 본문 안정화 재시도`);
-                          await rasterizeRightPanelForPdf(clone);
+                          await rasterizeRightPanelForPdf(clone, originalPage);
                       }
                   } catch (error) {
                       console.warn('Body text rasterize fallback skipped:', error);
-                      await rasterizeRightPanelForPdf(clone);
+                      await rasterizeRightPanelForPdf(clone, originalPage);
                   }
               }
 
