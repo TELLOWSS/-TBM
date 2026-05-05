@@ -364,6 +364,31 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return riskScore;
   };
 
+  const isCanvasLikelyBlank = (canvas: HTMLCanvasElement) => {
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) return false;
+
+      const sampleStep = 16;
+      let sampled = 0;
+      let blankish = 0;
+
+      for (let y = 0; y < canvas.height; y += sampleStep) {
+          for (let x = 0; x < canvas.width; x += sampleStep) {
+              const pixel = context.getImageData(x, y, 1, 1).data;
+              const alpha = pixel[3];
+              const isWhite = pixel[0] >= 248 && pixel[1] >= 248 && pixel[2] >= 248;
+              if (alpha === 0 || isWhite) {
+                  blankish += 1;
+              }
+              sampled += 1;
+          }
+      }
+
+      if (sampled === 0) return false;
+      const blankRatio = blankish / sampled;
+      return blankRatio >= 0.992;
+  };
+
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
     if (generatingMode) return;
     setGeneratingMode(mode);
@@ -503,23 +528,22 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           // Brief pause for rendering stabilization
           await new Promise(resolve => setTimeout(resolve, 220));
 
-          // 3. Capture with html2canvas
-          const canvas = await html2canvas(clone, {
-            scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
-            useCORS: true,
-                                                foreignObjectRendering: useTextProfile,
-            logging: false,
-            width: 794,
-            height: 1123,
-            x: 0,
-            y: 0,
-            windowWidth: 794,
-            windowHeight: 1123,
-            backgroundColor: '#ffffff',
-            // Enforce font rendering to fix layout shifts
-            onclone: (doc) => {
-               const style = doc.createElement('style');
-               style.innerHTML = `
+                    // 3. Capture with html2canvas (TEXT profile first, fallback to COMPAT when blank)
+                    const capturePage = (foreignObjectRendering: boolean) => html2canvas(clone, {
+                        scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
+                        useCORS: true,
+                        foreignObjectRendering,
+                        logging: false,
+                        width: 794,
+                        height: 1123,
+                        x: 0,
+                        y: 0,
+                        windowWidth: 794,
+                        windowHeight: 1123,
+                        backgroundColor: '#ffffff',
+                        onclone: (doc) => {
+                             const style = doc.createElement('style');
+                             style.innerHTML = `
                   .report-page, .report-page * {
                       box-sizing: border-box !important;
                       -webkit-font-smoothing: antialiased !important;
@@ -793,9 +817,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       image-rendering: -webkit-optimize-contrast !important;
                   }
                `;
-               doc.head.appendChild(style);
-            }
-          });
+                             doc.head.appendChild(style);
+                        }
+                    });
+
+                    let canvas = await capturePage(useTextProfile);
+                    if (mode === 'PDF' && useTextProfile && isCanvasLikelyBlank(canvas)) {
+                            setStatusMessage(`PDF 생성 중... (${i + 1}/${originalPages.length}) 텍스트 렌더 재시도`);
+                            canvas = await capturePage(false);
+                    }
 
           const imgData = mode === 'PDF'
               ? canvas.toDataURL('image/png')
