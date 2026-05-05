@@ -746,19 +746,44 @@ const App = () => {
               return;
           }
 
-          // De-duplicate Entries based on ID
-          const uniqueEntryMap = new Map();
-          mergedEntries.forEach(e => {
-              // Ensure critical arrays are present (Data Sanitization)
-              if (!Array.isArray(e.riskFactors)) e.riskFactors = [];
-              if (!Array.isArray(e.safetyFeedback)) e.safetyFeedback = [];
-              uniqueEntryMap.set(e.id, e);
+          // De-duplicate Entries (restore-first precedence + safe fallback key)
+          const uniqueEntryMap = new Map<string, TBMEntry>();
+          mergedEntries.forEach(entry => {
+              if (!entry || typeof entry !== 'object') return;
+
+              const normalizedEntry: TBMEntry = {
+                  ...entry,
+                  riskFactors: Array.isArray(entry.riskFactors) ? entry.riskFactors : [],
+                  safetyFeedback: Array.isArray(entry.safetyFeedback) ? entry.safetyFeedback : [],
+              };
+
+              const rawId = normalizedEntry.id;
+              const hasStableId =
+                  (typeof rawId === 'string' && rawId.trim().length > 0)
+                  || typeof rawId === 'number';
+
+              const key = hasStableId
+                  ? `id:${String(rawId)}`
+                  : `legacy:${normalizedEntry.date || ''}|${(normalizedEntry.teamId || normalizedEntry.teamName || '미지정').trim()}|${(normalizedEntry.time || '').trim()}|${(normalizedEntry.workDescription || '').trim()}`;
+
+              // Keep first occurrence so newly restored records (prepended earlier) win over stale local copies.
+              if (!uniqueEntryMap.has(key)) {
+                  uniqueEntryMap.set(key, normalizedEntry);
+              }
           });
           const finalEntries = Array.from(uniqueEntryMap.values());
 
-          // De-duplicate Assessments based on ID
-          const uniqueAssMap = new Map();
-          mergedAssessments.forEach(a => uniqueAssMap.set(a.id, a));
+          // De-duplicate Assessments (restore-first precedence)
+          const uniqueAssMap = new Map<string, MonthlyRiskAssessment>();
+          mergedAssessments.forEach(assessment => {
+              if (!assessment || typeof assessment !== 'object') return;
+              const key = (typeof assessment.id === 'string' && assessment.id.trim().length > 0)
+                  ? `id:${assessment.id}`
+                  : `month:${assessment.month || ''}|type:${assessment.type || 'MONTHLY'}`;
+              if (!uniqueAssMap.has(key)) {
+                  uniqueAssMap.set(key, assessment);
+              }
+          });
           const finalAssessments = Array.from(uniqueAssMap.values());
 
           const uniqueLogMap = new Map<string, TeamNormalizationLog>();
