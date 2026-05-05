@@ -389,6 +389,45 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return blankRatio >= 0.992;
   };
 
+  const rasterizeRightPanelForPdf = async (clone: HTMLElement) => {
+      const panel = clone.querySelector<HTMLElement>('.right-ai-col');
+      if (!panel) return;
+
+      const rect = panel.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+
+      if (width < 10 || height < 10) return;
+
+      const panelCanvas = await html2canvas(panel, {
+          scale: 2,
+          useCORS: true,
+          foreignObjectRendering: false,
+          logging: false,
+          width,
+          height,
+          x: 0,
+          y: 0,
+          backgroundColor: '#ffffff',
+      });
+
+      if (isCanvasLikelyBlank(panelCanvas)) return;
+
+      const dataUrl = panelCanvas.toDataURL('image/png');
+      const snapshot = document.createElement('img');
+      snapshot.src = dataUrl;
+      snapshot.style.width = '100%';
+      snapshot.style.height = '100%';
+      snapshot.style.display = 'block';
+      snapshot.style.objectFit = 'fill';
+      snapshot.style.imageRendering = 'auto';
+
+      panel.innerHTML = '';
+      panel.style.padding = '0';
+      panel.style.overflow = 'hidden';
+      panel.appendChild(snapshot);
+  };
+
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
     if (generatingMode) return;
     setGeneratingMode(mode);
@@ -530,6 +569,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           
           // Brief pause for rendering stabilization
           await new Promise(resolve => setTimeout(resolve, 220));
+
+          if (mode === 'PDF') {
+              try {
+                  await rasterizeRightPanelForPdf(clone);
+              } catch (error) {
+                  console.warn('Right panel rasterize fallback skipped:', error);
+              }
+          }
 
                     // 3. Capture with html2canvas (TEXT profile first, fallback to COMPAT when blank)
                     const capturePage = (foreignObjectRendering: boolean) => html2canvas(clone, {
