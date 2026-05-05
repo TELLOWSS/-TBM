@@ -249,11 +249,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       });
   };
 
-    const fitTextForExport = (element: HTMLElement, density: 'standard' | 'compact') => {
-      const regions = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .col'));
+        const fitTextForExport = (element: HTMLElement, density: 'standard' | 'compact') => {
+            const regions = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .left-text-col'));
       if (regions.length === 0) return;
 
-            const textTargets = Array.from(element.querySelectorAll<HTMLElement>('.text-wrap-fix, .text-cell span, .feedback-line-text, .risk-line-text, .overall-opinion-text'));
+            const textTargets = Array.from(element.querySelectorAll<HTMLElement>('.left-text-col .text-wrap-fix, .left-text-col .text-cell span, .left-text-col .risk-line-text'));
       if (textTargets.length === 0) return;
 
         const minFontSizePx = density === 'compact' ? 8.4 : 8.8;
@@ -286,7 +286,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
   const rebalanceBodyForExport = (element: HTMLElement, density: 'standard' | 'compact') => {
       const bodyRowImages = element.querySelector<HTMLElement>('.body-row-images');
-      const textCols = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .col'));
+      const textCols = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .left-text-col'));
       if (!bodyRowImages || textCols.length === 0) return;
 
       element.classList.remove('export-tight', 'export-ultra-tight');
@@ -333,7 +333,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
   };
 
   const hasBodyOverflow = (element: HTMLElement) => {
-      const textCols = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .col'));
+      const textCols = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .left-text-col'));
       if (textCols.length === 0) return false;
       return textCols.some((col) => col.scrollHeight > (col.clientHeight + 1));
   };
@@ -619,11 +619,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   .text-wrap-fix { white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; line-height: 1.35 !important; }
                   .break-keep { word-break: keep-all !important; overflow-wrap: anywhere !important; }
                   .dense-export-text { font-size: 9.4px !important; line-height: 1.25 !important; }
-                  .report-page.export-compact .dense-export-text { font-size: 9px !important; line-height: 1.2 !important; }
-                  .report-page.export-tight .dense-export-text { font-size: 8.8px !important; line-height: 1.18 !important; }
-                  .report-page.export-ultra-tight .dense-export-text { font-size: 8.6px !important; line-height: 1.16 !important; }
-                  .risk-focus-block { min-height: 136px !important; }
-                  .report-page.export-compact .risk-focus-block { min-height: 120px !important; }
+                  .report-page.export-compact .left-text-col .dense-export-text { font-size: 9px !important; line-height: 1.2 !important; }
+                  .report-page.export-tight .left-text-col .dense-export-text { font-size: 8.8px !important; line-height: 1.18 !important; }
+                  .report-page.export-ultra-tight .left-text-col .dense-export-text { font-size: 8.6px !important; line-height: 1.16 !important; }
+                  .left-text-col .risk-focus-block { min-height: 136px !important; }
+                  .report-page.export-compact .left-text-col .risk-focus-block { min-height: 120px !important; }
                   .risk-line-text {
                       display: -webkit-box !important;
                       -webkit-box-orient: vertical !important;
@@ -646,22 +646,18 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   .report-page.export-compact .overall-opinion-text { -webkit-line-clamp: 6 !important; }
                   .report-page.export-tight .overall-opinion-text { -webkit-line-clamp: 5 !important; }
                   .report-page.export-ultra-tight .overall-opinion-text { -webkit-line-clamp: 4 !important; }
-                  .report-page.export-tight .left-content-stack,
-                  .report-page.export-tight .ai-summary-block,
-                  .report-page.export-tight .manager-feedback-block {
+                  .report-page.export-tight .left-text-col .left-content-stack {
                       padding: 8px !important;
                   }
-                  .report-page.export-ultra-tight .left-content-stack,
-                  .report-page.export-ultra-tight .ai-summary-block,
-                  .report-page.export-ultra-tight .manager-feedback-block {
+                  .report-page.export-ultra-tight .left-text-col .left-content-stack {
                       padding: 6px !important;
                   }
-                  .report-page.export-tight .left-content-stack,
-                  .report-page.export-ultra-tight .left-content-stack {
+                  .report-page.export-tight .left-text-col .left-content-stack,
+                  .report-page.export-ultra-tight .left-text-col .left-content-stack {
                       gap: 6px !important;
                   }
-                  .report-page.export-tight .body-pane-header { height: 28px !important; min-height: 28px !important; max-height: 28px !important; font-size: 10px !important; }
-                  .report-page.export-ultra-tight .body-pane-header { height: 27px !important; min-height: 27px !important; max-height: 27px !important; font-size: 10px !important; }
+                  .report-page.export-tight .left-text-col .body-pane-header { height: 28px !important; min-height: 28px !important; max-height: 28px !important; font-size: 10px !important; }
+                  .report-page.export-ultra-tight .left-text-col .body-pane-header { height: 27px !important; min-height: 27px !important; max-height: 27px !important; font-size: 10px !important; }
                   .report-page.export-tight .integrity-seal,
                   .report-page.export-ultra-tight .integrity-seal {
                       display: none !important;
@@ -1219,7 +1215,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     
                     {/* 3-B. Text Content Row */}
                     <div className="body-row-text">
-                        <div className="col flex flex-col" style={{width: '50%'}}>
+                        <div className="col left-text-col flex flex-col" style={{width: '50%'}}>
                             <div className="section-header body-pane-header">3. 금일 작업·설치 내용 및 위험요인</div>
                             <div className="left-content-stack report-pane-block flex-1 p-3 flex flex-col gap-3 overflow-hidden">
                                 <div>
@@ -1299,7 +1295,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                             </div>
                         </div>
                         
-                        <div className="col last flex flex-col" style={{width: '50%'}}>
+                        <div className="col last right-ai-col flex flex-col" style={{width: '50%'}}>
                                 <div className="section-header body-pane-header">4. AI 심층 정밀 진단</div>
                              <div className="flex-1 flex flex-col overflow-hidden">
                                 <div className="ai-summary-block report-pane-block p-3 border-b border-black bg-slate-50/50">
