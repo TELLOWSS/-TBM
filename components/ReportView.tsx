@@ -554,6 +554,66 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       color: #111827 !important;
                       letter-spacing: 0 !important;
                   }
+                  .ai-score-header {
+                      display: flex !important;
+                      align-items: center !important;
+                      justify-content: space-between !important;
+                      min-height: 20px !important;
+                      gap: 6px !important;
+                  }
+                  .ai-score-title-wrap {
+                      display: inline-flex !important;
+                      align-items: center !important;
+                      min-width: 0 !important;
+                  }
+                  .ai-score-title-wrap svg,
+                  .ai-score-title-wrap img {
+                      width: 14px !important;
+                      height: 14px !important;
+                      display: block !important;
+                      flex-shrink: 0 !important;
+                  }
+                  .ai-score-badge {
+                      line-height: 1.2 !important;
+                      padding-top: 1px !important;
+                      padding-bottom: 1px !important;
+                      flex-shrink: 0 !important;
+                  }
+                  .ai-metric-grid {
+                      display: grid !important;
+                      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                      column-gap: 10px !important;
+                      row-gap: 4px !important;
+                  }
+                  .ai-metric-row {
+                      display: flex !important;
+                      align-items: center !important;
+                      min-height: 12px !important;
+                      line-height: 1.2 !important;
+                  }
+                  .ai-metric-label,
+                  .ai-metric-score {
+                      line-height: 1.2 !important;
+                  }
+                  .ai-metric-bar {
+                      height: 6px !important;
+                      margin-left: 4px !important;
+                      margin-right: 4px !important;
+                  }
+                  .ai-eval-grid {
+                      display: grid !important;
+                      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                      gap: 4px !important;
+                  }
+                  .ai-eval-card {
+                      min-height: 46px !important;
+                  }
+                  .ai-eval-text {
+                      display: block !important;
+                      line-height: 1.25 !important;
+                      word-break: keep-all !important;
+                      overflow-wrap: anywhere !important;
+                  }
                   .text-wrap-fix { white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; line-height: 1.35 !important; }
                   .break-keep { word-break: keep-all !important; overflow-wrap: anywhere !important; }
                   .dense-export-text { font-size: 9.4px !important; line-height: 1.25 !important; }
@@ -828,6 +888,66 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
         .body-row-text .section-header {
             color: #111827;
             letter-spacing: 0;
+        }
+        .ai-score-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 20px;
+            gap: 6px;
+        }
+        .ai-score-title-wrap {
+            display: inline-flex;
+            align-items: center;
+            min-width: 0;
+        }
+        .ai-score-title-wrap svg,
+        .ai-score-title-wrap img {
+            width: 14px;
+            height: 14px;
+            display: block;
+            flex-shrink: 0;
+        }
+        .ai-score-badge {
+            line-height: 1.2;
+            padding-top: 1px;
+            padding-bottom: 1px;
+            flex-shrink: 0;
+        }
+        .ai-metric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            column-gap: 10px;
+            row-gap: 4px;
+        }
+        .ai-metric-row {
+            display: flex;
+            align-items: center;
+            min-height: 12px;
+            line-height: 1.2;
+        }
+        .ai-metric-label,
+        .ai-metric-score {
+            line-height: 1.2;
+        }
+        .ai-metric-bar {
+            height: 6px;
+            margin-left: 4px;
+            margin-right: 4px;
+        }
+        .ai-eval-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 4px;
+        }
+        .ai-eval-card {
+            min-height: 46px;
+        }
+        .ai-eval-text {
+            display: block;
+            line-height: 1.25;
+            word-break: keep-all;
+            overflow-wrap: anywhere;
         }
         
         /* Text Handling */
@@ -1181,47 +1301,47 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                     {entry.videoAnalysis ? (
                                         <div className="flex flex-col gap-2">
                                             {/* Top Score */}
-                                            <div className="flex justify-between items-center mb-1">
-                                                <div className="flex items-center gap-1.5">
+                                            <div className="ai-score-header flex justify-between items-center mb-1">
+                                                <div className="ai-score-title-wrap flex items-center gap-1.5">
                                                     <Sparkles size={14} className="text-violet-600 shrink-0"/>
                                                     <span className="report-pane-title text-[11px] font-black text-black">AI 종합 감사 점수</span>
                                                 </div>
-                                                <span className={`text-sm font-black border px-2 py-0.5 rounded shadow-sm ${entry.videoAnalysis.score >= 80 ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                                <span className={`ai-score-badge text-sm font-black border px-2 py-0.5 rounded shadow-sm ${entry.videoAnalysis.score >= 80 ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                                     {entry.videoAnalysis.score}점
                                                 </span>
                                             </div>
 
                                             {/* Detailed Evaluation Bars (Gauges) */}
-                                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-1">
+                                            <div className="ai-metric-grid grid grid-cols-2 gap-x-4 gap-y-1 mb-1">
                                                 {[
                                                     { label: '일지 충실도', score: rubric.logQuality || 0, max: 30, color: 'bg-indigo-500', bg: 'bg-indigo-50' },
                                                     { label: '작업자 집중도', score: rubric.focus || 0, max: 30, color: 'bg-emerald-500', bg: 'bg-emerald-50' },
                                                     { label: '전파 명확성', score: rubric.voice || 0, max: 20, color: 'bg-amber-500', bg: 'bg-amber-50' },
                                                     { label: '보호구 상태', score: rubric.ppe || 0, max: 20, color: 'bg-rose-500', bg: 'bg-rose-50' },
                                                 ].map((metric, midx) => (
-                                                    <div key={midx} className="flex items-center text-[9px]">
-                                                        <span className="w-14 font-bold text-slate-500 truncate">{metric.label}</span>
-                                                        <div className={`flex-1 h-1.5 rounded-full mx-1 overflow-hidden ${metric.bg}`}>
+                                                    <div key={midx} className="ai-metric-row flex items-center text-[9px]">
+                                                        <span className="ai-metric-label w-14 font-bold text-slate-500 truncate">{metric.label}</span>
+                                                        <div className={`ai-metric-bar flex-1 h-1.5 rounded-full mx-1 overflow-hidden ${metric.bg}`}>
                                                             <div 
                                                                 className={`h-full rounded-full ${metric.color}`} 
                                                                 style={{ width: `${(metric.score / metric.max) * 100}%` }}
                                                             ></div>
                                                         </div>
-                                                        <span className="w-6 text-right font-mono font-bold text-black">{metric.score}</span>
+                                                        <span className="ai-metric-score w-6 text-right font-mono font-bold text-black">{metric.score}</span>
                                                     </div>
                                                 ))}
                                             </div>
 
                                             {/* [NEW] 4-Point Text Evaluations */}
                                             {(entry.videoAnalysis.evalLog || entry.videoAnalysis.evalAttendance || entry.videoAnalysis.evalFocus || entry.videoAnalysis.evalLeader) && (
-                                                <div className="grid grid-cols-2 gap-1 mb-1 text-[9px]">
+                                                <div className="ai-eval-grid grid grid-cols-2 gap-1 mb-1 text-[9px]">
                                                     {[
                                                         { label: '일지 작성', value: entry.videoAnalysis.evalLog },
                                                         { label: '참석/참여도', value: entry.videoAnalysis.evalAttendance },
                                                         { label: '작업자 집중', value: entry.videoAnalysis.evalFocus },
                                                         { label: '팀장 리딩', value: entry.videoAnalysis.evalLeader },
                                                     ].filter(f => !!f.value).map((f, i) => (
-                                                        <div key={i} className="report-pane-card bg-white border border-slate-100 rounded px-1.5 py-1 overflow-hidden">
+                                                        <div key={i} className="ai-eval-card report-pane-card bg-white border border-slate-100 rounded px-1.5 py-1 overflow-hidden">
                                                             <span className="font-black text-indigo-700 block mb-0.5">{f.label}</span>
                                                             <span className="text-slate-700 leading-tight line-clamp-2 break-keep ai-eval-text dense-export-text">{f.value}</span>
                                                         </div>
