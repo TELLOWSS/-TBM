@@ -24,7 +24,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
     const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('TEXT');
   const [statusMessage, setStatusMessage] = useState("");
     const [announceMessage, setAnnounceMessage] = useState('');
-    const pdfExportStrategy: 'direct-original' | 'body-raster' | 'legacy' = 'direct-original';
+    const pdfExportStrategy: 'native-print' | 'direct-original' | 'body-raster' | 'legacy' = 'native-print';
   const [scale, setScale] = useState(1);
   const reportDialogRef = useRef<HTMLDivElement>(null);
   const reportCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -552,6 +552,29 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
     if (generatingMode) return;
     setGeneratingMode(mode);
     setStatusMessage(mode === 'PDF' ? "PDF 생성 중..." : "이미지 변환 중...");
+
+    if (mode === 'PDF' && pdfExportStrategy === 'native-print') {
+      const originalTitle = document.title;
+      try {
+          await document.fonts.ready;
+          await new Promise<void>((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          });
+
+          const dateStr = new Date().toISOString().slice(0, 10);
+          document.title = `TBM_일지_통합본_${dateStr}`;
+          window.print();
+          announceStatus('인쇄 창에서 "PDF로 저장"을 선택하면 미리보기와 동일한 품질로 저장됩니다.');
+      } catch (error) {
+          console.error('Native print PDF failed', error);
+          announceStatus('브라우저 인쇄 기반 PDF 생성 중 오류가 발생했습니다.');
+      } finally {
+          document.title = originalTitle;
+          setGeneratingMode(null);
+          setStatusMessage('');
+      }
+      return;
+    }
     
     // Allow UI update
     await new Promise(resolve => setTimeout(resolve, 100));
