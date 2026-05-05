@@ -555,6 +555,59 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       color: #111827 !important;
                       letter-spacing: 0 !important;
                   }
+                  .report-page.export-mode .report-pane-title,
+                  .report-page.export-mode .report-pane-subtitle,
+                  .report-page.export-mode .text-wrap-fix,
+                  .report-page.export-mode .dense-export-text,
+                  .report-page.export-mode .risk-line-text,
+                  .report-page.export-mode .feedback-line-text,
+                  .report-page.export-mode .overall-opinion-text,
+                  .report-page.export-mode .text-cell span,
+                  .report-page.export-mode .section-header {
+                      position: relative !important;
+                      top: -0.8px !important;
+                      line-height: 1.24 !important;
+                  }
+                  .report-page.export-mode .h-header .p-4,
+                  .report-page.export-mode .h-header .section-header,
+                  .report-page.export-mode .h-info .flex-center,
+                  .report-page.export-mode .h-info .px-3 {
+                      position: relative !important;
+                      top: -0.6px !important;
+                  }
+                  .report-page.export-tight .report-pane-title,
+                  .report-page.export-tight .report-pane-subtitle,
+                  .report-page.export-tight .text-wrap-fix,
+                  .report-page.export-tight .dense-export-text,
+                  .report-page.export-tight .risk-line-text,
+                  .report-page.export-tight .feedback-line-text,
+                  .report-page.export-tight .overall-opinion-text,
+                  .report-page.export-tight .text-cell span,
+                  .report-page.export-tight .section-header,
+                  .report-page.export-ultra-tight .report-pane-title,
+                  .report-page.export-ultra-tight .report-pane-subtitle,
+                  .report-page.export-ultra-tight .text-wrap-fix,
+                  .report-page.export-ultra-tight .dense-export-text,
+                  .report-page.export-ultra-tight .risk-line-text,
+                  .report-page.export-ultra-tight .feedback-line-text,
+                  .report-page.export-ultra-tight .overall-opinion-text,
+                  .report-page.export-ultra-tight .text-cell span,
+                  .report-page.export-ultra-tight .section-header {
+                      position: relative !important;
+                      line-height: 1.22 !important;
+                      top: -1px !important;
+                  }
+                  .report-page.export-tight .h-header .p-4,
+                  .report-page.export-tight .h-header .section-header,
+                  .report-page.export-tight .h-info .flex-center,
+                  .report-page.export-tight .h-info .px-3,
+                  .report-page.export-ultra-tight .h-header .p-4,
+                  .report-page.export-ultra-tight .h-header .section-header,
+                  .report-page.export-ultra-tight .h-info .flex-center,
+                  .report-page.export-ultra-tight .h-info .px-3 {
+                      position: relative !important;
+                      top: -1px !important;
+                  }
                   .text-wrap-fix { white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; line-height: 1.35 !important; }
                   .break-keep { word-break: keep-all !important; overflow-wrap: anywhere !important; }
                   .dense-export-text { font-size: 9.4px !important; line-height: 1.25 !important; }
@@ -604,6 +657,20 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   .report-page.export-tight .integrity-seal,
                   .report-page.export-ultra-tight .integrity-seal {
                       display: none !important;
+                  }
+                  .report-page.export-mode .integrity-seal {
+                      top: 6px !important;
+                      right: 6px !important;
+                      opacity: 0.42 !important;
+                      transform: none !important;
+                  }
+                  .report-page.export-mode .integrity-seal .seal-ring {
+                      width: 56px !important;
+                      height: 56px !important;
+                      border-width: 2px !important;
+                  }
+                  .report-page.export-mode .integrity-seal .seal-inner {
+                      font-size: 6px !important;
                   }
                   table { border-collapse: collapse !important; width: 100% !important; table-layout: fixed !important; }
                   td { vertical-align: top !important; padding: 2px !important; line-height: 1.3 !important; }
@@ -950,13 +1017,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                 style={{ transform: `scale(${scale})`, marginBottom: `${40 * scale}px` }} 
               >
                 {/* [NEW] Digital Integrity Seal (Legal Defense) */}
-                <div className="integrity-seal absolute top-4 right-4 z-20 pointer-events-none opacity-65 rotate-6 mix-blend-multiply">
-                    <div className="border-[3px] border-red-600 rounded-full w-20 h-20 flex items-center justify-center p-1">
-                        <div className="border border-red-600 rounded-full w-full h-full flex flex-col items-center justify-center text-red-600 text-center">
-                            <ShieldCheck size={16} strokeWidth={2.5}/>
-                            <span className="text-[7px] font-black uppercase mt-0.5 leading-none">전자<br/>무결성</span>
-                            <span className="text-[8px] font-black mt-0.5">검증 완료</span>
-                            <span className="text-[5px] mt-0.5 font-mono tracking-tighter">HuiGang OS</span>
+                <div className="integrity-seal absolute top-2 right-2 z-20 pointer-events-none opacity-50 rotate-0 mix-blend-multiply">
+                    <div className="seal-ring border-2 border-red-600 rounded-full w-14 h-14 flex items-center justify-center p-0.5">
+                        <div className="seal-inner border border-red-600 rounded-full w-full h-full flex flex-col items-center justify-center text-red-600 text-center leading-none">
+                            <ShieldCheck size={12} strokeWidth={2.5}/>
+                            <span className="text-[6px] font-black uppercase mt-0.5">전자<br/>무결성</span>
+                            <span className="text-[7px] font-black mt-0.5">검증 완료</span>
+                            <span className="text-[4px] mt-0.5 font-mono tracking-tight">HuiGang OS</span>
                         </div>
                     </div>
                 </div>
