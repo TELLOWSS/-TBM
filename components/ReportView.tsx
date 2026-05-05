@@ -364,13 +364,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return riskScore;
   };
 
-    const isCanvasLikelyBlank = (canvas: HTMLCanvasElement, threshold = 0.992) => {
+    const isCanvasLikelyBlank = (canvas: HTMLCanvasElement, threshold = 0.992, minNonBlankSamples = 16) => {
       const context = canvas.getContext('2d', { willReadFrequently: true });
       if (!context) return false;
 
       const sampleStep = 16;
       let sampled = 0;
       let blankish = 0;
+      let nonBlank = 0;
 
       for (let y = 0; y < canvas.height; y += sampleStep) {
           for (let x = 0; x < canvas.width; x += sampleStep) {
@@ -379,6 +380,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               const isWhite = pixel[0] >= 248 && pixel[1] >= 248 && pixel[2] >= 248;
               if (alpha === 0 || isWhite) {
                   blankish += 1;
+              } else {
+                  nonBlank += 1;
               }
               sampled += 1;
           }
@@ -386,7 +389,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
       if (sampled === 0) return false;
       const blankRatio = blankish / sampled;
-      return blankRatio >= threshold;
+      return blankRatio >= threshold && nonBlank < minNonBlankSamples;
   };
 
   const rasterizeRightPanelForPdf = async (clone: HTMLElement) => {
@@ -411,7 +414,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           backgroundColor: '#ffffff',
       });
 
-    if (isCanvasLikelyBlank(panelCanvas, 0.999)) return;
+    if (isCanvasLikelyBlank(panelCanvas, 0.999, 10)) return;
 
       const dataUrl = panelCanvas.toDataURL('image/png');
       const snapshot = document.createElement('img');
@@ -440,8 +443,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       });
 
       bodyText.querySelectorAll<HTMLElement>('*').forEach((node) => {
+          node.style.fontFamily = '"Malgun Gothic", "맑은 고딕", "Segoe UI", sans-serif';
+          node.style.fontKerning = 'none';
+          node.style.textRendering = 'geometricPrecision';
           node.style.transform = 'none';
           node.style.textShadow = 'none';
+      });
+
+      bodyText.querySelectorAll<HTMLElement>('.ai-score-title, .ai-metric-label, .ai-metric-score, .ai-eval-text, .report-pane-title, .report-pane-subtitle').forEach((node) => {
+          node.style.lineHeight = '1.28';
       });
 
       const rect = bodyText.getBoundingClientRect();
@@ -461,7 +471,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           backgroundColor: '#ffffff',
       });
 
-    if (isCanvasLikelyBlank(bodyCanvas, 0.9997)) return;
+    if (isCanvasLikelyBlank(bodyCanvas, 0.999, 18)) return;
 
       const dataUrl = bodyCanvas.toDataURL('image/png');
       const snapshot = document.createElement('img');
