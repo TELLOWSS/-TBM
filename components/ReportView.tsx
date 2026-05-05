@@ -338,6 +338,32 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return textCols.some((col) => col.scrollHeight > (col.clientHeight + 1));
   };
 
+  const detectPdfExportRisk = (element: HTMLElement) => {
+      const selectors = [
+          '.right-ai-col .ai-summary-block',
+          '.right-ai-col .ai-metric-grid',
+          '.right-ai-col .ai-metric-row',
+          '.right-ai-col .ai-metric-label',
+          '.right-ai-col .ai-eval-grid',
+          '.right-ai-col .ai-eval-card',
+          '.right-ai-col .ai-eval-text',
+          '.right-ai-col .manager-feedback-block',
+      ];
+
+      let riskScore = 0;
+      selectors.forEach((selector) => {
+          element.querySelectorAll<HTMLElement>(selector).forEach((node) => {
+              const overflowY = node.scrollHeight > (node.clientHeight + 1);
+              const overflowX = node.scrollWidth > (node.clientWidth + 1);
+              if (overflowY || overflowX) {
+                  riskScore += 1;
+              }
+          });
+      });
+
+      return riskScore;
+  };
+
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
     if (generatingMode) return;
     setGeneratingMode(mode);
@@ -391,6 +417,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       
       let singleImageData: string | null = null;
       const pageDensityLog: Array<'standard' | 'compact'> = [];
+    const pageStabilityLog: Array<'normal' | 'pdf-safe'> = [];
 
       for (let i = 0; i < originalPages.length; i++) {
           setStatusMessage(`${mode === 'PDF' ? 'PDF 생성 중...' : '이미지 변환 중...'} (${i + 1}/${originalPages.length})`);
@@ -437,6 +464,17 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               clone.classList.add('export-compact');
               rebalanceBodyForExport(clone, activeDensity);
           }
+
+          if (mode === 'PDF') {
+              const riskScore = detectPdfExportRisk(clone);
+              if (riskScore > 0) {
+                  clone.classList.add('export-pdf-safe');
+                  pageStabilityLog.push('pdf-safe');
+              } else {
+                  pageStabilityLog.push('normal');
+              }
+          }
+
           pageDensityLog.push(activeDensity);
 
           // 1. Convert SVGs to PNGs (Critical for icon alignment)
@@ -582,17 +620,17 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       display: grid !important;
                       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
                       column-gap: 10px !important;
-                      row-gap: 4px !important;
+                      row-gap: 6px !important;
                   }
                   .ai-metric-row {
                       display: flex !important;
                       align-items: center !important;
-                      min-height: 10px !important;
-                      line-height: 1.2 !important;
+                      min-height: 14px !important;
+                      line-height: 1.32 !important;
                   }
                   .ai-metric-label,
                   .ai-metric-score {
-                      line-height: 1.2 !important;
+                      line-height: 1.32 !important;
                   }
                   .ai-metric-bar {
                       height: 6px !important;
@@ -603,6 +641,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       display: grid !important;
                       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
                       gap: 4px !important;
+                  }
+                  .ai-summary-block {
+                      flex-shrink: 0 !important;
                   }
                   .ai-eval-card {
                       min-height: 38px !important;
@@ -661,6 +702,44 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   .report-page.export-tight .integrity-seal,
                   .report-page.export-ultra-tight .integrity-seal {
                       display: none !important;
+                  }
+                  .report-page.export-pdf-safe .right-pane-stack {
+                      overflow: visible !important;
+                  }
+                  .report-page.export-pdf-safe .right-ai-col .ai-summary-block,
+                  .report-page.export-pdf-safe .right-ai-col .manager-feedback-block {
+                      overflow: visible !important;
+                      flex-shrink: 0 !important;
+                  }
+                  .report-page.export-pdf-safe .right-ai-col .ai-metric-grid {
+                      row-gap: 7px !important;
+                  }
+                  .report-page.export-pdf-safe .right-ai-col .ai-metric-row {
+                      display: grid !important;
+                      grid-template-columns: 66px minmax(0, 1fr) 22px !important;
+                      align-items: center !important;
+                      column-gap: 6px !important;
+                      min-height: 16px !important;
+                      line-height: 1.36 !important;
+                      font-size: 9.6px !important;
+                  }
+                  .report-page.export-pdf-safe .right-ai-col .ai-metric-label,
+                  .report-page.export-pdf-safe .right-ai-col .ai-metric-score {
+                      display: block !important;
+                      line-height: 1.36 !important;
+                      white-space: nowrap !important;
+                      overflow: visible !important;
+                      text-overflow: clip !important;
+                  }
+                  .report-page.export-pdf-safe .right-ai-col .ai-metric-bar {
+                      height: 7px !important;
+                      margin: 0 !important;
+                  }
+                  .report-page.export-pdf-safe .right-ai-col .ai-eval-card {
+                      min-height: 42px !important;
+                  }
+                  .report-page.export-pdf-safe .right-ai-col .ai-eval-text {
+                      line-height: 1.3 !important;
                   }
                   .report-page.export-mode .integrity-seal {
                       top: 6px !important;
@@ -745,7 +824,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
             const compactCount = pageDensityLog.filter((density) => density === 'compact').length;
             const standardCount = pageDensityLog.length - compactCount;
-            announceStatus(`내보내기 완료: 표준 ${standardCount}페이지, 압축 ${compactCount}페이지`);
+            const safeCount = pageStabilityLog.filter((modeTag) => modeTag === 'pdf-safe').length;
+            const stabilityText = mode === 'PDF' ? `, 안정화 ${safeCount}페이지` : '';
+            announceStatus(`내보내기 완료: 표준 ${standardCount}페이지, 압축 ${compactCount}페이지${stabilityText}`);
 
     } catch (error) {
       console.error("Generation failed", error);
@@ -916,17 +997,17 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             column-gap: 10px;
-            row-gap: 4px;
+            row-gap: 6px;
         }
         .ai-metric-row {
             display: flex;
             align-items: center;
-            min-height: 10px;
-            line-height: 1.2;
+            min-height: 14px;
+            line-height: 1.32;
         }
         .ai-metric-label,
         .ai-metric-score {
-            line-height: 1.2;
+            line-height: 1.32;
         }
         .ai-metric-bar {
             height: 6px;
@@ -937,6 +1018,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 4px;
+        }
+        .ai-summary-block {
+            flex-shrink: 0;
         }
         .ai-eval-card {
             min-height: 38px;
@@ -1297,7 +1381,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                         
                         <div className="col last right-ai-col flex flex-col" style={{width: '50%'}}>
                                 <div className="section-header body-pane-header">4. AI 심층 정밀 진단</div>
-                             <div className="flex-1 flex flex-col overflow-hidden">
+                             <div className="right-pane-stack flex-1 flex flex-col overflow-hidden">
                                 <div className="ai-summary-block report-pane-block p-3 border-b border-black bg-slate-50/50">
                                     {entry.videoAnalysis ? (
                                         <div className="flex flex-col gap-2">
@@ -1320,8 +1404,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                     { label: '전파 명확성', score: rubric.voice || 0, max: 20, color: 'bg-amber-500', bg: 'bg-amber-50' },
                                                     { label: '보호구 상태', score: rubric.ppe || 0, max: 20, color: 'bg-rose-500', bg: 'bg-rose-50' },
                                                 ].map((metric, midx) => (
-                                                    <div key={midx} className="ai-metric-row flex items-center text-[9px]">
-                                                        <span className="ai-metric-label w-14 font-bold text-slate-500 truncate">{metric.label}</span>
+                                                    <div key={midx} className="ai-metric-row flex items-center text-[10px]">
+                                                        <span className="ai-metric-label w-[62px] font-bold text-slate-500 whitespace-nowrap">{metric.label}</span>
                                                         <div className={`ai-metric-bar flex-1 h-1.5 rounded-full mx-1 overflow-hidden ${metric.bg}`}>
                                                             <div 
                                                                 className={`h-full rounded-full ${metric.color}`} 
