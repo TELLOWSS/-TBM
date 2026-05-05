@@ -461,6 +461,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           clone.style.backgroundColor = '#ffffff';
           clone.style.border = '2px solid black'; // Preserve outer border
           clone.classList.add('export-mode');
+          if (mode === 'PDF') {
+              clone.classList.add('export-pdf-canonical');
+          }
           
           // Remove UI controls
           clone.querySelectorAll('.edit-overlay, .no-print-ui').forEach(el => el.remove());
@@ -490,7 +493,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               rebalanceBodyForExport(clone, activeDensity);
           }
 
-          const useTextProfile = mode === 'PDF' ? true : (renderProfile === 'TEXT');
+          const useTextProfile = mode === 'PDF' ? false : (renderProfile === 'TEXT');
 
           if (mode === 'PDF' && !useTextProfile) {
               const riskScore = detectPdfExportRisk(clone);
@@ -530,7 +533,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
                     // 3. Capture with html2canvas (TEXT profile first, fallback to COMPAT when blank)
                     const capturePage = (foreignObjectRendering: boolean) => html2canvas(clone, {
-                        scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
+                        scale: mode === 'PDF' ? 2 : Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
                         useCORS: true,
                         foreignObjectRendering,
                         logging: false,
@@ -791,6 +794,105 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   }
                   .report-page.export-pdf-safe .right-ai-col .ai-eval-text {
                       line-height: 1.3 !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col,
+                  .report-page.export-pdf-canonical .right-pane-stack,
+                  .report-page.export-pdf-canonical .right-ai-col .ai-summary-block,
+                  .report-page.export-pdf-canonical .right-ai-col .manager-feedback-block {
+                      overflow: visible !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-score-header {
+                      display: grid !important;
+                      grid-template-columns: minmax(0, 1fr) auto !important;
+                      min-height: 26px !important;
+                      align-items: center !important;
+                      column-gap: 8px !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-score-title-wrap {
+                      display: inline-flex !important;
+                      align-items: center !important;
+                      gap: 6px !important;
+                      min-width: 0 !important;
+                      line-height: 1.2 !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-score-icon {
+                      width: 14px !important;
+                      height: 14px !important;
+                      display: block !important;
+                      flex-shrink: 0 !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-score-title {
+                      font-size: 11px !important;
+                      line-height: 1.2 !important;
+                      letter-spacing: 0 !important;
+                      white-space: nowrap !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-score-badge {
+                      display: inline-flex !important;
+                      align-items: center !important;
+                      justify-content: center !important;
+                      min-height: 20px !important;
+                      line-height: 1 !important;
+                      padding-top: 0 !important;
+                      padding-bottom: 0 !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-grid {
+                      display: grid !important;
+                      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                      column-gap: 10px !important;
+                      row-gap: 6px !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-row {
+                      display: table !important;
+                      width: 100% !important;
+                      table-layout: fixed !important;
+                      height: 16px !important;
+                      min-height: 16px !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-label,
+                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-bar,
+                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-score {
+                      display: table-cell !important;
+                      vertical-align: middle !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-label {
+                      width: 66px !important;
+                      font-size: 9.6px !important;
+                      line-height: 1.25 !important;
+                      white-space: nowrap !important;
+                      overflow: hidden !important;
+                      text-overflow: clip !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-bar {
+                      height: 6px !important;
+                      padding: 0 6px !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-metric-score {
+                      width: 22px !important;
+                      font-size: 9.6px !important;
+                      line-height: 1.25 !important;
+                      text-align: right !important;
+                      white-space: nowrap !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-eval-grid {
+                      display: grid !important;
+                      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                      gap: 4px !important;
+                      align-items: stretch !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-eval-card {
+                      min-height: 42px !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .ai-eval-text {
+                      display: block !important;
+                      line-height: 1.28 !important;
+                      max-height: 2.6em !important;
+                      overflow: hidden !important;
+                      -webkit-line-clamp: unset !important;
+                  }
+                  .report-page.export-pdf-canonical .right-ai-col .overall-opinion-text,
+                  .report-page.export-pdf-canonical .right-ai-col .feedback-line-text {
+                      line-height: 1.28 !important;
                   }
                   .report-page.export-mode .integrity-seal {
                       top: 6px !important;
