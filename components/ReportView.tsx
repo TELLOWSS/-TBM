@@ -288,6 +288,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       const textCols = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .col'));
       if (!bodyRowImages || textCols.length === 0) return;
 
+      element.classList.remove('export-tight', 'export-ultra-tight');
+
       let imageHeight = density === 'compact' ? 320 : 340;
       const minImageHeight = density === 'compact' ? 260 : 290;
       const step = 10;
@@ -309,6 +311,24 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               fitTextForExport(element, density);
               break;
           }
+      }
+
+      if (hasBodyOverflow(element)) {
+          element.classList.add('export-tight');
+          const tightHeight = `${Math.max(250, minImageHeight - 10)}px`;
+          bodyRowImages.style.height = tightHeight;
+          bodyRowImages.style.minHeight = tightHeight;
+          bodyRowImages.style.maxHeight = tightHeight;
+          fitTextForExport(element, 'compact');
+      }
+
+      if (hasBodyOverflow(element)) {
+          element.classList.add('export-ultra-tight');
+          const ultraTightHeight = '230px';
+          bodyRowImages.style.height = ultraTightHeight;
+          bodyRowImages.style.minHeight = ultraTightHeight;
+          bodyRowImages.style.maxHeight = ultraTightHeight;
+          fitTextForExport(element, 'compact');
       }
   };
 
@@ -494,11 +514,97 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   }
                   .body-row-images { height: 340px !important; border-bottom: 1px solid black !important; display: flex !important; width: 100% !important; flex-shrink: 0 !important; }
                   .report-page.export-compact .body-row-images { height: 320px !important; }
+                  .report-page.export-tight .body-row-images { height: 250px !important; }
+                  .report-page.export-ultra-tight .body-row-images { height: 230px !important; }
                   .body-row-text { flex: 1 !important; display: flex !important; width: 100% !important; min-height: 0 !important; }
+                  .body-row-text,
+                  .body-row-text * {
+                      color: #111827 !important;
+                      letter-spacing: -0.01em !important;
+                  }
+                  .report-pane-block { padding: 10px !important; }
+                  .report-pane-title {
+                      font-size: 11px !important;
+                      font-weight: 800 !important;
+                      letter-spacing: -0.01em !important;
+                      line-height: 1.25 !important;
+                  }
+                  .report-pane-subtitle {
+                      font-size: 10px !important;
+                      font-weight: 800 !important;
+                      letter-spacing: -0.01em !important;
+                      line-height: 1.25 !important;
+                  }
+                  .body-pane-header {
+                      height: 30px !important;
+                      min-height: 30px !important;
+                      max-height: 30px !important;
+                      padding: 0 8px !important;
+                      line-height: 1 !important;
+                      align-items: center !important;
+                      justify-content: center !important;
+                  }
+                  .report-pane-card {
+                      border-width: 1px !important;
+                      border-radius: 6px !important;
+                  }
+                  .report-pane-inner-pad {
+                      padding: 8px !important;
+                  }
+                  .body-row-text .section-header {
+                      color: #111827 !important;
+                      letter-spacing: 0 !important;
+                  }
                   .text-wrap-fix { white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; line-height: 1.35 !important; }
                   .break-keep { word-break: keep-all !important; overflow-wrap: anywhere !important; }
                   .dense-export-text { font-size: 9.4px !important; line-height: 1.25 !important; }
                   .report-page.export-compact .dense-export-text { font-size: 9px !important; line-height: 1.2 !important; }
+                  .report-page.export-tight .dense-export-text { font-size: 8.8px !important; line-height: 1.18 !important; }
+                  .report-page.export-ultra-tight .dense-export-text { font-size: 8.6px !important; line-height: 1.16 !important; }
+                  .risk-focus-block { min-height: 136px !important; }
+                  .report-page.export-compact .risk-focus-block { min-height: 120px !important; }
+                  .risk-line-text {
+                      display: -webkit-box !important;
+                      -webkit-box-orient: vertical !important;
+                      -webkit-line-clamp: 3 !important;
+                      overflow: hidden !important;
+                  }
+                  .report-page.export-compact .risk-line-text { -webkit-line-clamp: 2 !important; }
+                  .feedback-line-text {
+                      display: -webkit-box !important;
+                      -webkit-box-orient: vertical !important;
+                      -webkit-line-clamp: 2 !important;
+                      overflow: hidden !important;
+                  }
+                  .overall-opinion-text {
+                      display: -webkit-box !important;
+                      -webkit-box-orient: vertical !important;
+                      overflow: hidden !important;
+                      -webkit-line-clamp: 8 !important;
+                  }
+                  .report-page.export-compact .overall-opinion-text { -webkit-line-clamp: 6 !important; }
+                  .report-page.export-tight .overall-opinion-text { -webkit-line-clamp: 5 !important; }
+                  .report-page.export-ultra-tight .overall-opinion-text { -webkit-line-clamp: 4 !important; }
+                  .report-page.export-tight .left-content-stack,
+                  .report-page.export-tight .ai-summary-block,
+                  .report-page.export-tight .manager-feedback-block {
+                      padding: 8px !important;
+                  }
+                  .report-page.export-ultra-tight .left-content-stack,
+                  .report-page.export-ultra-tight .ai-summary-block,
+                  .report-page.export-ultra-tight .manager-feedback-block {
+                      padding: 6px !important;
+                  }
+                  .report-page.export-tight .left-content-stack,
+                  .report-page.export-ultra-tight .left-content-stack {
+                      gap: 6px !important;
+                  }
+                  .report-page.export-tight .body-pane-header { height: 28px !important; min-height: 28px !important; max-height: 28px !important; font-size: 10px !important; }
+                  .report-page.export-ultra-tight .body-pane-header { height: 27px !important; min-height: 27px !important; max-height: 27px !important; font-size: 10px !important; }
+                  .report-page.export-tight .integrity-seal,
+                  .report-page.export-ultra-tight .integrity-seal {
+                      display: none !important;
+                  }
                   table { border-collapse: collapse !important; width: 100% !important; table-layout: fixed !important; }
                   td { vertical-align: top !important; padding: 2px !important; line-height: 1.3 !important; }
                   .badge-cell { vertical-align: top !important; text-align: center !important; padding: 2px !important; }
@@ -672,6 +778,44 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
         
         .body-row-images { height: 340px; border-bottom: 1px solid black; display: flex; width: 100%; flex-shrink: 0; }
         .body-row-text { flex: 1; display: flex; width: 100%; min-height: 0; }
+        .body-row-text,
+        .body-row-text * {
+            color: #111827;
+            letter-spacing: -0.01em;
+        }
+        .report-pane-block { padding: 10px; }
+        .report-pane-title {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: -0.01em;
+            line-height: 1.25;
+        }
+        .report-pane-subtitle {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: -0.01em;
+            line-height: 1.25;
+        }
+        .body-pane-header {
+            height: 30px;
+            min-height: 30px;
+            max-height: 30px;
+            padding: 0 8px;
+            line-height: 1;
+            align-items: center;
+            justify-content: center;
+        }
+        .report-pane-card {
+            border-width: 1px;
+            border-radius: 6px;
+        }
+        .report-pane-inner-pad {
+            padding: 8px;
+        }
+        .body-row-text .section-header {
+            color: #111827;
+            letter-spacing: 0;
+        }
         
         /* Text Handling */
           .text-wrap-fix {
@@ -687,6 +831,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
         /* Table Reset for Internal Grids (Risk/Feedback) */
         table { border-collapse: collapse; width: 100%; table-layout: fixed; }
         td { vertical-align: top; padding: 2px; border-color: #cbd5e1; line-height: 1.3; }
+        .dense-export-text { font-size: 9.4px; line-height: 1.25; }
         
         @media print {
           @page { size: A4; margin: 0; }
@@ -805,13 +950,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                 style={{ transform: `scale(${scale})`, marginBottom: `${40 * scale}px` }} 
               >
                 {/* [NEW] Digital Integrity Seal (Legal Defense) */}
-                <div className="absolute top-24 right-8 z-20 pointer-events-none opacity-80 rotate-12 mix-blend-multiply">
-                    <div className="border-4 border-red-600 rounded-full w-24 h-24 flex items-center justify-center p-1">
+                <div className="integrity-seal absolute top-4 right-4 z-20 pointer-events-none opacity-65 rotate-6 mix-blend-multiply">
+                    <div className="border-[3px] border-red-600 rounded-full w-20 h-20 flex items-center justify-center p-1">
                         <div className="border border-red-600 rounded-full w-full h-full flex flex-col items-center justify-center text-red-600 text-center">
-                            <ShieldCheck size={20} strokeWidth={2.5}/>
-                            <span className="text-[8px] font-black uppercase mt-1 leading-none">전자<br/>무결성</span>
-                            <span className="text-[10px] font-black mt-1">검증 완료</span>
-                            <span className="text-[6px] mt-1 font-mono tracking-tighter">HuiGang OS</span>
+                            <ShieldCheck size={16} strokeWidth={2.5}/>
+                            <span className="text-[7px] font-black uppercase mt-0.5 leading-none">전자<br/>무결성</span>
+                            <span className="text-[8px] font-black mt-0.5">검증 완료</span>
+                            <span className="text-[5px] mt-0.5 font-mono tracking-tighter">HuiGang OS</span>
                         </div>
                     </div>
                 </div>
@@ -916,35 +1061,35 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     {/* 3-B. Text Content Row */}
                     <div className="body-row-text">
                         <div className="col flex flex-col" style={{width: '50%'}}>
-                            <div className="section-header">3. 금일 작업·설치 내용 및 위험요인</div>
-                            <div className="flex-1 p-3 flex flex-col gap-3 overflow-hidden">
+                            <div className="section-header body-pane-header">3. 금일 작업·설치 내용 및 위험요인</div>
+                            <div className="left-content-stack report-pane-block flex-1 p-3 flex flex-col gap-3 overflow-hidden">
                                 <div>
-                                    <div className="text-[11px] font-extrabold text-slate-800 mb-1 border-b border-slate-200 inline-block pb-0.5">[작업 내용]</div>
+                                    <div className="report-pane-title text-[11px] font-extrabold text-slate-800 mb-1 border-b border-slate-200 inline-block pb-0.5">[작업 내용]</div>
                                     <div className="text-[11px] leading-relaxed text-wrap-fix text-black min-h-[50px]">
                                         {entry.workDescription || "내용 없음"}
                                     </div>
-                                    <div className="mt-3 rounded border border-sky-200 bg-sky-50 px-2 py-2 min-h-[64px]">
-                                        <div className="text-[10px] font-extrabold text-sky-700 mb-1">[작업 위치]</div>
+                                    <div className="report-pane-card mt-3 rounded border border-sky-200 bg-sky-50 px-2 py-2 min-h-[64px]">
+                                        <div className="report-pane-subtitle text-[10px] font-extrabold text-sky-700 mb-1">[작업 위치]</div>
                                         <div className="text-[10px] leading-snug text-black break-keep">
                                             {safeLocation || '내용 없음'}
                                         </div>
                                     </div>
                                     <div className="mt-2 grid grid-cols-1 gap-2">
-                                        <div className="rounded border border-amber-200 bg-amber-50 px-2 py-2 min-h-[72px]">
-                                            <div className="text-[10px] font-extrabold text-amber-700 mb-1">[금일 설치한 사항]</div>
+                                        <div className="report-pane-card rounded border border-amber-200 bg-amber-50 px-2 py-2 min-h-[72px]">
+                                            <div className="report-pane-subtitle text-[10px] font-extrabold text-amber-700 mb-1">[금일 설치한 사항]</div>
                                             <div className="text-[10px] leading-snug text-black break-keep">
                                                 {entry.todayInstalledItems || '내용 없음'}
                                             </div>
                                         </div>
-                                        <div className="rounded border border-violet-200 bg-violet-50 px-2 py-2 min-h-[72px]">
-                                            <div className="text-[10px] font-extrabold text-violet-700 mb-1">[관리자 추가 설치 필요 항목]</div>
+                                        <div className="report-pane-card rounded border border-violet-200 bg-violet-50 px-2 py-2 min-h-[72px]">
+                                            <div className="report-pane-subtitle text-[10px] font-extrabold text-violet-700 mb-1">[관리자 추가 설치 필요 항목]</div>
                                             <div className="text-[10px] leading-snug text-black break-keep">
                                                 {entry.managerRequiredInstallItems || '내용 없음'}
                                             </div>
                                         </div>
                                     </div>
                                     {entry.linkedRiskAssessmentLabel && (
-                                        <div className="mt-2 rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5">
+                                        <div className="report-pane-card mt-2 rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5">
                                             <div className="flex items-center gap-1 flex-wrap">
                                                 <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${entry.linkedRiskAssessmentMatchedByMonth ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'}`}>
                                                     {entry.linkedRiskAssessmentMatchedByMonth ? '동일월 위험성평가 연계' : '위험성평가 연계'}
@@ -958,9 +1103,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex-1 border border-orange-300 rounded flex flex-col min-h-0 bg-white">
+                                <div className="report-pane-card risk-focus-block flex-1 border border-orange-300 rounded flex flex-col min-h-0 bg-white">
                                     <div className="bg-orange-50 p-1.5 text-center text-[10px] font-bold text-orange-700 border-b border-orange-200 shrink-0">⚠ 중점 위험 관리 사항</div>
-                                    <div className="p-2 overflow-hidden flex flex-col">
+                                    <div className="report-pane-inner-pad p-2 overflow-hidden flex flex-col">
                                         <table className="w-full border-collapse">
                                             <tbody>
                                                 {(entry.riskFactors || []).slice(0,5).map((risk, i) => (
@@ -970,7 +1115,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                                 <span className="inline-block w-8 text-center bg-red-100 text-red-600 border border-red-200 rounded text-[9px] font-bold py-0.5">위험</span>
                                                             </td>
                                                             <td className="align-middle pl-1 text-cell">
-                                                                <span className="text-[10px] text-black leading-snug break-keep block dense-export-text">{risk.risk}</span>
+                                                                <span className="risk-line-text text-[10px] text-black leading-snug break-keep block dense-export-text">{risk.risk}</span>
                                                             </td>
                                                         </tr>
                                                         <tr className="border-b border-dashed border-slate-200 last:border-0 mb-1">
@@ -978,7 +1123,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                                 <span className="inline-block w-8 text-center bg-blue-100 text-blue-600 border border-blue-200 rounded text-[9px] font-bold py-0.5">대책</span>
                                                             </td>
                                                             <td className="align-middle pl-1 pb-2 text-cell">
-                                                                <span className="text-[10px] text-black leading-snug break-keep block dense-export-text">{risk.measure}</span>
+                                                                <span className="risk-line-text text-[10px] text-black leading-snug break-keep block dense-export-text">{risk.measure}</span>
                                                             </td>
                                                         </tr>
                                                     </React.Fragment>
@@ -996,16 +1141,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                         </div>
                         
                         <div className="col last flex flex-col" style={{width: '50%'}}>
-                                <div className="section-header">4. AI 심층 정밀 진단</div>
+                                <div className="section-header body-pane-header">4. AI 심층 정밀 진단</div>
                              <div className="flex-1 flex flex-col overflow-hidden">
-                                <div className="p-3 border-b border-black bg-slate-50/50">
+                                <div className="ai-summary-block report-pane-block p-3 border-b border-black bg-slate-50/50">
                                     {entry.videoAnalysis ? (
                                         <div className="flex flex-col gap-2">
                                             {/* Top Score */}
                                             <div className="flex justify-between items-center mb-1">
                                                 <div className="flex items-center gap-1.5">
                                                     <Sparkles size={14} className="text-violet-600 shrink-0"/>
-                                                    <span className="text-[11px] font-black text-black">AI 종합 감사 점수</span>
+                                                    <span className="report-pane-title text-[11px] font-black text-black">AI 종합 감사 점수</span>
                                                 </div>
                                                 <span className={`text-sm font-black border px-2 py-0.5 rounded shadow-sm ${entry.videoAnalysis.score >= 80 ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                                     {entry.videoAnalysis.score}점
@@ -1042,7 +1187,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                         { label: '작업자 집중', value: entry.videoAnalysis.evalFocus },
                                                         { label: '팀장 리딩', value: entry.videoAnalysis.evalLeader },
                                                     ].filter(f => !!f.value).map((f, i) => (
-                                                        <div key={i} className="bg-white border border-slate-100 rounded px-1.5 py-1 overflow-hidden">
+                                                        <div key={i} className="report-pane-card bg-white border border-slate-100 rounded px-1.5 py-1 overflow-hidden">
                                                             <span className="font-black text-indigo-700 block mb-0.5">{f.label}</span>
                                                             <span className="text-slate-700 leading-tight line-clamp-2 break-keep ai-eval-text dense-export-text">{f.value}</span>
                                                         </div>
@@ -1052,9 +1197,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
                                             {/* [NEW] Leader Coaching (Reading to Leading) */}
                                             {entry.videoAnalysis.leaderCoaching && (
-                                                <div className="bg-indigo-50 border border-indigo-200 rounded p-2 mb-1">
+                                                <div className="report-pane-card bg-indigo-50 border border-indigo-200 rounded p-2 mb-1">
                                                     <div className="flex items-center gap-1 mb-0.5">
-                                                        <span className="text-[9px] font-black text-indigo-700 uppercase">현장 리더 실천 항목</span>
+                                                        <span className="report-pane-subtitle text-[9px] font-black text-indigo-700 uppercase">현장 리더 실천 항목</span>
                                                     </div>
                                                     <p className="text-[10px] font-bold text-slate-800 leading-snug">
                                                         "{entry.videoAnalysis.leaderCoaching.actionItem}"
@@ -1062,8 +1207,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                 </div>
                                             )}
 
-                                            <div className="text-[10px] text-slate-700 font-medium leading-relaxed bg-white p-2 rounded border border-slate-200 text-wrap-fix italic border-l-2 border-l-violet-400 mt-1">
-                                                <span className="block text-[9px] font-bold text-violet-600 mb-0.5">종합 의견</span>
+                                            <div className="report-pane-card overall-opinion-text text-[10px] text-slate-700 font-medium leading-relaxed bg-white p-2 rounded border border-slate-200 text-wrap-fix italic border-l-2 border-l-violet-400 mt-1">
+                                                <span className="report-pane-subtitle block text-[9px] font-bold text-violet-600 mb-0.5">종합 의견</span>
                                                 "{entry.videoAnalysis.evaluation}"
                                             </div>
                                         </div>
@@ -1071,8 +1216,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                         <div className="text-center py-6 text-[10px] text-slate-400">AI 분석 데이터 없음</div>
                                     )}
                                 </div>
-                                <div className="flex-1 p-3 bg-white">
-                                    <div className="text-[11px] font-extrabold text-black mb-2 border-b border-slate-200 pb-1 flex items-center gap-1">
+                                <div className="manager-feedback-block report-pane-block flex-1 p-3 bg-white">
+                                    <div className="report-pane-title text-[11px] font-extrabold text-black mb-2 border-b border-slate-200 pb-1 flex items-center gap-1">
                                         <UserCheck size={12}/> 안전관리자 코멘트
                                     </div>
                                     <div className="space-y-1">
@@ -1084,7 +1229,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                         <span className="text-blue-600 text-[10px] font-bold">✔</span>
                                                     </td>
                                                     <td className="align-middle text-cell">
-                                                        <span className="text-[10px] text-black leading-snug break-keep block dense-export-text">{fb}</span>
+                                                        <span className="feedback-line-text text-[10px] text-black leading-snug break-keep block dense-export-text">{fb}</span>
                                                     </td>
                                                 </tr>
                                             ))}
