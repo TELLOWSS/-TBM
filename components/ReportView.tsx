@@ -20,6 +20,7 @@ interface ReportViewProps {
 
 export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName, onClose, signatures, onUpdateSignature, onEdit, onDelete }) => {
   const [generatingMode, setGeneratingMode] = useState<'PDF' | 'IMAGE' | null>(null);
+        const [exportDensity, setExportDensity] = useState<'auto' | 'standard' | 'compact'>('auto');
   const [statusMessage, setStatusMessage] = useState("");
     const [announceMessage, setAnnounceMessage] = useState('');
   const [scale, setScale] = useState(1);
@@ -195,50 +196,126 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
   // [EXPORT STABILITY] Lock computed layout to reduce PDF/image drift
   const lockExportLayout = (element: HTMLElement) => {
-      const lockSelectors = [
-          '.report-page',
-          '.row',
-          '.col',
-          '.section-header',
-          '.body-row-images',
-          '.body-row-text',
-          'table',
-          'td',
-          'img'
-      ];
+      const page = element;
+      page.style.width = '794px';
+      page.style.height = '1123px';
+      page.style.boxSizing = 'border-box';
 
-      lockSelectors.forEach((selector) => {
+      const frameSelectors = ['.row', '.body-row-images', '.body-row-text', '.col'];
+      frameSelectors.forEach((selector) => {
           element.querySelectorAll(selector).forEach((node) => {
               const target = node as HTMLElement;
-              const computed = window.getComputedStyle(target);
               const rect = target.getBoundingClientRect();
+              const computed = window.getComputedStyle(target);
+
               if (rect.width > 0) {
                   const width = `${rect.width.toFixed(3)}px`;
                   target.style.width = width;
                   target.style.minWidth = width;
                   target.style.maxWidth = width;
               }
-              if (rect.height > 0) {
-                  const height = `${rect.height.toFixed(3)}px`;
-                  target.style.height = height;
-                  target.style.minHeight = height;
-                  target.style.maxHeight = height;
+
+              if (selector === '.row' || selector === '.body-row-images') {
+                  if (rect.height > 0) {
+                      const height = `${rect.height.toFixed(3)}px`;
+                      target.style.height = height;
+                      target.style.minHeight = height;
+                      target.style.maxHeight = height;
+                  }
               }
+
               if (computed.display === 'inline') {
                   target.style.display = 'inline-block';
               }
           });
       });
 
-      // Preserve image baseline alignment without forcing block layout
       element.querySelectorAll('img').forEach((node) => {
           const img = node as HTMLElement;
+          const rect = img.getBoundingClientRect();
           const computed = window.getComputedStyle(img);
-          if (computed.display === 'inline') {
-              img.style.display = 'inline-block';
+          img.style.display = 'block';
+          img.style.objectFit = 'contain';
+          if (rect.width > 0) {
+              const width = `${rect.width.toFixed(3)}px`;
+              img.style.width = width;
+              img.style.maxWidth = width;
+          }
+          if (rect.height > 0) {
+              img.style.maxHeight = `${rect.height.toFixed(3)}px`;
           }
           img.style.verticalAlign = computed.verticalAlign || 'middle';
       });
+  };
+
+    const fitTextForExport = (element: HTMLElement, density: 'standard' | 'compact') => {
+      const regions = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .col'));
+      if (regions.length === 0) return;
+
+      const textTargets = Array.from(element.querySelectorAll<HTMLElement>('.text-wrap-fix, .text-cell span, .ai-eval-text'));
+      if (textTargets.length === 0) return;
+
+    const minFontSizePx = density === 'compact' ? 7.8 : 8.2;
+    const maxIterations = density === 'compact' ? 8 : 6;
+
+      for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+          const hasOverflow = regions.some((region) => region.scrollHeight > (region.clientHeight + 1));
+          if (!hasOverflow) break;
+
+          textTargets.forEach((node) => {
+              const computed = window.getComputedStyle(node);
+              const currentFontSize = Number.parseFloat(computed.fontSize || '0');
+              if (Number.isFinite(currentFontSize) && currentFontSize > minFontSizePx) {
+                  const reduction = density === 'compact' ? 0.45 : 0.4;
+                  const nextFontSize = Math.max(minFontSizePx, currentFontSize - reduction);
+                  node.style.fontSize = `${nextFontSize.toFixed(2)}px`;
+              }
+
+              const currentLineHeight = Number.parseFloat(computed.lineHeight || '0');
+              if (Number.isFinite(currentLineHeight) && currentLineHeight > 0) {
+                  const fallbackFont = Number.parseFloat(node.style.fontSize || computed.fontSize || '10');
+                  const minLineHeightFactor = density === 'compact' ? 1.14 : 1.18;
+                  const lineReduction = density === 'compact' ? 0.28 : 0.22;
+                  const nextLineHeight = Math.max(fallbackFont * minLineHeightFactor, currentLineHeight - lineReduction);
+                  node.style.lineHeight = `${nextLineHeight.toFixed(2)}px`;
+              }
+          });
+      }
+  };
+
+  const rebalanceBodyForExport = (element: HTMLElement, density: 'standard' | 'compact') => {
+      const bodyRowImages = element.querySelector<HTMLElement>('.body-row-images');
+      const textCols = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .col'));
+      if (!bodyRowImages || textCols.length === 0) return;
+
+      let imageHeight = density === 'compact' ? 320 : 340;
+      const minImageHeight = density === 'compact' ? 260 : 290;
+      const step = 10;
+      const maxIterations = density === 'compact' ? 8 : 6;
+
+      for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+          fitTextForExport(element, density);
+
+          const hasOverflow = textCols.some((col) => col.scrollHeight > (col.clientHeight + 1));
+          if (!hasOverflow) break;
+
+          imageHeight = Math.max(minImageHeight, imageHeight - step);
+          const nextHeight = `${imageHeight}px`;
+          bodyRowImages.style.height = nextHeight;
+          bodyRowImages.style.minHeight = nextHeight;
+          bodyRowImages.style.maxHeight = nextHeight;
+
+          if (imageHeight <= minImageHeight) {
+              fitTextForExport(element, density);
+              break;
+          }
+      }
+  };
+
+  const hasBodyOverflow = (element: HTMLElement) => {
+      const textCols = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .col'));
+      if (textCols.length === 0) return false;
+      return textCols.some((col) => col.scrollHeight > (col.clientHeight + 1));
   };
 
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
@@ -277,7 +354,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       let pdf: any = null;
       if (mode === 'PDF') {
           try {
-              pdf = new jsPDF('p', 'mm', 'a4');
+              pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true, precision: 16 });
           } catch (e) {
               throw new Error("PDF 초기화 실패: 브라우저 호환성 문제");
           }
@@ -293,8 +370,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       }
       
       let singleImageData: string | null = null;
+      const pageDensityLog: Array<'standard' | 'compact'> = [];
 
       for (let i = 0; i < originalPages.length; i++) {
+          setStatusMessage(`${mode === 'PDF' ? 'PDF 생성 중...' : '이미지 변환 중...'} (${i + 1}/${originalPages.length})`);
           const originalPage = originalPages[i] as HTMLElement;
           // Deep clone
           const clone = originalPage.cloneNode(true) as HTMLElement;
@@ -309,6 +388,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           clone.style.position = 'relative';
           clone.style.backgroundColor = '#ffffff';
           clone.style.border = '2px solid black'; // Preserve outer border
+          clone.classList.add('export-mode');
           
           // Remove UI controls
           clone.querySelectorAll('.edit-overlay, .no-print-ui').forEach(el => el.remove());
@@ -324,6 +404,20 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
           // 0. Lock layout dimensions before conversion/capture
           lockExportLayout(clone);
+
+          // 0-1. Shrink text and rebalance image/text area only when overflow is detected
+          let activeDensity: 'standard' | 'compact' = exportDensity === 'compact' ? 'compact' : 'standard';
+          clone.classList.remove('export-standard', 'export-compact');
+          clone.classList.add(activeDensity === 'compact' ? 'export-compact' : 'export-standard');
+          rebalanceBodyForExport(clone, activeDensity);
+
+          if (exportDensity === 'auto' && hasBodyOverflow(clone)) {
+              activeDensity = 'compact';
+              clone.classList.remove('export-standard', 'export-compact');
+              clone.classList.add('export-compact');
+              rebalanceBodyForExport(clone, activeDensity);
+          }
+          pageDensityLog.push(activeDensity);
 
           // 1. Convert SVGs to PNGs (Critical for icon alignment)
           await convertSvgToImage(clone);
@@ -345,7 +439,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           }));
           
           // Brief pause for rendering stabilization
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise(resolve => setTimeout(resolve, 220));
 
           // 3. Capture with html2canvas
           const canvas = await html2canvas(clone, {
@@ -368,6 +462,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       -webkit-font-smoothing: antialiased !important;
                       text-rendering: geometricPrecision !important;
                       font-family: -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif !important;
+                      letter-spacing: 0 !important;
                   }
                   .report-page {
                       width: 794px !important;
@@ -397,13 +492,18 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       -webkit-print-color-adjust: exact !important;
                       print-color-adjust: exact !important;
                   }
-                  .body-row-images { height: 360px !important; border-bottom: 1px solid black !important; display: flex !important; width: 100% !important; flex-shrink: 0 !important; }
+                  .body-row-images { height: 340px !important; border-bottom: 1px solid black !important; display: flex !important; width: 100% !important; flex-shrink: 0 !important; }
+                  .report-page.export-compact .body-row-images { height: 320px !important; }
                   .body-row-text { flex: 1 !important; display: flex !important; width: 100% !important; min-height: 0 !important; }
-                  .text-wrap-fix { white-space: pre-wrap !important; word-break: keep-all !important; line-height: 1.35 !important; }
+                  .text-wrap-fix { white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; line-height: 1.35 !important; }
+                  .break-keep { word-break: keep-all !important; overflow-wrap: anywhere !important; }
+                  .dense-export-text { font-size: 9.4px !important; line-height: 1.25 !important; }
+                  .report-page.export-compact .dense-export-text { font-size: 9px !important; line-height: 1.2 !important; }
                   table { border-collapse: collapse !important; width: 100% !important; table-layout: fixed !important; }
-                  td { vertical-align: middle !important; padding: 2px !important; }
-                  .badge-cell { vertical-align: middle !important; text-align: center !important; padding: 2px !important; }
-                  .text-cell { vertical-align: middle !important; padding-left: 4px !important; line-height: 1.3 !important; }
+                  td { vertical-align: top !important; padding: 2px !important; line-height: 1.3 !important; }
+                  .badge-cell { vertical-align: top !important; text-align: center !important; padding: 2px !important; }
+                  .text-cell { vertical-align: top !important; padding-left: 4px !important; line-height: 1.3 !important; }
+                  .text-cell span { word-break: break-word !important; overflow-wrap: anywhere !important; }
                   img {
                       max-width: 100% !important;
                       object-fit: contain !important;
@@ -414,13 +514,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             }
           });
 
-          const imgData = canvas.toDataURL('image/jpeg', 0.95);
+          const imgData = mode === 'PDF'
+              ? canvas.toDataURL('image/png')
+              : canvas.toDataURL('image/jpeg', 0.95);
 
           if (mode === 'PDF' && pdf) {
               const imgWidth = 210; // A4 Width in mm
               const imgHeight = 297; // A4 Height in mm
               if (i > 0) pdf.addPage();
-              pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+              pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
           } else if (mode === 'IMAGE') {
               if (zip) {
                   // [UPDATED] Use resolved name for filename as well
@@ -463,6 +565,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               document.body.removeChild(link);
           }
       }
+
+            const compactCount = pageDensityLog.filter((density) => density === 'compact').length;
+            const standardCount = pageDensityLog.length - compactCount;
+            announceStatus(`내보내기 완료: 표준 ${standardCount}페이지, 압축 ${compactCount}페이지 적용`);
 
     } catch (error) {
       console.error("Generation failed", error);
@@ -564,22 +670,23 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             flex-shrink: 0;
         }
         
-        .body-row-images { height: 360px; border-bottom: 1px solid black; display: flex; width: 100%; flex-shrink: 0; }
+        .body-row-images { height: 340px; border-bottom: 1px solid black; display: flex; width: 100%; flex-shrink: 0; }
         .body-row-text { flex: 1; display: flex; width: 100%; min-height: 0; }
         
         /* Text Handling */
-        .text-wrap-fix {
-           white-space: pre-wrap;
-           word-break: keep-all; 
-           line-height: 1.35;
-        }
+          .text-wrap-fix {
+              white-space: pre-wrap;
+              word-break: break-word;
+              overflow-wrap: anywhere;
+              line-height: 1.35;
+          }
         
         /* Helpers */
         .flex-center { display: flex; align-items: center; justify-content: center; text-align: center; }
         
         /* Table Reset for Internal Grids (Risk/Feedback) */
         table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-        td { vertical-align: middle; padding: 2px; border-color: #cbd5e1; }
+        td { vertical-align: top; padding: 2px; border-color: #cbd5e1; line-height: 1.3; }
         
         @media print {
           @page { size: A4; margin: 0; }
@@ -608,6 +715,35 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     <p id="report-view-description" className="text-[10px] md:text-xs text-slate-400">
             {entries.length}개의 TBM 일지가 준비되었습니다.
           </p>
+                    <div className="mt-2 flex items-center gap-2">
+                        <span className="text-[10px] text-slate-300 font-semibold">내보내기 밀도</span>
+                        <div className="inline-flex rounded border border-slate-500 overflow-hidden">
+                            <button
+                                type="button"
+                                onClick={() => setExportDensity('auto')}
+                                disabled={generatingMode !== null}
+                                className={`px-2.5 py-1 text-[10px] font-bold transition-colors ${exportDensity === 'auto' ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-700 text-slate-200'} ${generatingMode !== null ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            >
+                                자동
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setExportDensity('standard')}
+                                disabled={generatingMode !== null}
+                                className={`px-2.5 py-1 text-[10px] font-bold transition-colors border-l border-slate-500 ${exportDensity === 'standard' ? 'bg-slate-100 text-slate-900' : 'bg-slate-700 text-slate-200'} ${generatingMode !== null ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            >
+                                표준
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setExportDensity('compact')}
+                                disabled={generatingMode !== null}
+                                className={`px-2.5 py-1 text-[10px] font-bold transition-colors border-l border-slate-500 ${exportDensity === 'compact' ? 'bg-indigo-200 text-indigo-900' : 'bg-slate-700 text-slate-200'} ${generatingMode !== null ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            >
+                                압축
+                            </button>
+                        </div>
+                    </div>
         </div>
         <div className="flex gap-2">
           {/* Image Download Button */}
@@ -781,7 +917,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     <div className="body-row-text">
                         <div className="col flex flex-col" style={{width: '50%'}}>
                             <div className="section-header">3. 금일 작업·설치 내용 및 위험요인</div>
-                            <div className="flex-1 p-4 flex flex-col gap-4 overflow-hidden">
+                            <div className="flex-1 p-3 flex flex-col gap-3 overflow-hidden">
                                 <div>
                                     <div className="text-[11px] font-extrabold text-slate-800 mb-1 border-b border-slate-200 inline-block pb-0.5">[작업 내용]</div>
                                     <div className="text-[11px] leading-relaxed text-wrap-fix text-black min-h-[50px]">
@@ -794,13 +930,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                         </div>
                                     </div>
                                     <div className="mt-2 grid grid-cols-1 gap-2">
-                                        <div className="rounded border border-amber-200 bg-amber-50 px-2 py-2.5 min-h-[82px]">
+                                        <div className="rounded border border-amber-200 bg-amber-50 px-2 py-2 min-h-[72px]">
                                             <div className="text-[10px] font-extrabold text-amber-700 mb-1">[금일 설치한 사항]</div>
                                             <div className="text-[10px] leading-snug text-black break-keep">
                                                 {entry.todayInstalledItems || '내용 없음'}
                                             </div>
                                         </div>
-                                        <div className="rounded border border-violet-200 bg-violet-50 px-2 py-2.5 min-h-[82px]">
+                                        <div className="rounded border border-violet-200 bg-violet-50 px-2 py-2 min-h-[72px]">
                                             <div className="text-[10px] font-extrabold text-violet-700 mb-1">[관리자 추가 설치 필요 항목]</div>
                                             <div className="text-[10px] leading-snug text-black break-keep">
                                                 {entry.managerRequiredInstallItems || '내용 없음'}
@@ -834,7 +970,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                                 <span className="inline-block w-8 text-center bg-red-100 text-red-600 border border-red-200 rounded text-[9px] font-bold py-0.5">위험</span>
                                                             </td>
                                                             <td className="align-middle pl-1 text-cell">
-                                                                <span className="text-[10px] text-black leading-snug break-keep block">{risk.risk}</span>
+                                                                <span className="text-[10px] text-black leading-snug break-keep block dense-export-text">{risk.risk}</span>
                                                             </td>
                                                         </tr>
                                                         <tr className="border-b border-dashed border-slate-200 last:border-0 mb-1">
@@ -842,7 +978,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                                 <span className="inline-block w-8 text-center bg-blue-100 text-blue-600 border border-blue-200 rounded text-[9px] font-bold py-0.5">대책</span>
                                                             </td>
                                                             <td className="align-middle pl-1 pb-2 text-cell">
-                                                                <span className="text-[10px] text-black leading-snug break-keep block">{risk.measure}</span>
+                                                                <span className="text-[10px] text-black leading-snug break-keep block dense-export-text">{risk.measure}</span>
                                                             </td>
                                                         </tr>
                                                     </React.Fragment>
@@ -908,7 +1044,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                     ].filter(f => !!f.value).map((f, i) => (
                                                         <div key={i} className="bg-white border border-slate-100 rounded px-1.5 py-1 overflow-hidden">
                                                             <span className="font-black text-indigo-700 block mb-0.5">{f.label}</span>
-                                                            <span className="text-slate-700 leading-tight line-clamp-2 break-keep">{f.value}</span>
+                                                            <span className="text-slate-700 leading-tight line-clamp-2 break-keep ai-eval-text dense-export-text">{f.value}</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -948,7 +1084,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                         <span className="text-blue-600 text-[10px] font-bold">✔</span>
                                                     </td>
                                                     <td className="align-middle text-cell">
-                                                        <span className="text-[10px] text-black leading-snug break-keep block">{fb}</span>
+                                                        <span className="text-[10px] text-black leading-snug break-keep block dense-export-text">{fb}</span>
                                                     </td>
                                                 </tr>
                                             ))}
