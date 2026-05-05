@@ -24,7 +24,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
     const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('TEXT');
   const [statusMessage, setStatusMessage] = useState("");
     const [announceMessage, setAnnounceMessage] = useState('');
-    const pdfExportStrategy: 'body-raster' | 'legacy' = 'body-raster';
+    const pdfExportStrategy: 'direct-original' | 'body-raster' | 'legacy' = 'direct-original';
   const [scale, setScale] = useState(1);
   const reportDialogRef = useRef<HTMLDivElement>(null);
   const reportCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -607,6 +607,64 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       for (let i = 0; i < originalPages.length; i++) {
           setStatusMessage(`${mode === 'PDF' ? 'PDF 생성 중...' : '이미지 변환 중...'} (${i + 1}/${originalPages.length})`);
           const originalPage = originalPages[i] as HTMLElement;
+
+          if (mode === 'PDF' && pdfExportStrategy === 'direct-original' && pdf) {
+              const previousTransform = originalPage.style.transform;
+              const previousMarginBottom = originalPage.style.marginBottom;
+              const previousBoxShadow = originalPage.style.boxShadow;
+
+              try {
+                  originalPage.style.transform = 'none';
+                  originalPage.style.marginBottom = '0';
+                  originalPage.style.boxShadow = 'none';
+
+                  await document.fonts.ready;
+                  await new Promise<void>((resolve) => {
+                      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+                  });
+
+                  const captureOriginal = (scale: number, foreignObjectRendering: boolean) => html2canvas(originalPage, {
+                      scale,
+                      useCORS: true,
+                      foreignObjectRendering,
+                      logging: false,
+                      width: 794,
+                      height: 1123,
+                      x: 0,
+                      y: 0,
+                      windowWidth: 794,
+                      windowHeight: 1123,
+                      backgroundColor: '#ffffff',
+                      ignoreElements: (element) => {
+                          if (!(element instanceof HTMLElement)) return false;
+                          return element.classList.contains('no-print-ui') || element.classList.contains('edit-overlay');
+                      },
+                  });
+
+                  let canvas = await captureOriginal(2, false);
+                  if (isCanvasLikelyBlank(canvas, 0.9995, 10)) {
+                      canvas = await captureOriginal(2, true);
+                  }
+                  if (isCanvasLikelyBlank(canvas, 0.9995, 10)) {
+                      canvas = await captureOriginal(3, false);
+                  }
+
+                  const imgData = canvas.toDataURL('image/png');
+                  if (i > 0) pdf.addPage();
+                  pdf.addImage(imgData, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
+
+                  pageDensityLog.push('standard');
+                  pageStabilityLog.push('normal');
+                  pageDiagnosticsLog.push(collectPageAlignmentDiagnostics(originalPage));
+              } finally {
+                  originalPage.style.transform = previousTransform;
+                  originalPage.style.marginBottom = previousMarginBottom;
+                  originalPage.style.boxShadow = previousBoxShadow;
+              }
+
+              continue;
+          }
+
           // Deep clone
           const clone = originalPage.cloneNode(true) as HTMLElement;
 
