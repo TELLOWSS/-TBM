@@ -22,6 +22,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
   const [generatingMode, setGeneratingMode] = useState<'PDF' | 'IMAGE' | null>(null);
         const [exportDensity, setExportDensity] = useState<'auto' | 'standard' | 'compact'>('auto');
     const [baselineTune, setBaselineTune] = useState<'auto' | 'low' | 'mid' | 'high'>('auto');
+    const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('TEXT');
   const [statusMessage, setStatusMessage] = useState("");
     const [announceMessage, setAnnounceMessage] = useState('');
   const [scale, setScale] = useState(1);
@@ -340,13 +341,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
   };
 
   const getBaselineOffsets = (tune: 'low' | 'mid' | 'high') => {
-      const textShift = tune === 'low' ? -0.8 : tune === 'high' ? -1.4 : -1.1;
-      const headerShift = tune === 'low' ? -0.4 : tune === 'high' ? -0.8 : -0.6;
+      const textShift = tune === 'low' ? -0.5 : tune === 'high' ? -1.0 : -0.75;
+      const headerShift = tune === 'low' ? -0.25 : tune === 'high' ? -0.55 : -0.4;
       return {
           textShift,
-          textShiftTight: Number((textShift - 0.3).toFixed(2)),
+          textShiftTight: Number((textShift - 0.2).toFixed(2)),
           headerShift,
-          headerShiftTight: Number((headerShift - 0.3).toFixed(2)),
+          headerShiftTight: Number((headerShift - 0.2).toFixed(2)),
       };
   };
 
@@ -500,6 +501,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           const canvas = await html2canvas(clone, {
             scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
             useCORS: true,
+                        foreignObjectRendering: renderProfile === 'TEXT',
             logging: false,
             width: 794,
             height: 1123,
@@ -516,8 +518,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       box-sizing: border-box !important;
                       -webkit-font-smoothing: antialiased !important;
                       text-rendering: geometricPrecision !important;
-                      font-family: -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif !important;
-                      letter-spacing: 0 !important;
+                      font-family: ${renderProfile === 'TEXT' ? '"Malgun Gothic", "맑은 고딕", "Segoe UI", sans-serif' : '-apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif'} !important;
+                      font-kerning: none !important;
                   }
                   .report-page {
                       width: 794px !important;
@@ -1063,6 +1065,27 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                 className={`px-2.5 py-1 text-[10px] font-bold transition-colors border-l border-slate-500 ${baselineTune === 'high' ? 'bg-rose-200 text-rose-900' : 'bg-slate-700 text-slate-200'} ${generatingMode !== null ? 'opacity-60 cursor-not-allowed' : ''}`}
                             >
                                 강
+                            </button>
+                        </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                        <span className="text-[10px] text-slate-300 font-semibold">렌더 프로필</span>
+                        <div className="inline-flex rounded border border-slate-500 overflow-hidden">
+                            <button
+                                type="button"
+                                onClick={() => setRenderProfile('TEXT')}
+                                disabled={generatingMode !== null}
+                                className={`px-2.5 py-1 text-[10px] font-bold transition-colors ${renderProfile === 'TEXT' ? 'bg-indigo-200 text-indigo-900' : 'bg-slate-700 text-slate-200'} ${generatingMode !== null ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            >
+                                A(텍스트)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setRenderProfile('COMPAT')}
+                                disabled={generatingMode !== null}
+                                className={`px-2.5 py-1 text-[10px] font-bold transition-colors border-l border-slate-500 ${renderProfile === 'COMPAT' ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-700 text-slate-200'} ${generatingMode !== null ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            >
+                                B(호환)
                             </button>
                         </div>
                     </div>
