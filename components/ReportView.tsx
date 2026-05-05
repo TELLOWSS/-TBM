@@ -592,16 +592,29 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       letter-spacing: 0 !important;
                   }
                   .ai-score-header {
-                      display: flex !important;
+                      display: grid !important;
+                      grid-template-columns: minmax(0, 1fr) auto !important;
                       align-items: center !important;
-                      justify-content: space-between !important;
-                      min-height: 20px !important;
-                      gap: 6px !important;
+                      min-height: 24px !important;
+                      column-gap: 8px !important;
                   }
                   .ai-score-title-wrap {
                       display: inline-flex !important;
                       align-items: center !important;
+                      gap: 6px !important;
                       min-width: 0 !important;
+                  }
+                  .ai-score-icon {
+                      width: 14px !important;
+                      height: 14px !important;
+                      display: block !important;
+                      flex-shrink: 0 !important;
+                  }
+                  .ai-score-title {
+                      display: block !important;
+                      font-size: 11px !important;
+                      line-height: 1.2 !important;
+                      white-space: nowrap !important;
                   }
                   .ai-score-title-wrap svg,
                   .ai-score-title-wrap img {
@@ -611,9 +624,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       flex-shrink: 0 !important;
                   }
                   .ai-score-badge {
-                      line-height: 1.2 !important;
-                      padding-top: 1px !important;
-                      padding-bottom: 1px !important;
+                      display: inline-flex !important;
+                      align-items: center !important;
+                      justify-content: center !important;
+                      min-height: 20px !important;
+                      line-height: 1 !important;
+                      padding-top: 0 !important;
+                      padding-bottom: 0 !important;
                       flex-shrink: 0 !important;
                   }
                   .ai-metric-grid {
@@ -623,19 +640,25 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       row-gap: 6px !important;
                   }
                   .ai-metric-row {
-                      display: flex !important;
+                      display: grid !important;
+                      grid-template-columns: 66px minmax(0, 1fr) 22px !important;
                       align-items: center !important;
+                      column-gap: 6px !important;
                       min-height: 14px !important;
-                      line-height: 1.32 !important;
+                      line-height: 1.28 !important;
                   }
                   .ai-metric-label,
                   .ai-metric-score {
-                      line-height: 1.32 !important;
+                      display: block !important;
+                      line-height: 1.28 !important;
+                      white-space: nowrap !important;
+                      overflow: hidden !important;
+                      text-overflow: clip !important;
                   }
                   .ai-metric-bar {
                       height: 6px !important;
-                      margin-left: 4px !important;
-                      margin-right: 4px !important;
+                      margin-left: 0 !important;
+                      margin-right: 0 !important;
                   }
                   .ai-eval-grid {
                       display: grid !important;
@@ -969,16 +992,29 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             letter-spacing: 0;
         }
         .ai-score-header {
-            display: flex;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
             align-items: center;
-            justify-content: space-between;
-            min-height: 20px;
-            gap: 6px;
+            min-height: 24px;
+            column-gap: 8px;
         }
         .ai-score-title-wrap {
             display: inline-flex;
             align-items: center;
+            gap: 6px;
             min-width: 0;
+        }
+        .ai-score-icon {
+            width: 14px;
+            height: 14px;
+            display: block;
+            flex-shrink: 0;
+        }
+        .ai-score-title {
+            display: block;
+            font-size: 11px;
+            line-height: 1.2;
+            white-space: nowrap;
         }
         .ai-score-title-wrap svg,
         .ai-score-title-wrap img {
@@ -988,9 +1024,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             flex-shrink: 0;
         }
         .ai-score-badge {
-            line-height: 1.2;
-            padding-top: 1px;
-            padding-bottom: 1px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 20px;
+            line-height: 1;
+            padding-top: 0;
+            padding-bottom: 0;
             flex-shrink: 0;
         }
         .ai-metric-grid {
@@ -1000,19 +1040,25 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             row-gap: 6px;
         }
         .ai-metric-row {
-            display: flex;
+            display: grid;
+            grid-template-columns: 66px minmax(0, 1fr) 22px;
             align-items: center;
+            column-gap: 6px;
             min-height: 14px;
-            line-height: 1.32;
+            line-height: 1.28;
         }
         .ai-metric-label,
         .ai-metric-score {
-            line-height: 1.32;
+            display: block;
+            line-height: 1.28;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: clip;
         }
         .ai-metric-bar {
             height: 6px;
-            margin-left: 4px;
-            margin-right: 4px;
+            margin-left: 0;
+            margin-right: 0;
         }
         .ai-eval-grid {
             display: grid;
@@ -1388,8 +1434,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                             {/* Top Score */}
                                             <div className="ai-score-header flex justify-between items-center mb-1">
                                                 <div className="ai-score-title-wrap flex items-center gap-1.5">
-                                                    <Sparkles size={14} className="text-violet-600 shrink-0"/>
-                                                    <span className="report-pane-title text-[11px] font-black text-black">AI 종합 감사 점수</span>
+                                                    <Sparkles size={14} className="ai-score-icon text-violet-600 shrink-0"/>
+                                                    <span className="ai-score-title report-pane-title text-[11px] font-black text-black">AI 종합 감사 점수</span>
                                                 </div>
                                                 <span className={`ai-score-badge text-sm font-black border px-2 py-0.5 rounded shadow-sm ${entry.videoAnalysis.score >= 80 ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                                     {entry.videoAnalysis.score}점
@@ -1404,15 +1450,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                                                     { label: '전파 명확성', score: rubric.voice || 0, max: 20, color: 'bg-amber-500', bg: 'bg-amber-50' },
                                                     { label: '보호구 상태', score: rubric.ppe || 0, max: 20, color: 'bg-rose-500', bg: 'bg-rose-50' },
                                                 ].map((metric, midx) => (
-                                                    <div key={midx} className="ai-metric-row flex items-center text-[10px]">
-                                                        <span className="ai-metric-label w-[62px] font-bold text-slate-500 whitespace-nowrap">{metric.label}</span>
-                                                        <div className={`ai-metric-bar flex-1 h-1.5 rounded-full mx-1 overflow-hidden ${metric.bg}`}>
+                                                    <div key={midx} className="ai-metric-row text-[10px]">
+                                                        <span className="ai-metric-label font-bold text-slate-500">{metric.label}</span>
+                                                        <div className={`ai-metric-bar rounded-full overflow-hidden ${metric.bg}`}>
                                                             <div 
                                                                 className={`h-full rounded-full ${metric.color}`} 
                                                                 style={{ width: `${(metric.score / metric.max) * 100}%` }}
                                                             ></div>
                                                         </div>
-                                                        <span className="ai-metric-score w-6 text-right font-mono font-bold text-black">{metric.score}</span>
+                                                        <span className="ai-metric-score text-right font-mono font-bold text-black">{metric.score}</span>
                                                     </div>
                                                 ))}
                                             </div>
