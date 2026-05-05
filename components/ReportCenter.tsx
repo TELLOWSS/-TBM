@@ -1,7 +1,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { TBMEntry, TeamOption } from '../types';
-import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity, Database, BrainCircuit, Microscope, Trash2, CheckSquare, Square, XCircle } from 'lucide-react';
+import { FileText, Printer, Search, Filter, Calendar, CheckCircle2, AlertCircle, Download, MoreHorizontal, UserCheck, Shield, Loader2, Package, Sparkles, GraduationCap, FileSpreadsheet, BarChart2, PieChart, Activity, Database, BrainCircuit, Microscope, Trash2, CheckSquare, Square, XCircle, MapPin } from 'lucide-react';
 import JSZip from 'jszip';
 import { ConfirmDialog } from './common/ConfirmDialog';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
@@ -47,6 +47,7 @@ const SimpleLoadingOverlay = ({ text }: { text: string }) => (
 export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrintModal, signatures, teams, initialTeamName, initialLinkStatus = 'all', onDelete, onBulkDelete }) => {
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [selectedDate, setSelectedDate] = useState(''); // Date Filter
+    const [locationQuery, setLocationQuery] = useState('');
     const [selectedLinkStatus, setSelectedLinkStatus] = useState<'all' | 'linked' | 'matched' | 'mismatched' | 'unlinked'>('all');
     const [showRemediationOnly, setShowRemediationOnly] = useState(false);
     const [showInitialFilterBadge, setShowInitialFilterBadge] = useState(true);
@@ -55,6 +56,13 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
   
   const [isZipping, setIsZipping] = useState(false);
   const { confirmDialogState, requestConfirm, closeConfirmDialog } = useConfirmDialog();
+
+    const formatLocationSummary = (entry: TBMEntry) => {
+            return [entry.locationBuildingScope, entry.locationArea, entry.locationDetail]
+                    .map(value => value?.trim())
+                    .filter(Boolean)
+                    .join(' / ');
+    };
 
   const announceStatus = (message: string) => {
       setStatusMessage('');
@@ -106,6 +114,13 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
       return result.sort((a, b) => a.name.localeCompare(b.name));
   }, [teams, entries]);
 
+  const uniqueLocations = useMemo(() => {
+      return Array.from(new Set(entries
+          .map(entry => formatLocationSummary(entry))
+          .filter((value): value is string => !!value)
+      )).sort((a, b) => a.localeCompare(b));
+  }, [entries]);
+
   useEffect(() => {
       if (!initialTeamName) return;
       const matchedTeam = uniqueTeams.find(team => team.name === initialTeamName);
@@ -139,7 +154,13 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
           result = result.filter(e => e.date === selectedDate);
       }
 
-      // 3. Linked Risk Assessment Filter
+      // 3. Location Search Filter
+      if (locationQuery.trim()) {
+          const normalizedQuery = locationQuery.trim().toLowerCase();
+          result = result.filter(e => formatLocationSummary(e).toLowerCase().includes(normalizedQuery));
+      }
+
+      // 4. Linked Risk Assessment Filter
       if (selectedLinkStatus === 'linked') {
           result = result.filter(e => !!e.linkedRiskAssessmentId || !!e.linkedRiskAssessmentLabel);
       } else if (selectedLinkStatus === 'matched') {
@@ -155,7 +176,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
       }
 
       return result;
-  }, [selectedTeam, selectedDate, selectedLinkStatus, showRemediationOnly, entries, uniqueTeams]);
+    }, [selectedTeam, selectedDate, locationQuery, selectedLinkStatus, showRemediationOnly, entries, uniqueTeams]);
 
   const remediationSummary = useMemo(() => {
       const missing = filteredEntries.filter(e => !e.linkedRiskAssessmentId && !e.linkedRiskAssessmentLabel).length;
@@ -186,6 +207,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
 
   const handleClearInitialPrefill = () => {
       setSelectedTeam('all');
+      setLocationQuery('');
       setSelectedLinkStatus('all');
       setShowRemediationOnly(false);
       setShowInitialFilterBadge(false);
@@ -426,6 +448,22 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
                  {selectedDate && <button onClick={() => setSelectedDate('')} aria-label="날짜 필터 초기화" className="text-slate-400 hover:text-red-500"><XCircle size={14}/></button>}
              </div>
 
+             <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 min-w-[220px]">
+                 <Search size={16} className="text-slate-500"/>
+                 <input
+                    list="report-center-location-suggestions"
+                    type="text"
+                    value={locationQuery}
+                    onChange={(e) => setLocationQuery(e.target.value)}
+                    placeholder="위치 검색"
+                    className="bg-transparent text-sm font-bold text-slate-700 outline-none w-full"
+                 />
+                 <datalist id="report-center-location-suggestions">
+                    {uniqueLocations.map(location => <option key={location} value={location} />)}
+                 </datalist>
+                 {locationQuery && <button onClick={() => setLocationQuery('')} aria-label="위치 필터 초기화" className="text-slate-400 hover:text-red-500"><XCircle size={14}/></button>}
+             </div>
+
              <div className="h-6 w-px bg-slate-200 mx-2"></div>
 
              {/* Team Filter Buttons */}
@@ -475,7 +513,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <Search size={48} className="mb-4 opacity-20"/>
               <p className="font-bold">조건에 맞는 문서가 없습니다.</p>
-              <button onClick={() => { setSelectedDate(''); setSelectedTeam('all'); setSelectedLinkStatus('all'); setShowRemediationOnly(false); }} aria-label="날짜 및 팀 필터 초기화" className="mt-4 text-sm text-blue-500 underline">필터 초기화</button>
+              <button onClick={() => { setSelectedDate(''); setSelectedTeam('all'); setLocationQuery(''); setSelectedLinkStatus('all'); setShowRemediationOnly(false); }} aria-label="날짜 및 팀 필터 초기화" className="mt-4 text-sm text-blue-500 underline">필터 초기화</button>
           </div>
       ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -509,6 +547,12 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({ entries, onOpenPrint
                       <div>
                          <h4 className={`font-bold text-sm ${isSelected ? 'text-indigo-700' : 'text-slate-800'}`}>{entry.teamName}</h4>
                          <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium"><Calendar size={10} /> {entry.date} {entry.time}</div>
+                         {formatLocationSummary(entry) && (
+                             <div className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-sky-100 bg-sky-50 px-2 py-1 text-[10px] font-bold text-sky-700">
+                                 <MapPin size={10} className="shrink-0" />
+                                 <span className="truncate max-w-[220px]">{formatLocationSummary(entry)}</span>
+                             </div>
+                         )}
                          {(needsLinkageRemediation || hasSameMonthMismatch) && (
                              <div className="mt-1 flex items-center gap-1 flex-wrap">
                                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${needsLinkageRemediation ? 'bg-amber-100 text-amber-700' : 'bg-violet-100 text-violet-700'}`}>

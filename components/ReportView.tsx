@@ -85,6 +85,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       }
   };
 
+    const formatLocationSummary = (entry: TBMEntry) => {
+            return [entry.locationBuildingScope, entry.locationArea, entry.locationDetail]
+                    .map(value => value?.trim())
+                    .filter(Boolean)
+                    .join(' / ');
+    };
+
   // Auto-scale for mobile/tablet screens
     React.useEffect(() => {
       const handleResize = () => {
@@ -374,8 +381,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   .col { border-right: 1px solid black !important; height: 100% !important; position: relative !important; overflow: hidden !important; flex-shrink: 0 !important; }
                   .col.last { border-right: none !important; }
                   .h-header { height: 130px !important; }
-                  .h-info { height: 45px !important; }
-                  .h-body { height: 908px !important; display: flex !important; flex-direction: column !important; }
+                  .h-info { height: 78px !important; }
+                  .h-body { height: 875px !important; display: flex !important; flex-direction: column !important; }
                   .h-footer { height: 36px !important; border-top: 1px solid black !important; display: flex !important; align-items: center !important; }
                   .section-header {
                       height: 30px !important;
@@ -390,7 +397,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       -webkit-print-color-adjust: exact !important;
                       print-color-adjust: exact !important;
                   }
-                  .body-row-images { height: 400px !important; border-bottom: 1px solid black !important; display: flex !important; width: 100% !important; flex-shrink: 0 !important; }
+                  .body-row-images { height: 360px !important; border-bottom: 1px solid black !important; display: flex !important; width: 100% !important; flex-shrink: 0 !important; }
                   .body-row-text { flex: 1 !important; display: flex !important; width: 100% !important; min-height: 0 !important; }
                   .text-wrap-fix { white-space: pre-wrap !important; word-break: keep-all !important; line-height: 1.35 !important; }
                   table { border-collapse: collapse !important; width: 100% !important; table-layout: fixed !important; }
@@ -539,8 +546,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
         
         /* Fixed Heights */
         .h-header { height: 130px; }
-        .h-info { height: 45px; }
-        .h-body { height: 908px; display: flex; flex-direction: column; } 
+        .h-info { height: 78px; }
+        .h-body { height: 875px; display: flex; flex-direction: column; } 
         .h-footer { height: 36px; border-top: 1px solid black; display: flex; align-items: center; }
         
         /* Section Headers */
@@ -557,7 +564,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             flex-shrink: 0;
         }
         
-        .body-row-images { height: 400px; border-bottom: 1px solid black; display: flex; width: 100%; flex-shrink: 0; }
+        .body-row-images { height: 360px; border-bottom: 1px solid black; display: flex; width: 100%; flex-shrink: 0; }
         .body-row-text { flex: 1; display: flex; width: 100%; min-height: 0; }
         
         /* Text Handling */
@@ -653,6 +660,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
             const hasVideoEvidence = !!(entry.tbmVideoUrl || entry.tbmVideoFileName || entry.videoAnalysis);
             const displayFileName = entry.tbmVideoFileName || (entry.videoAnalysis ? '분석된 동영상 데이터.mp4' : '파일명 없음');
+            const safeLocation = formatLocationSummary(entry);
 
             return (
               <div 
@@ -705,12 +713,22 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
                 {/* 2. Info Row */}
                 <div className="row h-info text-xs">
-                    <div className="col bg-slate-50 flex-center font-extrabold text-black" style={{width: '12%'}}>작업 팀명</div>
-                    <div className="col flex-center font-bold text-black" style={{width: '23%'}}>{safeTeamName}</div>
-                    <div className="col bg-slate-50 flex-center font-extrabold text-black" style={{width: '10%'}}>팀장</div>
-                    <div className="col flex-center font-bold text-black" style={{width: '20%'}}>{safeLeader}</div>
-                    <div className="col bg-slate-50 flex-center font-extrabold text-black" style={{width: '15%'}}>금일 출력</div>
-                    <div className="col last flex-center font-bold text-black" style={{width: '20%'}}>{safeCount}명</div>
+                    <div className="w-full h-full flex flex-col">
+                        <div className="row" style={{ height: '39px' }}>
+                            <div className="col bg-slate-50 flex-center font-extrabold text-black" style={{width: '12%'}}>작업 팀명</div>
+                            <div className="col flex-center font-bold text-black" style={{width: '23%'}}>{safeTeamName}</div>
+                            <div className="col bg-slate-50 flex-center font-extrabold text-black" style={{width: '10%'}}>팀장</div>
+                            <div className="col flex-center font-bold text-black" style={{width: '20%'}}>{safeLeader}</div>
+                            <div className="col bg-slate-50 flex-center font-extrabold text-black" style={{width: '15%'}}>금일 출력</div>
+                            <div className="col last flex-center font-bold text-black" style={{width: '20%'}}>{safeCount}명</div>
+                        </div>
+                        <div className="row last" style={{ height: '39px' }}>
+                            <div className="col bg-slate-50 flex-center font-extrabold text-black" style={{width: '12%'}}>작업 위치</div>
+                            <div className="col px-3 flex items-center font-bold text-black" style={{width: '88%'}}>
+                                <span className="text-[11px] leading-snug break-keep">{safeLocation || '내용 없음'}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {/* 3. Main Body */}
@@ -762,12 +780,32 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     {/* 3-B. Text Content Row */}
                     <div className="body-row-text">
                         <div className="col flex flex-col" style={{width: '50%'}}>
-                            <div className="section-header">3. 금일 작업 내용 및 위험요인</div>
+                            <div className="section-header">3. 금일 작업·설치 내용 및 위험요인</div>
                             <div className="flex-1 p-4 flex flex-col gap-4 overflow-hidden">
                                 <div>
                                     <div className="text-[11px] font-extrabold text-slate-800 mb-1 border-b border-slate-200 inline-block pb-0.5">[작업 내용]</div>
                                     <div className="text-[11px] leading-relaxed text-wrap-fix text-black min-h-[50px]">
                                         {entry.workDescription || "내용 없음"}
+                                    </div>
+                                    <div className="mt-3 rounded border border-sky-200 bg-sky-50 px-2 py-2 min-h-[64px]">
+                                        <div className="text-[10px] font-extrabold text-sky-700 mb-1">[작업 위치]</div>
+                                        <div className="text-[10px] leading-snug text-black break-keep">
+                                            {safeLocation || '내용 없음'}
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 grid grid-cols-1 gap-2">
+                                        <div className="rounded border border-amber-200 bg-amber-50 px-2 py-2.5 min-h-[82px]">
+                                            <div className="text-[10px] font-extrabold text-amber-700 mb-1">[금일 설치한 사항]</div>
+                                            <div className="text-[10px] leading-snug text-black break-keep">
+                                                {entry.todayInstalledItems || '내용 없음'}
+                                            </div>
+                                        </div>
+                                        <div className="rounded border border-violet-200 bg-violet-50 px-2 py-2.5 min-h-[82px]">
+                                            <div className="text-[10px] font-extrabold text-violet-700 mb-1">[관리자 추가 설치 필요 항목]</div>
+                                            <div className="text-[10px] leading-snug text-black break-keep">
+                                                {entry.managerRequiredInstallItems || '내용 없음'}
+                                            </div>
+                                        </div>
                                     </div>
                                     {entry.linkedRiskAssessmentLabel && (
                                         <div className="mt-2 rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5">

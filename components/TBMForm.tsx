@@ -91,6 +91,11 @@ const normalizeImageToJpeg = (file: File): Promise<string> => {
 interface WorkTypeExample {
     type: string;
     work: string;
+    locationBuildingScope: string;
+    locationArea: string;
+    locationDetail: string;
+    todayInstalledItems: string;
+    managerRequiredInstallItems: string;
     risks: { risk: string; measure: string }[];
     feedback: string[];
     videoEvals: { evalLog: string; evalAttendance: string; evalFocus: string; evalLeader: string; evaluation: string };
@@ -100,6 +105,11 @@ export const WORK_TYPE_EXAMPLES: WorkTypeExample[] = [
     {
         type: '토공/굴착',
         work: '굴착기를 이용한 터파기 작업 및 토사 반출',
+        locationBuildingScope: '전체동',
+        locationArea: '외곽구간',
+        locationDetail: '단지 외곽 터파기 구간 및 흙막이 주변',
+        todayInstalledItems: '굴착구간 흙막이 지보공 설치, 출입통제 라바콘 및 접근금지선 설치, 장비 작업반경 경고 표지 설치',
+        managerRequiredInstallItems: '굴착 심화 구간 추가 흙막이 보강재 설치, 우천 대비 배수펌프 및 미끄럼 방지 발판 추가 설치',
         risks: [
             { risk: '굴착 중 지반 붕괴 및 비탈면 파괴', measure: '비탈면 기울기 기준 준수, 흙막이 지보공 설치 및 일일 점검' },
             { risk: '굴착장비 선회 반경 내 작업자 접근', measure: '유도원 배치, 접근금지선 설치, 굴착장비 경광등 작동 확인' },
@@ -121,6 +131,11 @@ export const WORK_TYPE_EXAMPLES: WorkTypeExample[] = [
     {
         type: '콘크리트 타설',
         work: '기초·슬라브 콘크리트 타설 및 양생 작업',
+        locationBuildingScope: '101동',
+        locationArea: '지상층',
+        locationDetail: '1층 슬라브 타설 구간',
+        todayInstalledItems: '타설 구간 거푸집 및 동바리 설치 완료, 레미콘 차량 유도라인 설치, 양생포 배치',
+        managerRequiredInstallItems: '타설 확대 구간 추가 동바리 보강, 야간 조명탑 및 이동식 안전휀스 추가 설치',
         risks: [
             { risk: '콘크리트 타설 중 거푸집 붕괴', measure: '타설 전 거푸집 동바리 체결 상태 확인, 콘크리트 타설 속도 준수' },
             { risk: '레미콘 차량 후진 시 작업자 충돌', measure: '차량 유도원 배치, 차량 이동 경로 작업자 통제' },
@@ -142,6 +157,11 @@ export const WORK_TYPE_EXAMPLES: WorkTypeExample[] = [
     {
         type: '철근/거푸집',
         work: '기둥·보 철근 배근 및 거푸집 조립·해체 작업',
+        locationBuildingScope: '102동',
+        locationArea: '지상층',
+        locationDetail: '3층 보·슬래브 배근 구간',
+        todayInstalledItems: '철근 선단부 보호캡 설치, 고소작업 구간 안전난간 설치, 거푸집 지지대 설치 완료',
+        managerRequiredInstallItems: '해체 예정 구간 낙하물 방지망 추가 설치, 고소작업 발판 보강재 추가 설치',
         risks: [
             { risk: '철근 운반 및 배근 중 찔림·베임', measure: '장갑 착용 의무화, 절단면 캡 설치, 2인 1조 운반' },
             { risk: '거푸집 해체 시 낙하 및 전도', measure: '해체 순서 준수, 하부 출입금지 구역 설정, 안전띠 착용' },
@@ -163,6 +183,11 @@ export const WORK_TYPE_EXAMPLES: WorkTypeExample[] = [
     {
         type: '비계/가설구조물',
         work: '강관 비계 및 시스템 비계 설치·해체 작업',
+        locationBuildingScope: '전체동',
+        locationArea: '외벽',
+        locationDetail: '외벽 작업 전층 비계 설치 구간',
+        todayInstalledItems: '비계 발판 및 벽연결재 설치, 하부 출입통제 바리케이드 설치, 낙하물 방지망 설치',
+        managerRequiredInstallItems: '작업 확장 구간 비계 발판 추가 설치, 강풍 대비 보강 연결재 추가 설치',
         risks: [
             { risk: '비계 발판 탈락으로 인한 추락', measure: '발판 고정핀 체결 확인, 작업 전 점검표 작성' },
             { risk: '비계 설치 중 자재 낙하', measure: '낙하물 방지망 설치, 하부 출입금지, 안전모 착용' },
@@ -184,6 +209,11 @@ export const WORK_TYPE_EXAMPLES: WorkTypeExample[] = [
     {
         type: '도장/마감',
         work: '내외부 도장 및 마감 작업',
+        locationBuildingScope: '103동',
+        locationArea: '지상층',
+        locationDetail: '12층 세대 내부 마감 구간',
+        todayInstalledItems: '도장 구역 환기팬 설치, 사다리 고정 장치 설치, 인화물 보관함 배치',
+        managerRequiredInstallItems: '밀폐 구역 추가 환기덕트 설치, 화재 대비 소화기 및 경고표지 추가 설치',
         risks: [
             { risk: '도료 흡입으로 인한 호흡기 유해물질 노출', measure: '방독마스크 착용, 작업 구역 환기 유지' },
             { risk: '사다리 사용 중 추락', measure: '사다리 발 고정 확인, 2인 1조 작업(1인 보조)' },
@@ -205,6 +235,11 @@ export const WORK_TYPE_EXAMPLES: WorkTypeExample[] = [
     {
         type: '전기/기계설비',
         work: '전기 배선 및 기계설비 설치·유지보수 작업',
+        locationBuildingScope: '104동',
+        locationArea: '기계실/전기실',
+        locationDetail: '지하 전기실 및 EPS실 배선 구간',
+        todayInstalledItems: '분전함 차단 표지 설치, LOTO 잠금장치 설치, 기계 회전부 임시 방호덮개 설치',
+        managerRequiredInstallItems: '추가 작업구간 절연매트 설치, 점검구역 접근금지 펜스 및 경광등 추가 설치',
         risks: [
             { risk: '활선 작업 중 감전', measure: '전원 차단 후 LOTO(잠금제어) 적용, 절연 장갑·절연공구 사용' },
             { risk: '배선 작업 중 고소 추락', measure: '안전발판 또는 사다리 고정 후 사용, 안전띠 착용' },
@@ -226,6 +261,11 @@ export const WORK_TYPE_EXAMPLES: WorkTypeExample[] = [
     {
         type: '공통 일반',
         work: '현장 공통 안전관리 및 일반 작업',
+        locationBuildingScope: '전체동',
+        locationArea: '공용구간',
+        locationDetail: '현장 공용 통로 및 자재 이동 동선',
+        todayInstalledItems: '현장 출입통제선 설치, 공용 안전표지 설치, 통로 정리정돈 및 위험구역 표시 완료',
+        managerRequiredInstallItems: '추가 이동통로 유도표지 설치, 취약구역 보호난간 및 야간 조명 추가 설치',
         risks: [
             { risk: '개인 보호구 미착용으로 인한 상해', measure: '안전모·안전화·안전조끼 착용 의무화 및 일일 점검' },
             { risk: '작업장 정리 불량으로 인한 전도', measure: '작업 전·중·후 정리정돈, 통로 확보' },
@@ -244,7 +284,140 @@ export const WORK_TYPE_EXAMPLES: WorkTypeExample[] = [
             evaluation: '일반 공종 TBM 전반 양호. 일일 안전 점검 체크리스트 활용 지속 권고.',
         }
     },
+    {
+        type: '지하주차장 설비/마감',
+        work: '지하주차장 배관, 트레이, 도장 및 마감 보수 작업',
+        locationBuildingScope: '전체동',
+        locationArea: '지하주차장',
+        locationDetail: 'B2 서측 주차구획 및 램프 접속부',
+        todayInstalledItems: '차량 통제 콘 설치, 작업구간 펜스 설치, 임시 조명 및 배수커버 보호판 설치',
+        managerRequiredInstallItems: '추가 환기팬 설치, 차량 우회 안내 표지 및 고정식 차단대 추가 설치',
+        risks: [
+            { risk: '차량 이동과 작업 동선 중첩으로 인한 충돌', measure: '차량 통제요원 배치, 차단봉·유도표지 설치, 작업 시간대 분리' },
+            { risk: '지하 환기 부족에 따른 유해가스 노출', measure: '환기팬 가동, 밀폐도 점검, 작업 중 주기적 환기' },
+            { risk: '램프부 미끄럼 및 전도', measure: '미끄럼 방지 매트 설치, 누수 구간 즉시 정리, 이동 동선 분리' },
+        ],
+        feedback: [
+            '지하주차장 작업은 차량 통제 계획과 작업자 보행 동선 분리를 먼저 확인해야 합니다.',
+            '램프 접속부는 누수·오염 여부를 수시 점검해 전도 위험을 제거하세요.',
+            '저조도 구간은 임시 조명을 충분히 확보하고 사각지대를 없애야 합니다.',
+        ],
+        videoEvals: {
+            evalLog: '지하주차장 구획과 차량 통제 범위가 일지에 구체적으로 기록됨.',
+            evalAttendance: '배관·마감 작업자와 차량 통제 인원 참석 확인.',
+            evalFocus: '차량 접근 위험에 대한 집중도 전반 양호.',
+            evalLeader: '팀장이 램프부 위험구간과 차량 유도 절차를 명확히 설명함.',
+            evaluation: '지하주차장 작업 TBM은 양호하나 차량 통제 표지 추가 설치 여부를 재확인할 필요가 있습니다.',
+        }
+    },
+    {
+        type: '외부계단/출입구',
+        work: '외부계단 난간, 디딤판 마감 및 출입구 주변 정리 작업',
+        locationBuildingScope: '전체동',
+        locationArea: '외부계단',
+        locationDetail: '2호 외부계단 1~3층 연결 구간',
+        todayInstalledItems: '추락방지 난간 설치, 출입 통제 바리케이드 설치, 계단부 미끄럼 방지 테이프 부착',
+        managerRequiredInstallItems: '계단참 보호덮개 추가 설치, 야간 경고등 및 접근금지 안내판 추가 설치',
+        risks: [
+            { risk: '계단 단차 및 자재 적치로 인한 전도', measure: '계단 통로 확보, 자재 적치 금지, 미끄럼 방지 조치' },
+            { risk: '난간 미설치 구간 추락', measure: '임시 난간 선설치 후 작업, 계단참 개구부 덮개 설치' },
+            { risk: '출입구 공용동선과 작업동선 충돌', measure: '작업 시간 분리, 통제선 및 유도 인원 배치' },
+        ],
+        feedback: [
+            '외부계단 작업은 통행자와 작업자 동선이 겹치지 않도록 통제해야 합니다.',
+            '계단참 개구부와 난간 미설치 구간은 작업 전 선조치가 필요합니다.',
+            '우천 시 계단부 미끄럼 위험이 커지므로 미끄럼 방지 상태를 수시 점검하세요.',
+        ],
+        videoEvals: {
+            evalLog: '외부계단 작업 위치와 통제 범위가 일지에 명확히 기록됨.',
+            evalAttendance: '작업자와 통제요원 참여 확인.',
+            evalFocus: '통행자 접근 통제가 잘 공유되어 집중도 양호.',
+            evalLeader: '팀장이 외부계단 추락·전도 위험을 반복 강조하며 통제 절차를 설명함.',
+            evaluation: '외부계단 작업 TBM은 적정하나 계단참 추가 보호조치 설치 여부 확인이 필요합니다.',
+        }
+    },
+    {
+        type: '옥상 방수/실외기 기초',
+        work: '옥상 방수 보수 및 실외기 기초 정리 작업',
+        locationBuildingScope: '105동',
+        locationArea: '옥상',
+        locationDetail: '옥상 서측 실외기 기초 주변',
+        todayInstalledItems: '옥상 추락방지 로프 설치, 작업구간 안전표지 설치, 자재 비산 방지망 설치',
+        managerRequiredInstallItems: '난간 취약부 추가 보호난간 설치, 강풍 대비 자재 고정장치 추가 설치',
+        risks: [
+            { risk: '옥상 가장자리 접근 중 추락', measure: '생명줄 체결, 가장자리 접근 금지선 설치, 2인 1조 작업' },
+            { risk: '강풍에 의한 자재 비산', measure: '자재 묶음 고정, 강풍 시 작업 중지 기준 준수' },
+            { risk: '방수재 취급 중 화학물질 노출', measure: '보호장갑·보안경 착용, MSDS 교육 실시' },
+        ],
+        feedback: [
+            '옥상 작업은 기상 조건에 따라 작업 중지 기준을 분명히 해야 합니다.',
+            '가장자리 작업 시 생명줄 체결 여부를 상호 확인하세요.',
+            '비산 가능 자재는 반드시 고정하고 잔재물을 즉시 정리해야 합니다.',
+        ],
+        videoEvals: {
+            evalLog: '옥상 작업 특성과 기상 조건 반영 내용이 적절히 기재됨.',
+            evalAttendance: '작업자 참석 및 보호구 착용 상태 공유 확인.',
+            evalFocus: '고소 위험 인지 수준이 높고 집중도 양호.',
+            evalLeader: '팀장이 생명줄 체결과 강풍 대응 절차를 명확히 안내함.',
+            evaluation: '옥상 방수/실외기 기초 작업 TBM은 양호하며 난간 취약부 보강 설치를 병행하면 더 좋습니다.',
+        }
+    },
+    {
+        type: '창호/유리 설치',
+        work: '창호 프레임 및 유리 설치 작업',
+        locationBuildingScope: '106동',
+        locationArea: '외벽',
+        locationDetail: '15층 남측 창호 설치 구간',
+        todayInstalledItems: '유리 양중 통제구역 설치, 흡착기 점검 완료, 외부 작업 발판 점검 완료',
+        managerRequiredInstallItems: '추가 낙하물 방지망 설치, 하부 통제 펜스 확대 설치',
+        risks: [
+            { risk: '유리 파손 및 절상', measure: '절단방지 장갑 착용, 전용 거치대 사용, 충격 방지' },
+            { risk: '고소 외벽 작업 중 추락', measure: '안전대 체결, 작업발판 상태 확인, 양중 동선 통제' },
+            { risk: '유리 낙하물 발생', measure: '하부 출입금지, 낙하물 방지망 및 통제요원 배치' },
+        ],
+        feedback: [
+            '창호/유리 작업은 하부 통제 범위를 충분히 넓게 설정해야 합니다.',
+            '흡착기와 양중 장비 점검 결과를 작업 전 공유하세요.',
+            '유리 이동 경로에는 불필요한 인원 접근을 차단해야 합니다.',
+        ],
+        videoEvals: {
+            evalLog: '양중 구간과 유리 취급 절차가 일지에 명확히 반영됨.',
+            evalAttendance: '양중 담당자 포함 전원 참석 확인.',
+            evalFocus: '고소·파손 위험에 대한 경계 수준이 높음.',
+            evalLeader: '팀장이 유리 이동 동선과 하부 통제 절차를 구체적으로 설명함.',
+            evaluation: '창호/유리 설치 TBM은 양호하나 낙하물 방지망 확대 설치가 필요합니다.',
+        }
+    },
+    {
+        type: '소방/배관',
+        work: '소방 배관 및 기계 배관 설치 작업',
+        locationBuildingScope: '전체동',
+        locationArea: '코어부',
+        locationDetail: '코어 샤프트 및 지하 주배관 연결부',
+        todayInstalledItems: '배관 지지대 설치, 용접작업 화재감시 배치, 화기취급 통제구역 설치',
+        managerRequiredInstallItems: '추가 화재감시 인원 배치, 비상소화장비 및 용접불티 비산방지포 추가 설치',
+        risks: [
+            { risk: '용접·절단 중 화재', measure: '화기작업 허가서 발급, 불티비산방지포 설치, 소화기 비치' },
+            { risk: '배관 반입 중 협착', measure: '반입 동선 정리, 신호수 배치, 2인 이상 운반' },
+            { risk: '샤프트 작업 중 추락', measure: '개구부 덮개 설치, 안전대 체결, 작업발판 점검' },
+        ],
+        feedback: [
+            '소방/배관 작업은 화기작업 허가와 화재감시 체계를 먼저 확인해야 합니다.',
+            '샤프트 개구부 주변은 항상 덮개와 난간 상태를 점검하세요.',
+            '장척 자재 반입 시 신호수 배치와 통행 통제가 필요합니다.',
+        ],
+        videoEvals: {
+            evalLog: '화기작업 허가와 배관 반입 동선이 일지에 잘 기록됨.',
+            evalAttendance: '용접 작업자와 화재감시 인원 참석 확인.',
+            evalFocus: '화재·협착 위험 인지 수준이 높음.',
+            evalLeader: '팀장이 화기작업 절차와 샤프트 추락 예방을 반복 설명함.',
+            evaluation: '소방/배관 작업 TBM은 적정하나 추가 소화장비 설치 여부를 병행 점검해야 합니다.',
+        }
+    },
 ];
+
+const LOCATION_BUILDING_SUGGESTIONS = ['전체동', '101동', '102동', '103동', '104동', '105동', '106동', '부대시설', '외곽구간'];
+const LOCATION_AREA_SUGGESTIONS = ['지상층', '지하주차장', '외부계단', '옥상', '외벽', '코어부', '공용구간', '기계실/전기실', '출입구', '외부부지', '자재야적장'];
 
 // [RELIABILITY FIX] API 키 사전 점검 — AI 기능 호출 전 공통 가드
 const checkApiKeyOrThrow = () => {
@@ -277,6 +450,11 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const [leaderName, setLeaderName] = useState('');
   const [attendeesCount, setAttendeesCount] = useState<number>(0);
   const [workDescription, setWorkDescription] = useState('');
+    const [locationBuildingScope, setLocationBuildingScope] = useState('');
+    const [locationArea, setLocationArea] = useState('');
+    const [locationDetail, setLocationDetail] = useState('');
+    const [todayInstalledItems, setTodayInstalledItems] = useState('');
+    const [managerRequiredInstallItems, setManagerRequiredInstallItems] = useState('');
   const [riskFactors, setRiskFactors] = useState<RiskAssessmentItem[]>([]);
   const [safetyFeedback, setSafetyFeedback] = useState<string[]>([]);
   
@@ -516,6 +694,11 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           setLeaderName(activeItem.leaderName || '');
           setAttendeesCount(activeItem.attendeesCount || 0);
           setWorkDescription(activeItem.workDescription || '');
+          setLocationBuildingScope(activeItem.locationBuildingScope || '');
+          setLocationArea(activeItem.locationArea || '');
+          setLocationDetail(activeItem.locationDetail || '');
+          setTodayInstalledItems(activeItem.todayInstalledItems || '');
+          setManagerRequiredInstallItems(activeItem.managerRequiredInstallItems || '');
           setRiskFactors(activeItem.riskFactors || []);
           setSafetyFeedback(activeItem.safetyFeedback || []);
           
@@ -539,6 +722,15 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   const handleLeaderChange = (v: string) => { setLeaderName(v); updateActiveItem({ leaderName: v }); };
   const handleCountChange = (v: number) => { setAttendeesCount(v); updateActiveItem({ attendeesCount: v }); };
   const handleWorkChange = (v: string) => { setWorkDescription(v); updateActiveItem({ workDescription: v }); };
+    const handleLocationBuildingScopeChange = (v: string) => { setLocationBuildingScope(v); updateActiveItem({ locationBuildingScope: v }); };
+    const handleLocationAreaChange = (v: string) => { setLocationArea(v); updateActiveItem({ locationArea: v }); };
+    const handleLocationDetailChange = (v: string) => { setLocationDetail(v); updateActiveItem({ locationDetail: v }); };
+    const handleTodayInstalledItemsChange = (v: string) => { setTodayInstalledItems(v); updateActiveItem({ todayInstalledItems: v }); };
+    const handleManagerRequiredInstallItemsChange = (v: string) => { setManagerRequiredInstallItems(v); updateActiveItem({ managerRequiredInstallItems: v }); };
+
+    const formatLocationSummary = (building: string, area: string, detail: string) => {
+            return [building, area, detail].map(v => v?.trim()).filter(Boolean).join(' / ');
+    };
   
   const addRiskFactor = () => {
       const newRisks = [...riskFactors, { risk: '', measure: '' }];
@@ -1048,7 +1240,19 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       if (mode === 'ALL' || mode === 'RISK_ONLY') {
           if (mode === 'ALL') {
               setWorkDescription(example.work);
-              updateActiveItem({ workDescription: example.work });
+              setLocationBuildingScope(example.locationBuildingScope);
+              setLocationArea(example.locationArea);
+              setLocationDetail(example.locationDetail);
+              setTodayInstalledItems(example.todayInstalledItems);
+              setManagerRequiredInstallItems(example.managerRequiredInstallItems);
+              updateActiveItem({ 
+                  workDescription: example.work,
+                  locationBuildingScope: example.locationBuildingScope,
+                  locationArea: example.locationArea,
+                  locationDetail: example.locationDetail,
+                  todayInstalledItems: example.todayInstalledItems,
+                  managerRequiredInstallItems: example.managerRequiredInstallItems,
+              });
           }
           setRiskFactors(example.risks);
           updateActiveItem({ riskFactors: example.risks });
@@ -1107,6 +1311,11 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
               leaderName: item.leaderName || '',
               attendeesCount: item.attendeesCount || 0,
               workDescription: item.workDescription || '',
+              locationBuildingScope: item.locationBuildingScope || '',
+              locationArea: item.locationArea || '',
+              locationDetail: item.locationDetail || '',
+              todayInstalledItems: item.todayInstalledItems || '',
+              managerRequiredInstallItems: item.managerRequiredInstallItems || '',
               riskFactors: item.riskFactors || [],
               safetyFeedback: item.safetyFeedback || [],
               tbmPhotoUrl: item.tbmPhotoUrl || item.tbmPhotoPreview, // Ensure URL is taken
@@ -1383,6 +1592,17 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                                         <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wider">예시 내용 미리보기</p>
                                         <p className="text-xs font-bold text-slate-700">📋 작업 내용</p>
                                         <p className="text-xs text-slate-600 bg-slate-50 rounded p-2 leading-relaxed">{WORK_TYPE_EXAMPLES[selectedWorkTypeIndex].work}</p>
+
+                                        <p className="text-xs font-bold text-slate-700 pt-1">📍 위치 예시</p>
+                                        <p className="text-[11px] text-slate-600 bg-sky-50 rounded p-2 leading-relaxed">
+                                            {[WORK_TYPE_EXAMPLES[selectedWorkTypeIndex].locationBuildingScope, WORK_TYPE_EXAMPLES[selectedWorkTypeIndex].locationArea, WORK_TYPE_EXAMPLES[selectedWorkTypeIndex].locationDetail].filter(Boolean).join(' / ')}
+                                        </p>
+
+                                        <p className="text-xs font-bold text-slate-700 pt-1">🛠 금일 설치한 사항</p>
+                                        <p className="text-[11px] text-slate-600 bg-amber-50 rounded p-2 leading-relaxed">{WORK_TYPE_EXAMPLES[selectedWorkTypeIndex].todayInstalledItems}</p>
+
+                                        <p className="text-xs font-bold text-slate-700 pt-1">👷 관리자 추가 설치 필요 항목</p>
+                                        <p className="text-[11px] text-slate-600 bg-violet-50 rounded p-2 leading-relaxed">{WORK_TYPE_EXAMPLES[selectedWorkTypeIndex].managerRequiredInstallItems}</p>
 
                                         <p className="text-xs font-bold text-slate-700 pt-1">⚠️ 위험 요인 예시</p>
                                         <div className="space-y-1">
@@ -1841,9 +2061,103 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                             </div>
                         </div>
 
+                        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-3">
+                            <div>
+                                <p className="text-sm font-black text-sky-900">작업 위치</p>
+                                <p className="text-[11px] text-sky-800 mt-1">전체동 표기와 주차장·외부계단 같은 모호한 위치를 모두 직접 입력할 수 있습니다.</p>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500">동/구역</label>
+                                    <input
+                                        list="tbm-location-building-suggestions"
+                                        value={locationBuildingScope}
+                                        onChange={(e) => handleLocationBuildingScopeChange(e.target.value)}
+                                        placeholder="예: 101동, 전체동, 부대시설"
+                                        className="w-full bg-white border border-sky-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 transition-shadow"
+                                    />
+                                    <datalist id="tbm-location-building-suggestions">
+                                        {LOCATION_BUILDING_SUGGESTIONS.map(option => <option key={option} value={option} />)}
+                                    </datalist>
+                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                        {LOCATION_BUILDING_SUGGESTIONS.map(option => (
+                                            <button
+                                                key={option}
+                                                type="button"
+                                                onClick={() => handleLocationBuildingScopeChange(option)}
+                                                className={`px-2 py-1 rounded-full text-[10px] font-black border transition-colors ${locationBuildingScope === option ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-sky-700 border-sky-200 hover:bg-sky-50'}`}
+                                            >
+                                                {option}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500">위치 유형</label>
+                                    <input
+                                        list="tbm-location-area-suggestions"
+                                        value={locationArea}
+                                        onChange={(e) => handleLocationAreaChange(e.target.value)}
+                                        placeholder="예: 지하주차장, 외부계단, 옥상"
+                                        className="w-full bg-white border border-sky-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 transition-shadow"
+                                    />
+                                    <datalist id="tbm-location-area-suggestions">
+                                        {LOCATION_AREA_SUGGESTIONS.map(option => <option key={option} value={option} />)}
+                                    </datalist>
+                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                        {LOCATION_AREA_SUGGESTIONS.map(option => (
+                                            <button
+                                                key={option}
+                                                type="button"
+                                                onClick={() => handleLocationAreaChange(option)}
+                                                className={`px-2 py-1 rounded-full text-[10px] font-black border transition-colors ${locationArea === option ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-sky-700 border-sky-200 hover:bg-sky-50'}`}
+                                            >
+                                                {option}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-slate-500">상세 위치</label>
+                                <input
+                                    type="text"
+                                    value={locationDetail}
+                                    onChange={(e) => handleLocationDetailChange(e.target.value)}
+                                    placeholder="예: B2 서측 램프 앞, 2호 외부계단 3~5층, 남측 출입구 앞"
+                                    className="w-full bg-white border border-sky-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 transition-shadow"
+                                />
+                            </div>
+                            <div className="rounded-xl border border-sky-100 bg-white px-3 py-2">
+                                <p className="text-[10px] font-black text-sky-600 mb-1">위치 미리보기</p>
+                                <p className="text-xs font-bold text-slate-700 leading-relaxed">{formatLocationSummary(locationBuildingScope, locationArea, locationDetail) || '위치를 입력하면 여기에 표시됩니다.'}</p>
+                            </div>
+                        </div>
+
                         <div className="space-y-1">
                             <label className="text-xs font-bold text-slate-500">금일 작업 내용</label>
                             <textarea value={workDescription} onChange={(e) => handleWorkChange(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none resize-none h-32 focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="구체적인 작업 내용을 입력하거나, 좌측 '수기 일지 자동 추출' 버튼을 사용하세요."/>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-slate-500">금일 설치한 사항</label>
+                                <textarea
+                                    value={todayInstalledItems}
+                                    onChange={(e) => handleTodayInstalledItemsChange(e.target.value)}
+                                    className="w-full bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm outline-none resize-none h-24 focus:ring-2 focus:ring-amber-500 transition-shadow"
+                                    placeholder="예: 안전난간 설치, 접근금지선 설치, 방호덮개 설치 등"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-slate-500">관리자가 추가로 설치해야 할 항목</label>
+                                <textarea
+                                    value={managerRequiredInstallItems}
+                                    onChange={(e) => handleManagerRequiredInstallItemsChange(e.target.value)}
+                                    className="w-full bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 text-sm outline-none resize-none h-24 focus:ring-2 focus:ring-violet-500 transition-shadow"
+                                    placeholder="예: 추가 안전휀스, 추가 조명, 추가 보호난간, 추가 표지판 등"
+                                />
+                            </div>
                         </div>
 
                         <hr className="border-slate-100"/>

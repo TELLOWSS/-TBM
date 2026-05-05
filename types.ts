@@ -128,6 +128,11 @@ export interface TBMEntry {
   leaderName: string;
   attendeesCount: number;
   workDescription: string;
+  locationBuildingScope?: string; // 예: 101동, 전체동, 외곽구간
+  locationArea?: string; // 예: 지하주차장, 외부계단, 옥상
+  locationDetail?: string; // 예: B2 서측 램프 앞, 2호 외부계단 3~5층
+  todayInstalledItems?: string; // 금일 설치한 사항
+  managerRequiredInstallItems?: string; // 관리자가 추가 설치해야 할 항목
   riskFactors: RiskAssessmentItem[];
   safetyFeedback: string[]; // New: AI generated feedback (3-5 items)
   
