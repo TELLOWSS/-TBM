@@ -21,7 +21,7 @@ interface ReportViewProps {
 export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName, onClose, signatures, onUpdateSignature, onEdit, onDelete }) => {
   const [generatingMode, setGeneratingMode] = useState<'PDF' | 'IMAGE' | null>(null);
         const [exportDensity, setExportDensity] = useState<'auto' | 'standard' | 'compact'>('auto');
-    const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('COMPAT');
+    const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('TEXT');
   const [statusMessage, setStatusMessage] = useState("");
     const [announceMessage, setAnnounceMessage] = useState('');
   const [scale, setScale] = useState(1);
@@ -465,7 +465,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               rebalanceBodyForExport(clone, activeDensity);
           }
 
-          if (mode === 'PDF') {
+          const useTextProfile = mode === 'PDF' ? true : (renderProfile === 'TEXT');
+
+          if (mode === 'PDF' && !useTextProfile) {
               const riskScore = detectPdfExportRisk(clone);
               if (riskScore > 0) {
                   clone.classList.add('export-pdf-safe');
@@ -473,6 +475,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               } else {
                   pageStabilityLog.push('normal');
               }
+          } else if (mode === 'PDF') {
+              pageStabilityLog.push('normal');
           }
 
           pageDensityLog.push(activeDensity);
@@ -503,7 +507,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           const canvas = await html2canvas(clone, {
             scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
             useCORS: true,
-                        foreignObjectRendering: renderProfile === 'TEXT',
+                                                foreignObjectRendering: useTextProfile,
             logging: false,
             width: 794,
             height: 1123,
