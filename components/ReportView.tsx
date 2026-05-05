@@ -24,6 +24,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
     const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('TEXT');
   const [statusMessage, setStatusMessage] = useState("");
     const [announceMessage, setAnnounceMessage] = useState('');
+    const pdfExportStrategy: 'body-raster' | 'legacy' = 'body-raster';
   const [scale, setScale] = useState(1);
   const reportDialogRef = useRef<HTMLDivElement>(null);
   const reportCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -364,6 +365,30 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return riskScore;
   };
 
+  const collectPageAlignmentDiagnostics = (element: HTMLElement) => {
+      const checks = [
+          '.right-ai-col .ai-score-header',
+          '.right-ai-col .ai-metric-row',
+          '.right-ai-col .ai-eval-card',
+          '.right-ai-col .overall-opinion-text',
+          '.left-text-col .risk-line-text',
+      ];
+
+      let overflowIssues = 0;
+      checks.forEach((selector) => {
+          element.querySelectorAll<HTMLElement>(selector).forEach((node) => {
+              if (node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1) {
+                  overflowIssues += 1;
+              }
+          });
+      });
+
+      return {
+          overflowIssues,
+          riskScore: detectPdfExportRisk(element),
+      };
+  };
+
     const isCanvasLikelyBlank = (canvas: HTMLCanvasElement, threshold = 0.992, minNonBlankSamples = 16) => {
       const context = canvas.getContext('2d', { willReadFrequently: true });
       if (!context) return false;
@@ -431,9 +456,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       panel.appendChild(snapshot);
   };
 
-  const rasterizeBodyTextForPdf = async (clone: HTMLElement) => {
+  const rasterizeBodyTextForPdf = async (clone: HTMLElement): Promise<boolean> => {
       const bodyText = clone.querySelector<HTMLElement>('.body-row-text');
-      if (!bodyText) return;
+      if (!bodyText) return false;
 
       if (document.fonts?.status !== 'loaded') {
           await document.fonts.ready;
@@ -459,10 +484,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       const height = Math.max(1, Math.round(rect.height));
       if (width < 50 || height < 50) return;
 
-      const bodyCanvas = await html2canvas(bodyText, {
-          scale: 2.5,
+      const captureBody = (scale: number, foreignObjectRendering: boolean) => html2canvas(bodyText, {
+          scale,
           useCORS: true,
-          foreignObjectRendering: false,
+          foreignObjectRendering,
           logging: false,
           width,
           height,
@@ -471,7 +496,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           backgroundColor: '#ffffff',
       });
 
-    if (isCanvasLikelyBlank(bodyCanvas, 0.999, 18)) return;
+      let bodyCanvas = await captureBody(2.5, false);
+      if (isCanvasLikelyBlank(bodyCanvas, 0.999, 18)) {
+          await new Promise<void>((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          });
+          bodyCanvas = await captureBody(2, true);
+      }
+
+      if (isCanvasLikelyBlank(bodyCanvas, 0.999, 18)) return false;
 
       const dataUrl = bodyCanvas.toDataURL('image/png');
       const snapshot = document.createElement('img');
@@ -486,6 +519,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       bodyText.style.display = 'block';
       bodyText.style.overflow = 'hidden';
       bodyText.appendChild(snapshot);
+      return true;
   };
 
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
@@ -541,7 +575,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       
       let singleImageData: string | null = null;
       const pageDensityLog: Array<'standard' | 'compact'> = [];
-    const pageStabilityLog: Array<'normal' | 'pdf-safe'> = [];
+            const pageStabilityLog: Array<'normal' | 'pdf-safe'> = [];
+            const pageDiagnosticsLog: Array<{ overflowIssues: number; riskScore: number }> = [];
 
       for (let i = 0; i < originalPages.length; i++) {
           setStatusMessage(`${mode === 'PDF' ? 'PDF 생성 중...' : '이미지 변환 중...'} (${i + 1}/${originalPages.length})`);
@@ -592,7 +627,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
               rebalanceBodyForExport(clone, activeDensity);
           }
 
-          const useTextProfile = mode === 'PDF' ? false : (renderProfile === 'TEXT');
+          const useTextProfile = mode === 'IMAGE' && renderProfile === 'TEXT';
 
           if (mode === 'PDF' && !useTextProfile) {
               const riskScore = detectPdfExportRisk(clone);
@@ -631,10 +666,20 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           await new Promise(resolve => setTimeout(resolve, 220));
 
           if (mode === 'PDF') {
-              try {
-                  await rasterizeBodyTextForPdf(clone);
-              } catch (error) {
-                  console.warn('Body text rasterize fallback skipped:', error);
+              const beforeDiag = collectPageAlignmentDiagnostics(clone);
+              pageDiagnosticsLog.push(beforeDiag);
+
+              if (pdfExportStrategy === 'body-raster') {
+                  try {
+                      const bodyRasterized = await rasterizeBodyTextForPdf(clone);
+                      if (!bodyRasterized) {
+                          setStatusMessage(`PDF 생성 중... (${i + 1}/${originalPages.length}) 본문 안정화 재시도`);
+                          await rasterizeRightPanelForPdf(clone);
+                      }
+                  } catch (error) {
+                      console.warn('Body text rasterize fallback skipped:', error);
+                      await rasterizeRightPanelForPdf(clone);
+                  }
               }
           }
 
@@ -1030,11 +1075,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                         }
                     });
 
-                    let canvas = await capturePage(useTextProfile);
-                    if (mode === 'PDF' && useTextProfile && isCanvasLikelyBlank(canvas)) {
-                            setStatusMessage(`PDF 생성 중... (${i + 1}/${originalPages.length}) 텍스트 렌더 재시도`);
+                        let canvas = await capturePage(useTextProfile);
+                        if (mode === 'PDF' && isCanvasLikelyBlank(canvas, 0.9995, 10)) {
+                            setStatusMessage(`PDF 생성 중... (${i + 1}/${originalPages.length}) 페이지 캡처 재시도`);
                             canvas = await capturePage(false);
-                    }
+                        }
 
           const imgData = mode === 'PDF'
               ? canvas.toDataURL('image/png')
@@ -1091,8 +1136,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             const compactCount = pageDensityLog.filter((density) => density === 'compact').length;
             const standardCount = pageDensityLog.length - compactCount;
             const safeCount = pageStabilityLog.filter((modeTag) => modeTag === 'pdf-safe').length;
+            const totalOverflow = pageDiagnosticsLog.reduce((sum, item) => sum + item.overflowIssues, 0);
             const stabilityText = mode === 'PDF' ? `, 안정화 ${safeCount}페이지` : '';
-            announceStatus(`내보내기 완료: 표준 ${standardCount}페이지, 압축 ${compactCount}페이지${stabilityText}`);
+            const diagnosticText = mode === 'PDF' ? `, 진단이슈 ${totalOverflow}` : '';
+            announceStatus(`내보내기 완료: 표준 ${standardCount}페이지, 압축 ${compactCount}페이지${stabilityText}${diagnosticText}`);
 
     } catch (error) {
       console.error("Generation failed", error);
