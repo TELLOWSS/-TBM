@@ -1307,6 +1307,13 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
         localStorage.setItem(COMMAND_TASK_STORAGE_KEY, JSON.stringify(nextTasks));
     };
 
+    const createValidationEvidenceImage = (label: string) => {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0f172a"/><stop offset="100%" stop-color="#1d4ed8"/></linearGradient></defs><rect width="320" height="180" rx="18" fill="url(#g)"/><text x="24" y="78" fill="#e2e8f0" font-size="18" font-family="Arial, sans-serif" font-weight="700">스마트TBM 검증용 증빙</text><text x="24" y="112" fill="#bfdbfe" font-size="14" font-family="Arial, sans-serif">${label}</text><text x="24" y="142" fill="#93c5fd" font-size="12" font-family="Arial, sans-serif">자동 생성 placeholder image</text></svg>`;
+        return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+    };
+
+    const isValidationCommandTask = (task: SmartCommandTask) => task.id.startsWith('VALCMD-');
+
     const handleCreateCommandTask = () => {
         const title = commandForm.title.trim();
         const instruction = commandForm.instruction.trim();
@@ -1509,6 +1516,12 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     };
 
     const handleGenerateValidationCommands = () => {
+        const existingValidationCount = commandTasks.filter(isValidationCommandTask).length;
+        if (existingValidationCount > 0) {
+            announceStatus(`이미 검증용 데이터 ${existingValidationCount}건이 있습니다. 먼저 정리 후 다시 생성하세요.`);
+            return;
+        }
+
         const now = Date.now();
         const today = new Date().toISOString().slice(0, 10);
         const defaultTeam = teams[0];
@@ -1539,44 +1552,84 @@ export const SafetyDataLab: React.FC<SafetyDataLabProps> = ({ entries, teams, on
     };
 
     const handleRunValidationTransitions = () => {
-        if (commandTasks.length === 0) {
-            announceStatus('먼저 지시를 생성한 후 상태전이 검증을 실행하세요.');
+        const validationTasks = commandTasks.filter(isValidationCommandTask);
+        if (validationTasks.length === 0) {
+            announceStatus('먼저 검증 5건 생성을 실행한 후 상태전이 검증을 진행하세요.');
             return;
         }
-
-        const statusFlow: SmartCommandStatus[] = ['IN_PROGRESS', 'DONE', 'DELAYED', 'IN_PROGRESS', 'DONE'];
         let transitionCount = 0;
 
         const updatedTasks = commandTasks.map((task, taskIndex) => {
-            const nextStatus = statusFlow[taskIndex % statusFlow.length];
+            if (!isValidationCommandTask(task)) {
+                return task;
+            }
+
+            const nextStatus: SmartCommandStatus = (() => {
+                if (task.status === 'NOT_STARTED') {
+                    return taskIndex % 2 === 0 ? 'IN_PROGRESS' : 'DELAYED';
+                }
+                if (task.status === 'IN_PROGRESS') {
+                    return 'DONE';
+                }
+                if (task.status === 'DELAYED') {
+                    return 'DONE';
+                }
+                return taskIndex % 2 === 0 ? 'DELAYED' : 'IN_PROGRESS';
+            })();
+
             if (task.status === nextStatus) return task;
 
+            const changedAt = Date.now() + taskIndex;
             transitionCount += 1;
             const nextHistory: CommandStatusHistoryItem[] = [
                 ...(task.statusHistory || []),
                 {
                     from: task.status,
                     to: nextStatus,
-                    changedAt: Date.now() + taskIndex,
+                    changedAt,
                     note: '검증용 자동 전이',
                 },
             ].slice(-50);
+
+            const shouldAttachEvidence = nextStatus === 'DONE';
+            const shouldApplyDelay = nextStatus === 'DELAYED';
+            const evidenceImageUrls = shouldAttachEvidence
+                ? ((task.evidenceImageUrls && task.evidenceImageUrls.length > 0)
+                    ? task.evidenceImageUrls
+                    : [createValidationEvidenceImage(task.title)])
+                : task.evidenceImageUrls;
+
+            const evidenceComment = shouldAttachEvidence
+                ? (task.evidenceComment?.trim() || `검증용 완료 증빙 등록 - ${new Date(changedAt).toLocaleTimeString('ko-KR')}`)
+                : task.evidenceComment;
+
+            const delayReason = shouldApplyDelay
+                ? (task.delayReason || 'MATERIAL')
+                : task.delayReason;
+
+            const delayComment = shouldApplyDelay
+                ? (task.delayComment?.trim() || '검증용 지연 사유 자동 입력')
+                : task.delayComment;
 
             return {
                 ...task,
                 status: nextStatus,
                 statusHistory: nextHistory,
-                updatedAt: Date.now() + taskIndex,
+                evidenceImageUrls,
+                evidenceComment,
+                delayReason,
+                delayComment,
+                updatedAt: changedAt,
             };
         });
 
         persistCommandTasks(updatedTasks);
-        announceStatus(`검증용 상태전이 ${transitionCount}건이 반영되었습니다.`);
+        announceStatus(`검증용 상태전이 ${transitionCount}건이 반영되었습니다. 다시 실행하면 다음 단계로 이어집니다.`);
     };
 
     const handleClearValidationCommands = () => {
         const before = commandTasks.length;
-        const filtered = commandTasks.filter(task => !task.id.startsWith('VALCMD-'));
+        const filtered = commandTasks.filter(task => !isValidationCommandTask(task));
         const removed = before - filtered.length;
         if (removed === 0) {
             announceStatus('정리할 검증용 데이터가 없습니다.');
