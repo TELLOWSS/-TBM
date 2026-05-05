@@ -417,6 +417,27 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return blankRatio >= threshold && nonBlank < minNonBlankSamples;
   };
 
+  const countNonBlankSamples = (canvas: HTMLCanvasElement) => {
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) return 0;
+
+      const sampleStep = 16;
+      let nonBlank = 0;
+
+      for (let y = 0; y < canvas.height; y += sampleStep) {
+          for (let x = 0; x < canvas.width; x += sampleStep) {
+              const pixel = context.getImageData(x, y, 1, 1).data;
+              const alpha = pixel[3];
+              const isWhite = pixel[0] >= 248 && pixel[1] >= 248 && pixel[2] >= 248;
+              if (!(alpha === 0 || isWhite)) {
+                  nonBlank += 1;
+              }
+          }
+      }
+
+      return nonBlank;
+  };
+
   const rasterizeRightPanelForPdf = async (clone: HTMLElement) => {
       const panel = clone.querySelector<HTMLElement>('.right-ai-col');
       if (!panel) return;
@@ -443,6 +464,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
       const dataUrl = panelCanvas.toDataURL('image/png');
       const snapshot = document.createElement('img');
+    snapshot.className = 'pdf-raster-right';
       snapshot.src = dataUrl;
       snapshot.style.width = '100%';
       snapshot.style.height = '100%';
@@ -456,7 +478,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       panel.appendChild(snapshot);
   };
 
-  const rasterizeBodyTextForPdf = async (clone: HTMLElement): Promise<boolean> => {
+    const rasterizeBodyTextForPdf = async (clone: HTMLElement): Promise<boolean> => {
       const bodyText = clone.querySelector<HTMLElement>('.body-row-text');
       if (!bodyText) return false;
 
@@ -496,18 +518,20 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           backgroundColor: '#ffffff',
       });
 
-      let bodyCanvas = await captureBody(2.5, false);
-      if (isCanvasLikelyBlank(bodyCanvas, 0.999, 18)) {
-          await new Promise<void>((resolve) => {
-              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-          });
-          bodyCanvas = await captureBody(2, true);
-      }
+      const passA = await captureBody(2.5, false);
+      await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+      const passB = await captureBody(2, true);
 
-      if (isCanvasLikelyBlank(bodyCanvas, 0.999, 18)) return false;
+      const scoreA = countNonBlankSamples(passA);
+      const scoreB = countNonBlankSamples(passB);
+      const bodyCanvas = scoreB > scoreA ? passB : passA;
+      if (isCanvasLikelyBlank(bodyCanvas, 0.999, 12)) return false;
 
       const dataUrl = bodyCanvas.toDataURL('image/png');
       const snapshot = document.createElement('img');
+    snapshot.className = 'pdf-raster-body';
       snapshot.src = dataUrl;
       snapshot.style.width = '100%';
       snapshot.style.height = '100%';
@@ -1069,6 +1093,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                       max-width: 100% !important;
                       object-fit: contain !important;
                       image-rendering: -webkit-optimize-contrast !important;
+                  }
+                  .pdf-raster-body,
+                  .pdf-raster-right {
+                      width: 100% !important;
+                      height: 100% !important;
+                      max-width: none !important;
+                      object-fit: fill !important;
+                      image-rendering: auto !important;
+                      display: block !important;
                   }
                `;
                              doc.head.appendChild(style);
