@@ -428,6 +428,44 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       panel.appendChild(snapshot);
   };
 
+  const rasterizeBodyTextForPdf = async (clone: HTMLElement) => {
+      const bodyText = clone.querySelector<HTMLElement>('.body-row-text');
+      if (!bodyText) return;
+
+      const rect = bodyText.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      if (width < 50 || height < 50) return;
+
+      const bodyCanvas = await html2canvas(bodyText, {
+          scale: 2.5,
+          useCORS: true,
+          foreignObjectRendering: false,
+          logging: false,
+          width,
+          height,
+          x: 0,
+          y: 0,
+          backgroundColor: '#ffffff',
+      });
+
+      if (isCanvasLikelyBlank(bodyCanvas)) return;
+
+      const dataUrl = bodyCanvas.toDataURL('image/png');
+      const snapshot = document.createElement('img');
+      snapshot.src = dataUrl;
+      snapshot.style.width = '100%';
+      snapshot.style.height = '100%';
+      snapshot.style.display = 'block';
+      snapshot.style.objectFit = 'fill';
+      snapshot.style.imageRendering = 'auto';
+
+      bodyText.innerHTML = '';
+      bodyText.style.display = 'block';
+      bodyText.style.overflow = 'hidden';
+      bodyText.appendChild(snapshot);
+  };
+
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
     if (generatingMode) return;
     setGeneratingMode(mode);
@@ -572,9 +610,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
           if (mode === 'PDF') {
               try {
-                  await rasterizeRightPanelForPdf(clone);
+                  await rasterizeBodyTextForPdf(clone);
               } catch (error) {
-                  console.warn('Right panel rasterize fallback skipped:', error);
+                  console.warn('Body text rasterize fallback skipped:', error);
               }
           }
 
