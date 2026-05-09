@@ -5,7 +5,7 @@ import { TBMEntry, RiskAssessmentItem, SafetyGuideline, TeamOption, TBMAnalysisR
 import { analyzeMasterLog, evaluateTBMVideo, generateSafetyFeedback } from '../services/geminiService';
 import { SESSION_API_KEY_STORAGE_KEY } from '../utils/siteConfigStorage';
 import { compressVideo, type VideoCompressionResult } from '../utils/videoUtils';
-import { Upload, Camera, FileText, X, Layers, ArrowLeft, Trash2, Film, Save, Plus, UserCheck, BrainCircuit, CheckCircle2, AlertCircle, Loader2, PlayCircle, Zap, Image as ImageIcon, Copy, Sparkles, Maximize, ScanText, ChevronRight, SplitSquareHorizontal, Paperclip, Users, Eye, Mic, Edit3, Sliders, Shield, Award, ClipboardCheck } from 'lucide-react';
+import { Upload, Camera, FileText, X, Layers, ArrowLeft, Trash2, Film, Save, Plus, UserCheck, BrainCircuit, CheckCircle2, AlertCircle, Loader2, PlayCircle, Zap, Image as ImageIcon, Copy, Sparkles, Maximize, ScanText, ChevronRight, ChevronDown, ChevronUp, SplitSquareHorizontal, Paperclip, Users, Eye, Mic, Edit3, Sliders, Shield, Award, ClipboardCheck } from 'lucide-react';
 
 interface TBMFormProps {
     onSave: (data: TBMEntry | TBMEntry[], shouldExit?: boolean) => Promise<boolean>;
@@ -487,6 +487,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   // [수기 직접 입력] OCR 대신 수기 입력 모드 토글 및 공종 선택
   const [showManualOcrInput, setShowManualOcrInput] = useState(false);
   const [selectedWorkTypeIndex, setSelectedWorkTypeIndex] = useState(0);
+    const [showOptionalFields, setShowOptionalFields] = useState(false);
   // [동영상 수기 채점] 공종별 예시 코멘트 확장 패널
   const [showVideoExamplePanel, setShowVideoExamplePanel] = useState(false);
   const [videoExampleWorkTypeIndex, setVideoExampleWorkTypeIndex] = useState(0);
@@ -699,6 +700,14 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
           setLocationDetail(activeItem.locationDetail || '');
           setTodayInstalledItems(activeItem.todayInstalledItems || '');
           setManagerRequiredInstallItems(activeItem.managerRequiredInstallItems || '');
+          const hasOptionalData = !!(
+              activeItem.locationBuildingScope?.trim() ||
+              activeItem.locationArea?.trim() ||
+              activeItem.locationDetail?.trim() ||
+              activeItem.todayInstalledItems?.trim() ||
+              activeItem.managerRequiredInstallItems?.trim()
+          );
+          setShowOptionalFields(hasOptionalData);
           setRiskFactors(activeItem.riskFactors || []);
           setSafetyFeedback(activeItem.safetyFeedback || []);
           
@@ -1239,6 +1248,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
 
       if (mode === 'ALL' || mode === 'RISK_ONLY') {
           if (mode === 'ALL') {
+              setShowOptionalFields(true);
               setWorkDescription(example.work);
               setLocationBuildingScope(example.locationBuildingScope);
               setLocationArea(example.locationArea);
@@ -2061,103 +2071,125 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                             </div>
                         </div>
 
-                        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-3">
-                            <div>
-                                <p className="text-sm font-black text-sky-900">작업 위치</p>
-                                <p className="text-[11px] text-sky-800 mt-1">전체동 표기와 주차장·외부계단 같은 모호한 위치를 모두 직접 입력할 수 있습니다.</p>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-500">동/구역</label>
-                                    <input
-                                        list="tbm-location-building-suggestions"
-                                        value={locationBuildingScope}
-                                        onChange={(e) => handleLocationBuildingScopeChange(e.target.value)}
-                                        placeholder="예: 101동, 전체동, 부대시설"
-                                        className="w-full bg-white border border-sky-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 transition-shadow"
-                                    />
-                                    <datalist id="tbm-location-building-suggestions">
-                                        {LOCATION_BUILDING_SUGGESTIONS.map(option => <option key={option} value={option} />)}
-                                    </datalist>
-                                    <div className="mt-2 flex flex-wrap gap-1.5">
-                                        {LOCATION_BUILDING_SUGGESTIONS.map(option => (
-                                            <button
-                                                key={option}
-                                                type="button"
-                                                onClick={() => handleLocationBuildingScopeChange(option)}
-                                                className={`px-2 py-1 rounded-full text-[10px] font-black border transition-colors ${locationBuildingScope === option ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-sky-700 border-sky-200 hover:bg-sky-50'}`}
-                                            >
-                                                {option}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold text-slate-500">위치 유형</label>
-                                    <input
-                                        list="tbm-location-area-suggestions"
-                                        value={locationArea}
-                                        onChange={(e) => handleLocationAreaChange(e.target.value)}
-                                        placeholder="예: 지하주차장, 외부계단, 옥상"
-                                        className="w-full bg-white border border-sky-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 transition-shadow"
-                                    />
-                                    <datalist id="tbm-location-area-suggestions">
-                                        {LOCATION_AREA_SUGGESTIONS.map(option => <option key={option} value={option} />)}
-                                    </datalist>
-                                    <div className="mt-2 flex flex-wrap gap-1.5">
-                                        {LOCATION_AREA_SUGGESTIONS.map(option => (
-                                            <button
-                                                key={option}
-                                                type="button"
-                                                onClick={() => handleLocationAreaChange(option)}
-                                                className={`px-2 py-1 rounded-full text-[10px] font-black border transition-colors ${locationArea === option ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-sky-700 border-sky-200 hover:bg-sky-50'}`}
-                                            >
-                                                {option}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500">상세 위치</label>
-                                <input
-                                    type="text"
-                                    value={locationDetail}
-                                    onChange={(e) => handleLocationDetailChange(e.target.value)}
-                                    placeholder="예: B2 서측 램프 앞, 2호 외부계단 3~5층, 남측 출입구 앞"
-                                    className="w-full bg-white border border-sky-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 transition-shadow"
-                                />
-                            </div>
-                            <div className="rounded-xl border border-sky-100 bg-white px-3 py-2">
-                                <p className="text-[10px] font-black text-sky-600 mb-1">위치 미리보기</p>
-                                <p className="text-xs font-bold text-slate-700 leading-relaxed">{formatLocationSummary(locationBuildingScope, locationArea, locationDetail) || '위치를 입력하면 여기에 표시됩니다.'}</p>
-                            </div>
-                        </div>
-
                         <div className="space-y-1">
                             <label className="text-xs font-bold text-slate-500">금일 작업 내용</label>
                             <textarea value={workDescription} onChange={(e) => handleWorkChange(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none resize-none h-32 focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="구체적인 작업 내용을 입력하거나, 좌측 '수기 일지 자동 추출' 버튼을 사용하세요."/>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4">
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500">금일 설치한 사항</label>
-                                <textarea
-                                    value={todayInstalledItems}
-                                    onChange={(e) => handleTodayInstalledItemsChange(e.target.value)}
-                                    className="w-full bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm outline-none resize-none h-24 focus:ring-2 focus:ring-amber-500 transition-shadow"
-                                    placeholder="예: 안전난간 설치, 접근금지선 설치, 방호덮개 설치 등"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-500">관리자가 추가로 설치해야 할 항목</label>
-                                <textarea
-                                    value={managerRequiredInstallItems}
-                                    onChange={(e) => handleManagerRequiredInstallItemsChange(e.target.value)}
-                                    className="w-full bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 text-sm outline-none resize-none h-24 focus:ring-2 focus:ring-violet-500 transition-shadow"
-                                    placeholder="예: 추가 안전휀스, 추가 조명, 추가 보호난간, 추가 표지판 등"
-                                />
-                            </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <button
+                                type="button"
+                                onClick={() => setShowOptionalFields(prev => !prev)}
+                                className="w-full flex items-center justify-between text-left"
+                                aria-expanded={showOptionalFields}
+                                aria-controls="tbm-optional-fields-panel"
+                            >
+                                <div>
+                                    <p className="text-sm font-black text-slate-700">숨김 항목 (선택 입력)</p>
+                                    <p className="text-[11px] text-slate-500 mt-1">작성하지 않아도 되는 항목입니다. 필요 시 열어서 입력하세요.</p>
+                                </div>
+                                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600">
+                                    {showOptionalFields ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                                </span>
+                            </button>
+
+                            {showOptionalFields && (
+                                <div id="tbm-optional-fields-panel" className="mt-4 space-y-4">
+                                    <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-3">
+                                        <div>
+                                            <p className="text-sm font-black text-sky-900">작업 위치</p>
+                                            <p className="text-[11px] text-sky-800 mt-1">전체동 표기와 주차장·외부계단 같은 모호한 위치를 모두 직접 입력할 수 있습니다.</p>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-slate-500">동/구역</label>
+                                                <input
+                                                    list="tbm-location-building-suggestions"
+                                                    value={locationBuildingScope}
+                                                    onChange={(e) => handleLocationBuildingScopeChange(e.target.value)}
+                                                    placeholder="예: 101동, 전체동, 부대시설"
+                                                    className="w-full bg-white border border-sky-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 transition-shadow"
+                                                />
+                                                <datalist id="tbm-location-building-suggestions">
+                                                    {LOCATION_BUILDING_SUGGESTIONS.map(option => <option key={option} value={option} />)}
+                                                </datalist>
+                                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                                    {LOCATION_BUILDING_SUGGESTIONS.map(option => (
+                                                        <button
+                                                            key={option}
+                                                            type="button"
+                                                            onClick={() => handleLocationBuildingScopeChange(option)}
+                                                            className={`px-2 py-1 rounded-full text-[10px] font-black border transition-colors ${locationBuildingScope === option ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-sky-700 border-sky-200 hover:bg-sky-50'}`}
+                                                        >
+                                                            {option}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold text-slate-500">위치 유형</label>
+                                                <input
+                                                    list="tbm-location-area-suggestions"
+                                                    value={locationArea}
+                                                    onChange={(e) => handleLocationAreaChange(e.target.value)}
+                                                    placeholder="예: 지하주차장, 외부계단, 옥상"
+                                                    className="w-full bg-white border border-sky-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 transition-shadow"
+                                                />
+                                                <datalist id="tbm-location-area-suggestions">
+                                                    {LOCATION_AREA_SUGGESTIONS.map(option => <option key={option} value={option} />)}
+                                                </datalist>
+                                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                                    {LOCATION_AREA_SUGGESTIONS.map(option => (
+                                                        <button
+                                                            key={option}
+                                                            type="button"
+                                                            onClick={() => handleLocationAreaChange(option)}
+                                                            className={`px-2 py-1 rounded-full text-[10px] font-black border transition-colors ${locationArea === option ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-sky-700 border-sky-200 hover:bg-sky-50'}`}
+                                                        >
+                                                            {option}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-slate-500">상세 위치</label>
+                                            <input
+                                                type="text"
+                                                value={locationDetail}
+                                                onChange={(e) => handleLocationDetailChange(e.target.value)}
+                                                placeholder="예: B2 서측 램프 앞, 2호 외부계단 3~5층, 남측 출입구 앞"
+                                                className="w-full bg-white border border-sky-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-sky-500 transition-shadow"
+                                            />
+                                        </div>
+                                        <div className="rounded-xl border border-sky-100 bg-white px-3 py-2">
+                                            <p className="text-[10px] font-black text-sky-600 mb-1">위치 미리보기</p>
+                                            <p className="text-xs font-bold text-slate-700 leading-relaxed">{formatLocationSummary(locationBuildingScope, locationArea, locationDetail) || '위치를 입력하면 여기에 표시됩니다.'}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-slate-500">금일 설치한 사항</label>
+                                            <textarea
+                                                value={todayInstalledItems}
+                                                onChange={(e) => handleTodayInstalledItemsChange(e.target.value)}
+                                                className="w-full bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm outline-none resize-none h-24 focus:ring-2 focus:ring-amber-500 transition-shadow"
+                                                placeholder="예: 안전난간 설치, 접근금지선 설치, 방호덮개 설치 등"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-slate-500">관리자가 추가로 설치해야 할 항목</label>
+                                            <textarea
+                                                value={managerRequiredInstallItems}
+                                                onChange={(e) => handleManagerRequiredInstallItemsChange(e.target.value)}
+                                                className="w-full bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 text-sm outline-none resize-none h-24 focus:ring-2 focus:ring-violet-500 transition-shadow"
+                                                placeholder="예: 추가 안전휀스, 추가 조명, 추가 보호난간, 추가 표지판 등"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <hr className="border-slate-100"/>
