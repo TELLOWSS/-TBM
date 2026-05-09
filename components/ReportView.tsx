@@ -293,6 +293,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return textCols.some((col) => col.scrollHeight > (col.clientHeight + 1));
   };
 
+  const canvasToBlob = (canvas: HTMLCanvasElement, quality: number) => new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+          if (blob) {
+              resolve(blob);
+              return;
+          }
+          reject(new Error('이미지 Blob 생성 실패'));
+      }, 'image/jpeg', quality);
+  });
+
   const getCaptureScaleForExport = (mode: 'PDF' | 'IMAGE', pageCount: number) => {
       const dpr = window.devicePixelRatio || 1;
 
@@ -301,6 +311,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           if (pageCount >= 5) return Math.min(2, Math.max(1.6, dpr));
           return Math.min(2.4, Math.max(1.8, dpr));
       }
+
+      if (pageCount >= 10) return Math.min(1.9, Math.max(1.5, dpr));
+      if (pageCount >= 6) return Math.min(2.2, Math.max(1.7, dpr));
 
       return Math.min(3, Math.max(2, dpr));
   };
@@ -311,6 +324,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           if (pageCount >= 5) return 0.84;
           return 0.9;
       }
+
+      if (pageCount >= 10) return 0.82;
+      if (pageCount >= 6) return 0.88;
 
       return 0.95;
   };
@@ -357,6 +373,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
       if (mode === 'PDF' && originalPages.length >= 5) {
           setStatusMessage(`PDF 경량 모드로 최적화 중... (총 ${originalPages.length}페이지)`);
+      } else if (mode === 'IMAGE' && originalPages.length >= 6) {
+          setStatusMessage(`이미지 ZIP 경량 모드로 최적화 중... (총 ${originalPages.length}페이지)`);
       }
 
       let zip: any = null;
@@ -377,7 +395,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           })
           : null;
       
-      let singleImageData: string | null = null;
+    let singleImageBlob: Blob | null = null;
       const pageDensityLog: Array<'standard' | 'compact'> = [];
       const captureProgressWeight = mode === 'IMAGE' && originalPages.length > 1 ? 75 : 90;
 
@@ -712,21 +730,20 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     });
 
                         const canvas = await capturePage(useTextProfile);
-
-          const imgData = canvas.toDataURL('image/jpeg', jpegQuality);
-
           if (pdf) {
+              const imgData = canvas.toDataURL('image/jpeg', jpegQuality);
               if (i > 0) {
                   pdf.addPage([794, 1123], 'portrait');
               }
               pdf.addImage(imgData, 'JPEG', 0, 0, 794, 1123, undefined, 'FAST');
           } else if (zip) {
+              const imageBlob = await canvasToBlob(canvas, jpegQuality);
               const resolvedTeam = teams.find(t => t.id === entries[i].teamId);
               const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[i].teamName || '미지정')).replace(/[\/\\?%*:|"<>]/g, '_');
               const fileName = `TBM_Report_${entries[i].date}_${safeTeamName}.jpg`;
-              zip.file(fileName, imgData.split(',')[1], { base64: true });
+              zip.file(fileName, imageBlob);
           } else {
-              singleImageData = imgData;
+              singleImageBlob = await canvasToBlob(canvas, jpegQuality);
           }
 
           setExportProgress(Math.max(1, Math.round(((i + 1) / originalPages.length) * captureProgressWeight)));
@@ -774,12 +791,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           link.click();
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
-      } else if (singleImageData) {
+      } else if (singleImageBlob) {
           const resolvedTeam = teams.find(t => t.id === entries[0].teamId);
           const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[0].teamName || '미지정')).replace(/[\/\\?%*:|"<>]/g, '_');
           exportedFileName = `TBM_일지_${entries[0].date}_${safeTeamName}.jpg`;
           const link = document.createElement('a');
-          link.href = singleImageData;
+          const url = URL.createObjectURL(singleImageBlob);
+          link.href = url;
           link.setAttribute('download', exportedFileName);
                     setStatusMessage('이미지 다운로드 시작 중...');
                     setExportProgress(99);
@@ -788,6 +806,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
+          URL.revokeObjectURL(url);
       }
 
                         setExportProgress(100);
@@ -800,7 +819,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
     } catch (error) {
         console.error("Generation failed", error);
-            announceStatus(`${mode === 'PDF' ? 'PDF 생성' : '이미지 변환'} 중 오류가 발생했습니다. 메모리 부족 또는 이미지 처리 실패일 수 있습니다. ${mode === 'PDF' ? '다건이면 이미지 ZIP으로 먼저 저장한 뒤 PDF 재시도를 권장합니다. ' : ''}브라우저 다운로드 차단 여부도 함께 확인하세요.`, 'error');
+            announceStatus(`${mode === 'PDF' ? 'PDF 생성' : '이미지 변환'} 중 오류가 발생했습니다. 메모리 부족 또는 이미지 처리 실패일 수 있습니다. ${mode === 'PDF' ? '다건이면 이미지 ZIP으로 먼저 저장한 뒤 PDF 재시도를 권장합니다. ' : '다건이면 선택 건수를 줄여 다시 시도해 보세요. '}브라우저 다운로드 차단 여부도 함께 확인하세요.`, 'error');
     } finally {
       if (document.body.contains(ghostContainer)) {
           document.body.removeChild(ghostContainer);
