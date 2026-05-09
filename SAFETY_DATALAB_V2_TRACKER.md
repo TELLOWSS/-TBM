@@ -8,6 +8,7 @@
 
 ## 최근 조치 메모 (2026-05-09)
 - `components/ReportView.tsx`
+	- 누락 함수(`lockExportLayout`, `convertSvgToImage`) 복구로 단건/다건 PDF·이미지 공통 실패 원인 제거
 	- 다건 PDF를 캡처 기반 PDF 생성으로 전환해 페이지 밀림/잘림 이슈 완화
 	- 다건 PDF에서 페이지 수 기준 경량 모드(캡처 해상도/JPEG 품질 자동 조정) 적용
 	- 이미지 ZIP 경로를 base64 → Blob 기반으로 변경하고 다건 이미지 ZIP 경량 모드 적용

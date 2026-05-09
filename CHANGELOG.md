@@ -6,6 +6,7 @@
 
 ### ✅ 보고서 내보내기 진행 상태 UX 강화
 - `components/ReportView.tsx`
+  - 누락됐던 `lockExportLayout` / `convertSvgToImage` 함수 정의를 복구해 PDF·이미지 내보내기 공통 런타임 오류(ReferenceError) 제거
   - 다건 PDF를 브라우저 인쇄 대신 캡처 기반 `jsPDF` 생성 경로로 전환해 페이지 밀림/잘림 가능성 완화
   - 다건 PDF(5건+/8건+)에서는 캡처 스케일/JPEG 품질을 자동 낮추는 경량 모드를 적용해 메모리 사용량 완화
   - 이미지 ZIP은 `dataURL(base64)` 대신 `Blob` 기반으로 묶도록 변경해 다건 변환 시 메모리 사용량과 실패 확률 완화

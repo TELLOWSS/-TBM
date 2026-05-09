@@ -303,6 +303,76 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       }, 'image/jpeg', quality);
   });
 
+  const lockExportLayout = (root: HTMLElement) => {
+      const targets = root.querySelectorAll<HTMLElement>(
+          '.row, .col, .h-header, .h-info, .h-body, .h-footer, .body-row-images, .body-row-text, .section-header'
+      );
+
+      targets.forEach((node) => {
+          const rect = node.getBoundingClientRect();
+
+          if (rect.width > 0) {
+              const widthPx = `${rect.width.toFixed(2)}px`;
+              node.style.width = widthPx;
+              node.style.minWidth = widthPx;
+              node.style.maxWidth = widthPx;
+          }
+
+          if (rect.height > 0) {
+              const heightPx = `${rect.height.toFixed(2)}px`;
+              node.style.height = heightPx;
+              node.style.minHeight = heightPx;
+              node.style.maxHeight = heightPx;
+          }
+      });
+  };
+
+  const convertSvgToImage = async (root: HTMLElement) => {
+      const svgNodes = Array.from(root.querySelectorAll<SVGSVGElement>('svg'));
+      if (svgNodes.length === 0) return;
+
+      await Promise.all(svgNodes.map(async (svgNode) => {
+          try {
+              const rect = svgNode.getBoundingClientRect();
+              const width = Math.max(1, Math.round(rect.width || Number(svgNode.getAttribute('width')) || 16));
+              const height = Math.max(1, Math.round(rect.height || Number(svgNode.getAttribute('height')) || 16));
+
+              const serialized = new XMLSerializer().serializeToString(svgNode);
+              const normalizedSvg = serialized.includes('xmlns=')
+                  ? serialized
+                  : serialized.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+              const svgBlob = new Blob([normalizedSvg], { type: 'image/svg+xml;charset=utf-8' });
+              const blobUrl = URL.createObjectURL(svgBlob);
+
+              await new Promise<void>((resolve, reject) => {
+                  const image = new Image();
+                  image.decoding = 'sync';
+                  image.onload = () => {
+                      image.width = width;
+                      image.height = height;
+                      image.style.width = `${width}px`;
+                      image.style.height = `${height}px`;
+                      image.className = svgNode.getAttribute('class') || '';
+                      const inlineStyle = svgNode.getAttribute('style');
+                      if (inlineStyle) {
+                          image.setAttribute('style', inlineStyle);
+                      }
+                      svgNode.replaceWith(image);
+                      URL.revokeObjectURL(blobUrl);
+                      resolve();
+                  };
+                  image.onerror = () => {
+                      URL.revokeObjectURL(blobUrl);
+                      reject(new Error('SVG 이미지 변환 실패'));
+                  };
+                  image.src = blobUrl;
+              });
+          } catch {
+              // 개별 SVG 변환 실패는 무시하고 전체 내보내기 계속
+          }
+      }));
+  };
+
   const getCaptureScaleForExport = (mode: 'PDF' | 'IMAGE', pageCount: number) => {
       const dpr = window.devicePixelRatio || 1;
 
