@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { TBMEntry, TeamOption } from '../types';
 import { Printer, X, Download, Loader2, Edit3, Trash2, Sparkles, UserCheck, AlertOctagon, Eye, Users, Video, FileVideo, ImageOff, CheckCircle2, XCircle, Image as ImageIcon, Package, FileText, Mic, ShieldCheck, Lock } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
 
 interface ReportViewProps {
@@ -17,22 +18,44 @@ interface ReportViewProps {
   onDelete: (id: string) => void;
 }
 
+type NoticeTone = 'info' | 'success' | 'error';
+type ExportStage = 'preparing' | 'capturing' | 'packaging' | 'downloading';
+
 export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName, onClose, signatures, onUpdateSignature, onEdit, onDelete }) => {
   const [generatingMode, setGeneratingMode] = useState<'PDF' | 'IMAGE' | null>(null);
         const [exportDensity, setExportDensity] = useState<'auto' | 'standard' | 'compact'>('auto');
     const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('TEXT');
   const [statusMessage, setStatusMessage] = useState("");
+        const [exportProgress, setExportProgress] = useState<number | null>(null);
+      const [exportStage, setExportStage] = useState<ExportStage | null>(null);
+      const [lastExportFileName, setLastExportFileName] = useState('');
+            const [lastExportMode, setLastExportMode] = useState<'PDF' | 'IMAGE' | null>(null);
     const [announceMessage, setAnnounceMessage] = useState('');
+    const [announceTone, setAnnounceTone] = useState<NoticeTone>('info');
   const [scale, setScale] = useState(1);
   const reportDialogRef = useRef<HTMLDivElement>(null);
   const reportCloseButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+  const announceClearTimerRef = useRef<number | null>(null);
 
-  const announceStatus = (message: string) => {
+  const announceStatus = (message: string, tone: NoticeTone = 'info') => {
+      if (announceClearTimerRef.current !== null) {
+          window.clearTimeout(announceClearTimerRef.current);
+          announceClearTimerRef.current = null;
+      }
+
+      setAnnounceTone(tone);
       setAnnounceMessage('');
       requestAnimationFrame(() => {
           setAnnounceMessage(message);
       });
+
+      if (tone !== 'info') {
+          announceClearTimerRef.current = window.setTimeout(() => {
+              setAnnounceMessage('');
+              announceClearTimerRef.current = null;
+          }, 5000);
+      }
   };
 
   const formatLocationSummary = (entry: TBMEntry) => {
@@ -40,6 +63,73 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           .map((value) => value?.trim())
           .filter(Boolean)
           .join(' / ');
+  };
+
+  const getExportStageLabel = (mode: 'PDF' | 'IMAGE' | null, stage: ExportStage | null) => {
+      if (!mode) return '';
+
+      switch (stage) {
+          case 'preparing':
+              return mode === 'PDF' ? 'PDF 준비' : 'ZIP 준비';
+          case 'capturing':
+              return mode === 'PDF' ? '페이지 캡처' : '이미지 변환';
+          case 'packaging':
+              return mode === 'PDF' ? 'PDF 조합' : 'ZIP 압축';
+          case 'downloading':
+              return '다운로드 시작';
+          default:
+              return mode === 'PDF' ? 'PDF 생성 중' : '이미지 내보내기 중';
+      }
+  };
+
+  const getDownloadLocationHint = () => {
+      const userAgent = navigator.userAgent;
+
+      if (/Edg\//.test(userAgent)) {
+          return 'Edge는 기본 다운로드 폴더 또는 하단 다운로드 바를 먼저 확인하세요.';
+      }
+
+      if (/Chrome\//.test(userAgent) && !/Edg\//.test(userAgent)) {
+          return 'Chrome은 화면 하단 다운로드 표시줄 또는 기본 다운로드 폴더를 확인하세요.';
+      }
+
+      if (/Firefox\//.test(userAgent)) {
+          return 'Firefox는 우측 상단 다운로드 아이콘 또는 기본 다운로드 폴더를 확인하세요.';
+      }
+
+      if (/Safari\//.test(userAgent) && !/Chrome\//.test(userAgent)) {
+          return 'Safari는 우측 상단 다운로드 목록 또는 설정된 다운로드 폴더를 확인하세요.';
+      }
+
+      return '브라우저 다운로드 폴더 또는 저장 위치 선택 창을 확인하세요.';
+  };
+
+  const getDownloadBlockedHint = () => {
+      const userAgent = navigator.userAgent;
+
+      if (/Firefox\//.test(userAgent)) {
+          return '다운로드가 보이지 않으면 주소창 근처 권한 아이콘이나 다운로드 차단 알림을 확인하세요.';
+      }
+
+      if (/Safari\//.test(userAgent) && !/Chrome\//.test(userAgent)) {
+          return '저장이 보이지 않으면 팝업/다운로드 차단 설정과 Safari 다운로드 환경설정을 확인하세요.';
+      }
+
+      return '다운로드가 보이지 않으면 브라우저의 팝업/자동 다운로드 차단 설정을 확인하세요.';
+  };
+
+  const handleCloseRequest = () => {
+      if (generatingMode !== null) {
+          announceStatus('내보내기 진행 중에는 창을 닫을 수 없습니다. 완료 후 다시 시도하세요.', 'info');
+          return;
+      }
+
+      onClose();
+  };
+
+  const handleRetryLastExport = () => {
+      if (!lastExportMode || generatingMode !== null) return;
+      processPages(lastExportMode);
   };
 
   React.useEffect(() => {
@@ -54,19 +144,22 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       const handleKeyDown = (event: KeyboardEvent) => {
           if (event.key === 'Escape') {
               event.preventDefault();
-              onClose();
+              handleCloseRequest();
           }
       };
 
       window.addEventListener('keydown', handleKeyDown);
 
       return () => {
+          if (announceClearTimerRef.current !== null) {
+              window.clearTimeout(announceClearTimerRef.current);
+          }
           window.clearTimeout(focusTimer);
           window.removeEventListener('keydown', handleKeyDown);
           document.body.style.overflow = originalOverflow;
           previouslyFocusedElementRef.current?.focus();
       };
-  }, [onClose]);
+    }, [generatingMode, onClose]);
 
   React.useEffect(() => {
       const updateScale = () => {
@@ -203,30 +296,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
     if (generatingMode) return;
     setGeneratingMode(mode);
+        setLastExportMode(mode);
     setStatusMessage(mode === 'PDF' ? "PDF 생성 중..." : "이미지 변환 중...");
-
-        if (mode === 'PDF') {
-      const originalTitle = document.title;
-      try {
-          await document.fonts.ready;
-          await new Promise<void>((resolve) => {
-              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-          });
-
-          const dateStr = new Date().toISOString().slice(0, 10);
-          document.title = `TBM_일지_통합본_${dateStr}`;
-          window.print();
-          announceStatus('인쇄 창에서 "PDF로 저장"을 선택하면 미리보기와 동일한 품질로 저장됩니다.');
-      } catch (error) {
-          console.error('Native print PDF failed', error);
-          announceStatus('브라우저 인쇄 기반 PDF 생성 중 오류가 발생했습니다.');
-      } finally {
-          document.title = originalTitle;
-          setGeneratingMode(null);
-          setStatusMessage('');
-      }
-      return;
-    }
+        setExportProgress(0);
+        setExportStage('preparing');
+                setLastExportFileName('');
     
     // Allow UI update
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -251,25 +325,36 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
     try {
             const originalPages = reportDialogRef.current?.querySelectorAll('.report-page') || [];
             if (originalPages.length === 0) {
-                    announceStatus('내보낼 보고서 페이지가 없습니다.');
+                        announceStatus('내보낼 보고서 페이지가 없습니다.', 'error');
                     return;
             }
       await document.fonts.ready;
 
       let zip: any = null;
-      if (originalPages.length > 1) {
+      if (mode === 'IMAGE' && originalPages.length > 1) {
           try {
               zip = new JSZip();
           } catch (e) {
               throw new Error("ZIP 초기화 실패");
           }
       }
+      let pdf: jsPDF | null = mode === 'PDF'
+          ? new jsPDF({
+              orientation: 'portrait',
+              unit: 'px',
+              format: [794, 1123],
+              compress: true,
+              hotfixes: ['px_scaling'],
+          })
+          : null;
       
       let singleImageData: string | null = null;
       const pageDensityLog: Array<'standard' | 'compact'> = [];
+      const captureProgressWeight = mode === 'IMAGE' && originalPages.length > 1 ? 75 : 90;
 
       for (let i = 0; i < originalPages.length; i++) {
-          setStatusMessage(`이미지 변환 중... (${i + 1}/${originalPages.length})`);
+          setExportStage('capturing');
+          setStatusMessage(`${mode === 'PDF' ? 'PDF 생성 중...' : '이미지 변환 중...'} (${i + 1}/${originalPages.length})`);
           const originalPage = originalPages[i] as HTMLElement;
 
           // Deep clone
@@ -601,7 +686,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
           const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
-          if (zip) {
+          if (pdf) {
+              if (i > 0) {
+                  pdf.addPage([794, 1123], 'portrait');
+              }
+              pdf.addImage(imgData, 'JPEG', 0, 0, 794, 1123, undefined, 'FAST');
+          } else if (zip) {
               const resolvedTeam = teams.find(t => t.id === entries[i].teamId);
               const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[i].teamName || '미지정')).replace(/[\/\\?%*:|"<>]/g, '_');
               const fileName = `TBM_Report_${entries[i].date}_${safeTeamName}.jpg`;
@@ -609,18 +699,44 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           } else {
               singleImageData = imgData;
           }
+
+          setExportProgress(Math.max(1, Math.round(((i + 1) / originalPages.length) * captureProgressWeight)));
           
           ghostContainer.removeChild(clone);
       }
 
       const dateStr = new Date().toISOString().slice(0,10);
+      let exportedFileName = '';
 
-      if (zip) {
-          const content = await zip.generateAsync({ type: "blob" });
+      if (pdf) {
+          exportedFileName = `TBM_일지_통합본_${dateStr}.pdf`;
+          setExportStage('packaging');
+          setStatusMessage('PDF 저장 파일을 준비 중...');
+          setExportProgress(96);
+          setExportStage('downloading');
+          setLastExportFileName(exportedFileName);
+          pdf.save(exportedFileName);
+      } else if (zip) {
+          exportedFileName = `TBM_일지_이미지모음_${dateStr}.zip`;
+          setExportStage('packaging');
+          setStatusMessage('ZIP 압축 준비 중...');
+          setExportProgress(Math.max(captureProgressWeight, 76));
+          const content = await zip.generateAsync(
+              { type: "blob" },
+              (metadata) => {
+                  const zipPercent = Math.round(metadata.percent);
+                  setStatusMessage(`ZIP 압축 중... ${zipPercent}%`);
+                  setExportProgress(Math.min(99, 75 + Math.round(zipPercent * 0.24)));
+              }
+          );
           const url = URL.createObjectURL(content);
           const link = document.createElement('a');
           link.href = url;
-          link.setAttribute('download', `TBM_일지_이미지모음_${dateStr}.zip`);
+          link.setAttribute('download', exportedFileName);
+          setStatusMessage('ZIP 다운로드 시작 중...');
+          setExportProgress(99);
+          setExportStage('downloading');
+          setLastExportFileName(exportedFileName);
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -628,21 +744,30 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       } else if (singleImageData) {
           const resolvedTeam = teams.find(t => t.id === entries[0].teamId);
           const safeTeamName = (resolvedTeam ? resolvedTeam.name : (entries[0].teamName || '미지정')).replace(/[\/\\?%*:|"<>]/g, '_');
+          exportedFileName = `TBM_일지_${entries[0].date}_${safeTeamName}.jpg`;
           const link = document.createElement('a');
           link.href = singleImageData;
-          link.setAttribute('download', `TBM_일지_${entries[0].date}_${safeTeamName}.jpg`);
+          link.setAttribute('download', exportedFileName);
+                    setStatusMessage('이미지 다운로드 시작 중...');
+                    setExportProgress(99);
+          setExportStage('downloading');
+          setLastExportFileName(exportedFileName);
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
       }
 
+                        setExportProgress(100);
+                        setStatusMessage('내보내기 완료');
+                        await new Promise(resolve => setTimeout(resolve, 900));
+
             const compactCount = pageDensityLog.filter((density) => density === 'compact').length;
             const standardCount = pageDensityLog.length - compactCount;
-            announceStatus(`내보내기 완료: 표준 ${standardCount}페이지, 압축 ${compactCount}페이지`);
+            announceStatus(`${mode === 'PDF' ? 'PDF' : '이미지'} 내보내기 완료 · 파일명: ${exportedFileName || '생성 완료'} · 표준 ${standardCount}페이지, 압축 ${compactCount}페이지`, 'success');
 
     } catch (error) {
-      console.error("Generation failed", error);
-            announceStatus('변환 중 오류가 발생했습니다. 메모리 부족 또는 이미지 처리 실패일 수 있습니다.');
+        console.error("Generation failed", error);
+            announceStatus(`${mode === 'PDF' ? 'PDF 생성' : '이미지 변환'} 중 오류가 발생했습니다. 메모리 부족 또는 이미지 처리 실패일 수 있습니다. 브라우저 다운로드 차단 여부도 함께 확인하세요.`, 'error');
     } finally {
       if (document.body.contains(ghostContainer)) {
           document.body.removeChild(ghostContainer);
@@ -650,6 +775,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       window.scrollTo(0, originalScrollPos);
       setGeneratingMode(null);
       setStatusMessage("");
+            setExportProgress(null);
+            setExportStage(null);
     }
   };
 
@@ -658,12 +785,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       const file = e.target.files[0];
       // [FIX] 파일 타입 및 크기 검증 — 서명 이미지에만 허용
       if (!file.type.startsWith('image/')) {
-          announceStatus('이미지 파일만 업로드 가능합니다.');
+          announceStatus('이미지 파일만 업로드 가능합니다.', 'error');
           e.target.value = '';
           return;
       }
       if (file.size > 2 * 1024 * 1024) {
-          announceStatus('서명 이미지는 최대 2MB까지 가능합니다.');
+          announceStatus('서명 이미지는 최대 2MB까지 가능합니다.', 'error');
           e.target.value = '';
           return;
       }
@@ -697,6 +824,55 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     ? (statusMessage || (generatingMode === 'PDF' ? 'PDF를 생성 중입니다.' : '이미지를 생성 중입니다.'))
                     : (announceMessage || '')}
             </p>
+            {announceMessage && generatingMode === null && (
+                <div className="sticky top-2 z-[60] w-full max-w-[794px] px-4 no-print-ui">
+                    <div
+                        className={`rounded-xl border px-4 py-3 shadow-lg backdrop-blur-sm ${announceTone === 'success' ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-50' : announceTone === 'error' ? 'border-rose-400/60 bg-rose-500/15 text-rose-50' : 'border-sky-400/60 bg-sky-500/15 text-sky-50'}`}
+                        role="status"
+                        aria-live="polite"
+                    >
+                        <div className="flex items-start gap-2">
+                            <span className="mt-0.5 text-sm">{announceTone === 'success' ? '✅' : announceTone === 'error' ? '⚠️' : 'ℹ️'}</span>
+                            <div className="min-w-0">
+                                <p className="text-xs md:text-sm font-bold">
+                                    {announceTone === 'success' ? '내보내기 완료' : announceTone === 'error' ? '작업 확인 필요' : '안내'}
+                                </p>
+                                <p className="text-[11px] md:text-xs opacity-95 break-keep">{announceMessage}</p>
+                                {announceTone === 'success' && lastExportFileName && (
+                                    <>
+                                        <p className="mt-1 text-[10px] md:text-[11px] font-mono text-emerald-100/90 break-all">
+                                            파일: {lastExportFileName}
+                                        </p>
+                                        <p className="mt-1 text-[10px] md:text-[11px] text-emerald-100/80 break-keep">
+                                            이 안내는 잠시 후 자동으로 사라집니다.
+                                        </p>
+                                        <p className="mt-1 text-[10px] md:text-[11px] text-emerald-100/80 break-keep">
+                                            {getDownloadLocationHint()}
+                                        </p>
+                                        <p className="mt-1 text-[10px] md:text-[11px] text-emerald-100/75 break-keep">
+                                            {getDownloadBlockedHint()}
+                                        </p>
+                                        {lastExportMode && (
+                                            <button
+                                                type="button"
+                                                onClick={handleRetryLastExport}
+                                                className="mt-2 inline-flex items-center rounded-lg border border-emerald-300/40 bg-emerald-400/10 px-2.5 py-1.5 text-[10px] md:text-[11px] font-bold text-emerald-50 hover:bg-emerald-400/20 transition-colors"
+                                            >
+                                                {lastExportMode === 'PDF' ? 'PDF 다시 다운로드' : '이미지 다시 다운로드'}
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+                                {announceTone === 'error' && lastExportMode && (
+                                    <p className="mt-1 text-[10px] md:text-[11px] text-rose-100/80 break-keep">
+                                        문제가 계속되면 {lastExportMode === 'PDF' ? 'PDF' : '이미지 ZIP'} 내보내기를 다시 시도하거나 브라우저 다운로드 차단 설정을 확인하세요.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
       <style>{`
         .report-page {
             width: 794px;
@@ -913,6 +1089,27 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     <p id="report-view-description" className="text-[10px] md:text-xs text-slate-400">
             {entries.length}개의 TBM 일지가 준비되었습니다.
           </p>
+                    {generatingMode !== null && exportProgress !== null && (
+                        <div className="mt-3 w-full max-w-[320px]">
+                            <div className="flex items-center justify-between text-[10px] text-slate-200 font-semibold mb-1">
+                                <span>{statusMessage || (generatingMode === 'PDF' ? 'PDF 생성 준비 중...' : '이미지 내보내기 준비 중...')}</span>
+                                <span>{exportProgress}%</span>
+                            </div>
+                            <div
+                                className="h-2 w-full overflow-hidden rounded-full bg-slate-600/80"
+                                role="progressbar"
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={exportProgress}
+                                aria-label={generatingMode === 'PDF' ? 'PDF 생성 진행률' : '이미지 ZIP 생성 진행률'}
+                            >
+                                <div
+                                    className={`h-full rounded-full transition-all duration-300 ${generatingMode === 'PDF' ? 'bg-green-400' : 'bg-indigo-400'}`}
+                                    style={{ width: `${exportProgress}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
                     <div className="mt-2 flex items-center gap-2">
                         <span className="text-[10px] text-slate-300 font-semibold">내보내기 밀도</span>
                         <div className="inline-flex rounded border border-slate-500 overflow-hidden">
@@ -970,10 +1167,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             onClick={() => processPages('IMAGE')}
             disabled={generatingMode !== null}
             className={`flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 px-3 md:px-4 py-2 rounded font-bold transition-colors text-xs md:text-sm ${generatingMode !== null ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title="고화질 이미지로 저장 (JPG)"
+                        title={lastExportFileName && lastExportFileName.endsWith('.zip')
+                                ? `고화질 이미지로 저장 (JPG) · 최근 파일: ${lastExportFileName}`
+                                : '고화질 이미지로 저장 (JPG)'}
           >
             {generatingMode === 'IMAGE' ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
-            <span className="hidden md:inline">{generatingMode === 'IMAGE' ? statusMessage : (entries.length > 1 ? '이미지 ZIP' : '이미지 저장')}</span>
+                        <span className="hidden md:inline">{generatingMode === 'IMAGE' ? getExportStageLabel('IMAGE', exportStage) : (entries.length > 1 ? '이미지 ZIP' : '이미지 저장')}</span>
           </button>
 
           {/* PDF Download Button */}
@@ -981,21 +1180,73 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
             onClick={() => processPages('PDF')}
             disabled={generatingMode !== null}
             className={`flex items-center gap-2 bg-green-600 hover:bg-green-500 px-3 md:px-4 py-2 rounded font-bold transition-colors text-xs md:text-sm ${generatingMode !== null ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        title={lastExportFileName && lastExportFileName.endsWith('.pdf')
+                                ? `PDF 다운로드 · 최근 파일: ${lastExportFileName}`
+                                : 'PDF 다운로드'}
           >
             {generatingMode === 'PDF' ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            <span className="hidden md:inline">{generatingMode === 'PDF' ? statusMessage : 'PDF 다운로드'}</span>
+                        <span className="hidden md:inline">{generatingMode === 'PDF' ? getExportStageLabel('PDF', exportStage) : 'PDF 다운로드'}</span>
           </button>
 
           <button 
                         ref={reportCloseButtonRef}
-            onClick={onClose}
+                        onClick={handleCloseRequest}
+                                                disabled={generatingMode !== null}
                         aria-label="보고서 센터 닫기"
-            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 px-3 md:px-4 py-2 rounded transition-colors text-xs md:text-sm"
+                        className={`flex items-center gap-2 bg-slate-700 px-3 md:px-4 py-2 rounded transition-colors text-xs md:text-sm ${generatingMode !== null ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-600'}`}
           >
             <X size={16} /> 닫기
           </button>
         </div>
       </div>
+
+                        {generatingMode !== null && (
+                                <div className="fixed inset-0 z-[55] bg-slate-950/20 pointer-events-none no-print-ui" aria-hidden="true">
+                                        <div className="absolute inset-x-0 top-24 mx-auto hidden md:flex w-full max-w-[794px] justify-center px-4">
+                                                <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-slate-900/85 px-4 py-2 text-xs font-bold text-white shadow-xl backdrop-blur">
+                                                        <Loader2 size={14} className="animate-spin" />
+                                                        <span>{generatingMode === 'PDF' ? 'PDF 내보내기 작업 중입니다. 창을 닫지 마세요.' : '이미지 ZIP 내보내기 작업 중입니다. 창을 닫지 마세요.'}</span>
+                                                </div>
+                                        </div>
+                                </div>
+                        )}
+
+            {generatingMode !== null && exportProgress !== null && (
+                <div className="fixed bottom-3 left-3 right-3 z-[70] md:hidden no-print-ui">
+                    <div className="rounded-2xl border border-slate-600 bg-slate-900/95 text-white shadow-2xl backdrop-blur px-4 py-3">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="min-w-0">
+                                <p className="text-[11px] font-black tracking-wide text-slate-200">
+                                    {generatingMode === 'PDF' ? 'PDF 내보내기 진행 중' : '이미지 ZIP 내보내기 진행 중'}
+                                </p>
+                                <p className="text-[12px] font-semibold text-white break-keep">
+                                    {getExportStageLabel(generatingMode, exportStage)}
+                                </p>
+                                <p className="text-[10px] text-slate-300 mt-0.5 break-keep">
+                                    {statusMessage || (generatingMode === 'PDF' ? 'PDF 파일을 준비하고 있습니다.' : '이미지와 ZIP 파일을 준비하고 있습니다.')}
+                                </p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                                <div className="text-lg font-black leading-none">{exportProgress}%</div>
+                                <div className="text-[10px] text-slate-400 mt-1">완료율</div>
+                            </div>
+                        </div>
+                        <div
+                            className="h-2.5 w-full overflow-hidden rounded-full bg-slate-700"
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={exportProgress}
+                            aria-label={generatingMode === 'PDF' ? 'PDF 생성 진행률' : '이미지 ZIP 생성 진행률'}
+                        >
+                            <div
+                                className={`h-full rounded-full transition-all duration-300 ${generatingMode === 'PDF' ? 'bg-green-400' : 'bg-indigo-400'}`}
+                                style={{ width: `${exportProgress}%` }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
       <div className="pb-20 print:pb-0 w-full flex flex-col items-center">
         {entries.map((entry, index) => {
@@ -1326,8 +1577,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                 
                 {/* Edit Controls */}
                 <div className="edit-overlay absolute top-0 right-0 p-4 no-print-ui z-[1000] flex gap-2">
-                    <button onClick={() => onEdit(entry)} aria-label={`${safeTeamName} ${entry.date} 기록 수정`} className="bg-white text-blue-600 p-2 rounded shadow border hover:bg-blue-50 hover:border-blue-300 transition-colors"><Edit3 size={16}/></button>
-                    <button onClick={() => onDelete(String(entry.id))} aria-label={`${safeTeamName} ${entry.date} 기록 삭제`} className="bg-white text-red-600 p-2 rounded shadow border hover:bg-red-50 hover:border-red-300 transition-colors"><Trash2 size={16}/></button>
+                    <button disabled={generatingMode !== null} onClick={() => onEdit(entry)} aria-label={`${safeTeamName} ${entry.date} 기록 수정`} className={`bg-white text-blue-600 p-2 rounded shadow border transition-colors ${generatingMode !== null ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-50 hover:border-blue-300'}`}><Edit3 size={16}/></button>
+                    <button disabled={generatingMode !== null} onClick={() => onDelete(String(entry.id))} aria-label={`${safeTeamName} ${entry.date} 기록 삭제`} className={`bg-white text-red-600 p-2 rounded shadow border transition-colors ${generatingMode !== null ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50 hover:border-red-300'}`}><Trash2 size={16}/></button>
                 </div>
               </div>
             );
