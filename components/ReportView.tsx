@@ -74,6 +74,36 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return () => window.removeEventListener('resize', updateScale);
   }, []);
 
+  const handleReportDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Tab') return;
+
+      const dialogNode = reportDialogRef.current;
+      if (!dialogNode) return;
+
+      const focusableElements = dialogNode.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+
+      if (focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement as HTMLElement | null;
+
+      if (event.shiftKey) {
+          if (activeElement === firstElement || !dialogNode.contains(activeElement)) {
+              event.preventDefault();
+              lastElement.focus();
+          }
+          return;
+      }
+
+      if (activeElement === lastElement) {
+          event.preventDefault();
+          firstElement.focus();
+      }
+  };
+
   const fitTextForExport = (element: HTMLElement, density: 'standard' | 'compact') => {
       const regions = Array.from(element.querySelectorAll<HTMLElement>('.body-row-text .left-text-col'));
       if (regions.length === 0) return;
