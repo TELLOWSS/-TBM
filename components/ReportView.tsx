@@ -35,6 +35,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       });
   };
 
+  const formatLocationSummary = (entry: TBMEntry) => {
+      return [entry.locationBuildingScope, entry.locationArea, entry.locationDetail]
+          .map((value) => value?.trim())
+          .filter(Boolean)
+          .join(' / ');
+  };
+
   React.useEffect(() => {
       previouslyFocusedElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const originalOverflow = document.body.style.overflow;
