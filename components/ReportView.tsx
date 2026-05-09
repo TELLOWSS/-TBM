@@ -293,6 +293,28 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       return textCols.some((col) => col.scrollHeight > (col.clientHeight + 1));
   };
 
+  const getCaptureScaleForExport = (mode: 'PDF' | 'IMAGE', pageCount: number) => {
+      const dpr = window.devicePixelRatio || 1;
+
+      if (mode === 'PDF') {
+          if (pageCount >= 8) return Math.min(1.75, Math.max(1.5, dpr));
+          if (pageCount >= 5) return Math.min(2, Math.max(1.6, dpr));
+          return Math.min(2.4, Math.max(1.8, dpr));
+      }
+
+      return Math.min(3, Math.max(2, dpr));
+  };
+
+  const getJpegQualityForExport = (mode: 'PDF' | 'IMAGE', pageCount: number) => {
+      if (mode === 'PDF') {
+          if (pageCount >= 8) return 0.78;
+          if (pageCount >= 5) return 0.84;
+          return 0.9;
+      }
+
+      return 0.95;
+  };
+
   const processPages = async (mode: 'PDF' | 'IMAGE') => {
     if (generatingMode) return;
     setGeneratingMode(mode);
@@ -329,6 +351,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     return;
             }
       await document.fonts.ready;
+
+      const captureScale = getCaptureScaleForExport(mode, originalPages.length);
+      const jpegQuality = getJpegQualityForExport(mode, originalPages.length);
+
+      if (mode === 'PDF' && originalPages.length >= 5) {
+          setStatusMessage(`PDF 경량 모드로 최적화 중... (총 ${originalPages.length}페이지)`);
+      }
 
       let zip: any = null;
       if (mode === 'IMAGE' && originalPages.length > 1) {
@@ -429,7 +458,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                     // 3. Capture with html2canvas
                     const applyCloneOverrides = true;
                     const capturePage = (foreignObjectRendering: boolean) => html2canvas(clone, {
-                        scale: Math.min(3, Math.max(2, window.devicePixelRatio || 2)),
+                        scale: captureScale,
                         useCORS: true,
                         foreignObjectRendering,
                         logging: false,
@@ -684,7 +713,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
                         const canvas = await capturePage(useTextProfile);
 
-          const imgData = canvas.toDataURL('image/jpeg', 0.95);
+          const imgData = canvas.toDataURL('image/jpeg', jpegQuality);
 
           if (pdf) {
               if (i > 0) {
@@ -701,6 +730,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
           }
 
           setExportProgress(Math.max(1, Math.round(((i + 1) / originalPages.length) * captureProgressWeight)));
+
+          canvas.width = 1;
+          canvas.height = 1;
+          await new Promise(resolve => setTimeout(resolve, 0));
           
           ghostContainer.removeChild(clone);
       }
@@ -767,7 +800,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
     } catch (error) {
         console.error("Generation failed", error);
-            announceStatus(`${mode === 'PDF' ? 'PDF 생성' : '이미지 변환'} 중 오류가 발생했습니다. 메모리 부족 또는 이미지 처리 실패일 수 있습니다. 브라우저 다운로드 차단 여부도 함께 확인하세요.`, 'error');
+            announceStatus(`${mode === 'PDF' ? 'PDF 생성' : '이미지 변환'} 중 오류가 발생했습니다. 메모리 부족 또는 이미지 처리 실패일 수 있습니다. ${mode === 'PDF' ? '다건이면 이미지 ZIP으로 먼저 저장한 뒤 PDF 재시도를 권장합니다. ' : ''}브라우저 다운로드 차단 여부도 함께 확인하세요.`, 'error');
     } finally {
       if (document.body.contains(ghostContainer)) {
           document.body.removeChild(ghostContainer);
