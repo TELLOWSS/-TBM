@@ -75,6 +75,79 @@ const normalizeVoiceClarity = (value: unknown): VoiceClarity => value === 'MUFFL
 const normalizePpeStatus = (value: unknown): PpeStatus => value === 'BAD' ? 'BAD' : 'GOOD';
 const normalizeFocusZone = (value: unknown): FocusZone => value === 'LOW' ? 'LOW' : 'HIGH';
 
+const hasKorean = (text: string): boolean => /[가-힣]/.test(text);
+
+const normalizeTextLine = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  return value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+const normalizeKoreanText = (value: unknown, fallback: string): string => {
+  const text = normalizeTextLine(value);
+  if (!text) return fallback;
+  if (!hasKorean(text) && /[A-Za-z]/.test(text)) return fallback;
+  return text;
+};
+
+const extractContextKeywords = (workName: string, risksText: string): string[] => {
+  const merged = `${workName} ${risksText}`
+    .replace(/["'.,:;()\[\]{}]/g, ' ')
+    .split(/\s+/)
+    .map(token => token.trim())
+    .filter(token => token.length >= 2);
+  return Array.from(new Set(merged)).slice(0, 20);
+};
+
+const isGroundedToContext = (text: string, workName: string, risksText: string): boolean => {
+  const normalized = normalizeTextLine(text);
+  if (!normalized) return false;
+  const keywords = extractContextKeywords(workName, risksText);
+  if (keywords.length === 0) return hasKorean(normalized);
+  return keywords.some(keyword => normalized.includes(keyword));
+};
+
+const buildGroundedEvaluation = (workName: string, risksText: string, guideline?: string): string => {
+  const guidelinePart = guideline ? ` 월간 중점 사항("${guideline}") 준수 여부를 현장에서 재확인해야 합니다.` : '';
+  return `영상 기반 TBM 점검 결과, "${workName}" 작업 관련 위험요인(${risksText})의 전달·이해 여부를 중심으로 관리가 필요합니다.${guidelinePart}`;
+};
+
+const normalizeFeedbackArray = (
+  value: unknown,
+  fallback: string[],
+  workName: string,
+  risksText: string
+): string[] => {
+  if (!Array.isArray(value)) return fallback;
+  const cleaned = value
+    .map(item => normalizeTextLine(item))
+    .filter(item => item.length > 0)
+    .map(item => normalizeKoreanText(item, ''))
+    .filter(item => item.length > 0)
+    .filter(item => isGroundedToContext(item, workName, risksText));
+
+  if (cleaned.length === 0) return fallback;
+  return Array.from(new Set(cleaned)).slice(0, 5);
+};
+
+const normalizeRubric = (rawRubric: any) => {
+  const clamp = (value: unknown, min: number, max: number) => {
+    const parsed = safeParseInt(value);
+    return Math.max(min, Math.min(max, parsed));
+  };
+
+  const deductions = Array.isArray(rawRubric?.deductions)
+    ? rawRubric.deductions.map((item: unknown) => normalizeKoreanText(item, '')).filter((item: string) => item.length > 0)
+    : [];
+
+  return {
+    logQuality: clamp(rawRubric?.logQuality, 0, 25),
+    focus: clamp(rawRubric?.focus, 0, 25),
+    voice: clamp(rawRubric?.voice, 0, 25),
+    ppe: clamp(rawRubric?.ppe, 0, 25),
+    deductions: deductions.length > 0 ? deductions : ['특이 감점 사유 없음']
+  };
+};
+
 const getAiClient = () => {
     // [A] Dev proxy path: no user key needed on localhost
     if (isDevProxyAvailable()) {
@@ -381,40 +454,33 @@ export const evaluateTBMVideo = async (
       : "월간 중점 관리 사항 없음";
 
   // Common Rubric structure
-  const defaultRubric = { logQuality: 25, focus: 25, voice: 15, ppe: 15, deductions: [] };
+  const defaultRubric = { logQuality: 25, focus: 25, voice: 15, ppe: 15, deductions: ['특이 감점 사유 없음'] };
 
   try {
     // 1. Attempt Video Analysis
     const prompt = `
-      You are a Construction Safety Professional Engineer (건설안전기술사).
-      Role: A strict but mentoring "Safety Master".
-      
-      Analyze this TBM video and the provided context.
-      
-      CONTEXT:
-      - Work: "${workName}"
-      - Identified Risks: ${risksText}
-      - Monthly Priority Guidelines: ${guidelinesText}
-      
-      REQUIREMENTS:
-      1. Evaluate 4 specific categories (Output in Korean).
-      2. **Overall Evaluation (evaluation)**:
-         - **MANDATORY**: Write a comprehensive safety review.
-         - Mention specific risks from the context if visible or relevant.
-         - Cite the 'Monthly Priority Guidelines' if they apply to this work.
-         - Be direct and authoritative.
-      3. **Leader Coaching (Action Item)**:
-         - Provide one specific, actionable advice for the team leader to improve the *next* TBM.
-         - Example: "Voice is too soft. Use simple hand signals next time." or "Ask open-ended questions to check worker understanding."
+      역할: 건설안전기술사.
+      목표: TBM 동영상을 검토하여 현장 안전 코칭용 결과를 생성한다.
 
-      Output strictly in JSON.
+      [입력 문맥]
+      - 작업: "${workName}"
+      - 식별 위험요인: ${risksText}
+      - 월간 중점 관리사항:
+      ${guidelinesText}
+
+      [필수 규칙]
+      1) 모든 서술형 필드(evaluation, evalLog, evalAttendance, evalFocus, evalLeader, leaderCoaching, feedback)는 반드시 한국어로 작성.
+      2) 영상에서 직접 확인 어려운 내용은 추측하지 말고 "영상에서 확인 어려움"으로 명시.
+      3) 입력 문맥(작업/위험요인/월간 중점)과 무관한 일반론, 허구 사실, 과장 표현 금지.
+      4) 점수/코멘트는 보수적으로 작성하고, 불확실 시 감점 사유(deductions)에 명시.
+      5) 출력은 JSON만 반환.
     `;
 
     const apiCall = () => ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: [{ role: "user", parts: [{ inlineData: { mimeType: cleanMimeType, data: base64Video } }, { text: prompt }] }],
       config: {
-        temperature: 0.6, 
+        temperature: 0.2, 
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -490,19 +556,34 @@ export const evaluateTBMVideo = async (
 
     if (response.text) {
       const raw = JSON.parse(cleanAndRepairJson(response.text));
-      const finalRubric = raw.rubric || defaultRubric;
+      const firstGuideline = safetyGuidelines[0]?.content;
+      const fallbackEvaluation = buildGroundedEvaluation(workName, risksText, firstGuideline);
+      const finalRubric = raw.rubric ? normalizeRubric(raw.rubric) : defaultRubric;
       const totalScore = (finalRubric.logQuality || 0) + (finalRubric.focus || 0) + (finalRubric.voice || 0) + (finalRubric.ppe || 0);
+      const evaluationFromAi = normalizeKoreanText(raw.evaluation, fallbackEvaluation);
+      const groundedEvaluation = isGroundedToContext(evaluationFromAi, workName, risksText)
+        ? evaluationFromAi
+        : fallbackEvaluation;
+
+      const fallbackFeedback = [
+        `${workName} 작업 전 위험요인(${risksText}) 공유 여부를 재확인하세요.`,
+        '작업자 질의응답으로 위험 인지 수준을 확인하세요.'
+      ];
+      const finalFeedback = normalizeFeedbackArray(raw.feedback, fallbackFeedback, workName, risksText);
 
       return {
           score: totalScore,
-          evaluation: raw.evaluation || "분석 완료.",
-          evalLog: raw.evalLog || "내용 양호",
-          evalAttendance: raw.evalAttendance || "참여도 양호",
-          evalFocus: raw.evalFocus || "집중도 양호",
-          evalLeader: raw.evalLeader || "리더십 양호",
+          evaluation: groundedEvaluation,
+          evalLog: normalizeKoreanText(raw.evalLog, "작업 일지 전달 내용은 대체로 양호합니다."),
+          evalAttendance: normalizeKoreanText(raw.evalAttendance, "참석 및 참여도는 영상 기준 보통 수준입니다."),
+          evalFocus: normalizeKoreanText(raw.evalFocus, "작업자 집중도는 영상 기준 보통 수준입니다."),
+          evalLeader: normalizeKoreanText(raw.evalLeader, "팀장 리딩은 핵심 위험요인 중심으로 보완이 필요합니다."),
           analysisSource: 'VIDEO',
           rubric: finalRubric,
-          leaderCoaching: raw.leaderCoaching || { actionItem: "목소리를 더 크게 내세요.", rationale: "전달력이 부족합니다." },
+          leaderCoaching: {
+            actionItem: normalizeKoreanText(raw.leaderCoaching?.actionItem, '다음 TBM에서는 핵심 위험요인을 작업 순서별로 짧게 재확인하세요.'),
+            rationale: normalizeKoreanText(raw.leaderCoaching?.rationale, '영상 기반 점검에서 위험요인 전달의 구체성이 부족했습니다.')
+          },
           details: {
               participation: normalizeParticipation(raw.details?.participation),
               voiceClarity: normalizeVoiceClarity(raw.details?.voiceClarity),
@@ -519,11 +600,15 @@ export const evaluateTBMVideo = async (
               }
           },
           insight: {
-              mentionedTopics: raw.insight?.mentionedTopics || [],
-              missingTopics: raw.insight?.missingTopics || [],
-              suggestion: raw.insight?.suggestion || "안전 작업 준수 요망"
+              mentionedTopics: Array.isArray(raw.insight?.mentionedTopics)
+                ? raw.insight.mentionedTopics.map((item: unknown) => normalizeKoreanText(item, '')).filter((item: string) => item.length > 0)
+                : [],
+              missingTopics: Array.isArray(raw.insight?.missingTopics)
+                ? raw.insight.missingTopics.map((item: unknown) => normalizeKoreanText(item, '')).filter((item: string) => item.length > 0)
+                : [],
+              suggestion: normalizeKoreanText(raw.insight?.suggestion, "작업 전 위험요인 공유와 보호구 착용 확인 절차를 강화하세요.")
           },
-          feedback: raw.feedback || [] 
+          feedback: finalFeedback 
       };
     }
     throw new Error("Empty response from AI");
@@ -702,6 +787,7 @@ export const analyzeMasterLog = async (
             [모드: 종합 일지 일괄 처리 (BATCH)]
             - 이 문서는 이미 결재가 완료된 문서입니다.
             - 목표: 디지털 데이터 변환.
+            - 문서에 없는 내용 추측 금지. 읽히지 않는 값은 비워두거나 "미확인"으로 표기.
             - **안전관리자 코멘트(safetyFeedback) 생성 규칙:**
               1. 문서에 수기 코멘트가 있으면 우선 추출.
               2. 코멘트가 없으면, [작업 내용]과 [아래 제공된 월간 위험성평가 항목]을 대조하십시오.
@@ -715,6 +801,7 @@ export const analyzeMasterLog = async (
             [모드: 개별 TBM 간편 등록 (ROUTINE)]
             - 이 문서는 TBM 보드판입니다.
             - 목표: 텍스트 추출.
+            - 문서에 없는 내용 추측 금지. 읽히지 않는 값은 비워두거나 "미확인"으로 표기.
             - **안전관리자 코멘트:** 위 BATCH 모드와 동일한 로직으로, 월간 위험성평가 대비 누락 사항을 지적하는 코멘트를 생성하십시오.
           `;
       }
@@ -731,6 +818,8 @@ export const analyzeMasterLog = async (
 
         [필수 추출 항목]
         - teams 배열 내 'safetyFeedback'은 반드시 위 규칙에 따라 생성된 코멘트 배열이어야 합니다.
+        - workDescription, riskFactors.risk, riskFactors.measure, safetyFeedback은 반드시 한국어로 작성하세요.
+        - 출력은 JSON만 반환하세요.
       `;
   
       const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
@@ -798,6 +887,17 @@ export const analyzeMasterLog = async (
             const safeRiskFactors = Array.isArray(team.riskFactors) ? team.riskFactors : [];
             const safeFeedback = Array.isArray(team.safetyFeedback) ? team.safetyFeedback : [];
 
+            const normalizedRiskFactors = safeRiskFactors
+              .map((risk: any) => ({
+                risk: normalizeKoreanText(risk?.risk, '위험요인 확인 필요'),
+                measure: normalizeKoreanText(risk?.measure, '예방대책 확인 필요')
+              }))
+              .filter((risk: any) => risk.risk.length > 0 || risk.measure.length > 0);
+
+            const normalizedFeedback = safeFeedback
+              .map((item: any) => normalizeKoreanText(item, ''))
+              .filter((item: string) => item.length > 0);
+
             let researchAnalysis: TBMAnalysisResult | undefined = undefined;
 
             if (mode === 'BATCH') {
@@ -817,20 +917,20 @@ export const analyzeMasterLog = async (
                     leaderCoaching: { actionItem: "기록 보존 완료", rationale: "과거 데이터입니다." },
                     details: { participation: 'GOOD', voiceClarity: 'CLEAR', ppeStatus: 'GOOD', interaction: true },
                     focusAnalysis: { overall: verifiedFocus, distractedCount: 0, focusZones: { front: 'HIGH', back: 'HIGH', side: 'HIGH' } },
-                    insight: { mentionedTopics: safeRiskFactors.map((r:any) => r.risk || '') || [], missingTopics: [], suggestion: "기존 분석 검증 완료 데이터 (Batch Processed)" },
-                    feedback: safeFeedback 
+                    insight: { mentionedTopics: normalizedRiskFactors.map((r:any) => r.risk || '') || [], missingTopics: [], suggestion: "기존 분석 검증 완료 데이터입니다." },
+                    feedback: normalizedFeedback 
                 };
             } else {
                 researchAnalysis = undefined; 
             }
 
             return {
-                teamName: team.teamName || "팀명 미상",
-                leaderName: team.leaderName || "",
+                  teamName: normalizeKoreanText(team.teamName, "팀명 미상"),
+                  leaderName: normalizeKoreanText(team.leaderName, ""),
                 attendeesCount: safeAttendees,
-                workDescription: team.workDescription || "작업 내용 식별 불가",
-                riskFactors: safeRiskFactors,
-                safetyFeedback: safeFeedback,
+                  workDescription: normalizeKoreanText(team.workDescription, "작업 내용 식별 불가"),
+                  riskFactors: normalizedRiskFactors,
+                  safetyFeedback: normalizedFeedback,
                 detectedDate: globalDate,
                 videoAnalysis: researchAnalysis 
             };
