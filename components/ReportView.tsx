@@ -24,7 +24,7 @@ type ExportStage = 'preparing' | 'capturing' | 'packaging' | 'downloading';
 export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName, onClose, signatures, onUpdateSignature, onEdit, onDelete }) => {
   const [generatingMode, setGeneratingMode] = useState<'PDF' | 'IMAGE' | null>(null);
         const [exportDensity, setExportDensity] = useState<'auto' | 'standard' | 'compact'>('auto');
-    const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('TEXT');
+    const [renderProfile, setRenderProfile] = useState<'TEXT' | 'COMPAT'>('COMPAT');
   const [statusMessage, setStatusMessage] = useState("");
         const [exportProgress, setExportProgress] = useState<number | null>(null);
       const [exportStage, setExportStage] = useState<ExportStage | null>(null);
@@ -303,6 +303,35 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
       }, 'image/jpeg', quality);
   });
 
+  const isCanvasMostlyDark = (canvas: HTMLCanvasElement) => {
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) return false;
+
+      const width = canvas.width;
+      const height = canvas.height;
+      if (width === 0 || height === 0) return false;
+
+      const sampleStep = Math.max(10, Math.floor(Math.min(width, height) / 48));
+      let sampleCount = 0;
+      let darkCount = 0;
+
+      for (let y = 0; y < height; y += sampleStep) {
+          for (let x = 0; x < width; x += sampleStep) {
+              const pixel = context.getImageData(x, y, 1, 1).data;
+              const luminance = (0.2126 * pixel[0]) + (0.7152 * pixel[1]) + (0.0722 * pixel[2]);
+              const alpha = pixel[3] / 255;
+
+              sampleCount += 1;
+              if (alpha > 0.9 && luminance < 22) {
+                  darkCount += 1;
+              }
+          }
+      }
+
+      if (sampleCount === 0) return false;
+      return (darkCount / sampleCount) >= 0.9;
+  };
+
   const lockExportLayout = (root: HTMLElement) => {
       const targets = root.querySelectorAll<HTMLElement>(
           '.row, .col, .h-header, .h-info, .h-body, .h-footer, .body-row-images, .body-row-text, .section-header'
@@ -423,9 +452,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
     Object.assign(ghostContainer.style, {
         position: 'fixed',
         top: '0',
-        left: '-10000px', // Far off-screen
+        left: '0',
         width: '794px',   // A4 Width
-        zIndex: '-9999',
+        opacity: '0',
+        pointerEvents: 'none',
+        zIndex: '2147483647',
         background: '#ffffff',
     });
     document.body.appendChild(ghostContainer);
@@ -501,26 +532,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
 
           ghostContainer.appendChild(clone);
 
-          // 0. Lock layout dimensions before conversion/capture
-          lockExportLayout(clone);
-
-          // 0-1. Shrink text and rebalance image/text area only when overflow is detected
-          let activeDensity: 'standard' | 'compact' = exportDensity === 'compact' ? 'compact' : 'standard';
-          clone.classList.remove('export-standard', 'export-compact');
-          clone.classList.add(activeDensity === 'compact' ? 'export-compact' : 'export-standard');
-          rebalanceBodyForExport(clone, activeDensity);
-
-          if (exportDensity === 'auto' && hasBodyOverflow(clone)) {
-              activeDensity = 'compact';
-              clone.classList.remove('export-standard', 'export-compact');
-              clone.classList.add('export-compact');
-              rebalanceBodyForExport(clone, activeDensity);
-          }
-
-          const useTextProfile = renderProfile === 'TEXT';
-
-          pageDensityLog.push(activeDensity);
-
           // 1. Convert SVGs to PNGs (Critical for icon alignment)
           await convertSvgToImage(clone);
 
@@ -539,11 +550,33 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                   // ignore decode failure and continue export
               }
           }));
+
+          // 3. Freeze final layout after SVG/image metrics are fully settled
+          lockExportLayout(clone);
+
+          // 4. Shrink text and rebalance image/text area only when overflow is detected
+          let activeDensity: 'standard' | 'compact' = exportDensity === 'compact' ? 'compact' : 'standard';
+          clone.classList.remove('export-standard', 'export-compact');
+          clone.classList.add(activeDensity === 'compact' ? 'export-compact' : 'export-standard');
+          rebalanceBodyForExport(clone, activeDensity);
+
+          if (exportDensity === 'auto' && hasBodyOverflow(clone)) {
+              activeDensity = 'compact';
+              clone.classList.remove('export-standard', 'export-compact');
+              clone.classList.add('export-compact');
+              rebalanceBodyForExport(clone, activeDensity);
+          }
+
+          lockExportLayout(clone);
+
+          const useTextProfile = renderProfile === 'TEXT';
+
+          pageDensityLog.push(activeDensity);
           
           // Brief pause for rendering stabilization
           await new Promise(resolve => setTimeout(resolve, 220));
 
-                    // 3. Capture with html2canvas
+                    // 5. Capture with html2canvas
                     const applyCloneOverrides = true;
                     const capturePage = (foreignObjectRendering: boolean) => html2canvas(clone, {
                         scale: captureScale,
@@ -799,7 +832,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ entries, teams, siteName
                             }) : undefined
                     });
 
-                        const canvas = await capturePage(useTextProfile);
+                        let canvas = await capturePage(useTextProfile);
+                        if (isCanvasMostlyDark(canvas)) {
+                            canvas.width = 1;
+                            canvas.height = 1;
+                            setStatusMessage('캡처 호환 모드로 재시도 중...');
+                            canvas = await capturePage(false);
+                        }
           if (pdf) {
               const imgData = canvas.toDataURL('image/jpeg', jpegQuality);
               if (i > 0) {
