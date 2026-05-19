@@ -1303,6 +1303,31 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   };
 
   // [UPDATED] Save All Items in Queue (Batch Save Logic)
+  const handleAddRegistration = () => {
+      const nextItem: QueueItem = {
+          tempId: `ITEM-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          status: 'WAITING',
+          date: entryDate,
+          time: entryTime,
+          teamId,
+          teamName: teams.find(t => t.id === teamId)?.name || '',
+          leaderName,
+          attendeesCount,
+          workDescription,
+          locationBuildingScope,
+          locationArea,
+          locationDetail,
+          todayInstalledItems,
+          managerRequiredInstallItems,
+          riskFactors: riskFactors.map(item => ({ ...item })),
+          safetyFeedback: [...safetyFeedback],
+      };
+
+      setQueue(prev => [...prev, nextItem]);
+      setActiveId(nextItem.tempId);
+      announceStatus('추가 등록 항목을 만들었습니다. 다음 일지(2장째) 자료를 등록하세요.', 'success');
+  };
+
     const handleSaveAll = async () => {
       if (queue.length === 0) return;
       
@@ -1399,6 +1424,9 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                       <Trash2 size={18} /> 삭제
                   </button>
               )}
+              <button onClick={handleAddRegistration} className="bg-white border border-indigo-200 text-indigo-700 px-3 md:px-4 py-2 rounded-xl text-xs md:text-sm font-bold hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2 min-h-[44px]">
+                  <Plus size={16}/> 추가등록
+              </button>
               <button onClick={handleSaveAll} className="flex-1 md:flex-none bg-slate-900 text-white px-4 md:px-6 py-2.5 rounded-xl text-xs md:text-sm font-bold hover:bg-slate-800 shadow-lg flex items-center justify-center gap-2 transition-transform hover:scale-105 min-h-[44px]">
                   <Save size={18}/> {queue.length > 1 ? `전체 저장 완료 (${queue.length}건)` : '작성 완료'}
               </button>
@@ -2283,6 +2311,9 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
                     <p className="text-[10px] font-bold text-slate-500">현재 입력</p>
                     <p className="text-xs font-black text-slate-800 truncate">{teams.find(t => t.id === teamId)?.name || '팀 미선택'} · {leaderName || '팀장 미입력'}</p>
                 </div>
+                <button onClick={handleAddRegistration} className="px-3 py-3 rounded-xl border border-indigo-200 text-indigo-700 text-xs font-bold min-h-[48px] whitespace-nowrap bg-white">
+                    추가등록
+                </button>
                 <button onClick={handleSaveAll} className="px-4 py-3 rounded-xl bg-slate-900 text-white text-xs font-black min-h-[48px] whitespace-nowrap shadow-lg">
                     {queue.length > 1 ? `전체 저장 ${queue.length}건` : '작성 완료'}
                 </button>
