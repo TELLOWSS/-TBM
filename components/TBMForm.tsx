@@ -1303,7 +1303,7 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
   };
 
   // [UPDATED] Save All Items in Queue (Batch Save Logic)
-  const handleAddRegistration = () => {
+    const handleAddRegistration = () => {
       const nextItem: QueueItem = {
           tempId: `ITEM-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           status: 'WAITING',
@@ -1326,6 +1326,9 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
       setQueue(prev => [...prev, nextItem]);
       setActiveId(nextItem.tempId);
       announceStatus('추가 등록 항목을 만들었습니다. 다음 일지(2장째) 자료를 등록하세요.', 'success');
+      window.setTimeout(() => {
+          fileInputRef.current?.click();
+      }, 0);
   };
 
     const handleSaveAll = async () => {
