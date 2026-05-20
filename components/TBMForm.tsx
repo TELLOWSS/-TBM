@@ -990,31 +990,66 @@ export const TBMForm: React.FC<TBMFormProps> = ({ onSave, onCancel, monthlyGuide
 
       const newItems: QueueItem[] = [];
       const fileList = Array.from(files) as File[];
+      const baseItem: Partial<QueueItem> = {
+          date: entryDate,
+          time: entryTime,
+          teamId,
+          teamName: teams.find(t => t.id === teamId)?.name || '',
+          leaderName,
+          attendeesCount,
+          workDescription,
+          locationBuildingScope,
+          locationArea,
+          locationDetail,
+          todayInstalledItems,
+          managerRequiredInstallItems,
+          riskFactors: riskFactors.map(item => ({ ...item })),
+          safetyFeedback: [...safetyFeedback],
+      };
       
       for (const file of fileList) {
           if (file.type.startsWith('image/')) {
               const preview = await blobToBase64(file);
               newItems.push({
+                  ...baseItem,
                   tempId: `ITEM-${Date.now()}-${Math.random()}`,
                   originalLogFile: file,
                   originalLogPreview: preview,
                   originalLogImageUrl: preview,
                   status: 'WAITING',
-                  date: entryDate,
-                  time: entryTime,
-                  teamId: teamId
               });
           }
       }
 
-      if (mode === 'ROUTINE' && queue.length === 1 && !queue[0].originalLogPreview) {
+      if (newItems.length === 0) {
+          announceStatus('이미지 파일만 추가할 수 있습니다.', 'error');
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          return;
+      }
+
+      const activeItem = queue.find(item => item.tempId === activeId);
+      const canFillActiveItem = !!activeItem && !activeItem.originalLogPreview && !activeItem.originalLogImageUrl;
+
+      if (canFillActiveItem) {
+          const [first, ...rest] = newItems;
+          const filledActiveItem: QueueItem = {
+              ...activeItem,
+              originalLogFile: first.originalLogFile,
+              originalLogPreview: first.originalLogPreview,
+              originalLogImageUrl: first.originalLogImageUrl,
+          };
+
+          const nextQueue = queue.map(item => item.tempId === activeItem!.tempId ? filledActiveItem : item);
+          setQueue(rest.length > 0 ? [...nextQueue, ...rest] : nextQueue);
+          setActiveId(activeItem.tempId);
+      } else if (mode === 'ROUTINE' && queue.length === 1 && !queue[0].originalLogPreview) {
           setQueue(newItems);
           setActiveId(newItems[0].tempId);
       } else {
           setQueue(prev => [...prev, ...newItems]);
           if (!activeId && newItems.length > 0) setActiveId(newItems[0].tempId);
       }
-      
+
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
